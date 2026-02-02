@@ -1,3 +1,37 @@
+# Perpulangan
+
+## Struktur Folder
+
+- `src/app` — routes dan UI entry point (App Router)
+- `src/client` — modul client-only (hooks/auth client)
+- `src/server` — modul server-only (auth, env, logger, db)
+- `src/features` — modul per fitur/domain
+- `src/services` — integrasi eksternal (email, payment, storage)
+- `src/validators` — schema validasi (Zod)
+- `src/types` — tipe bersama lintas layer
+- `src/lib` — utilitas umum yang bisa dipakai lintas layer
+- `prisma` — schema dan migrations
+
+## Logging
+
+- Logger utama ada di `src/server/logger.ts` (Pino).
+- Konteks request ada di `src/server/request-context.ts` untuk requestId, method, path, ip.
+- Atur `LOG_LEVEL` dan `APP_NAME` di environment.
+
+Contoh penggunaan di route handler:
+
+```ts
+import { createRequestContext } from "@/server/request-context";
+
+export async function GET(req: Request) {
+  const { log } = createRequestContext(req);
+  log.info("fetching data");
+  return Response.json({ ok: true });
+}
+```
+
+## Getting Started
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
