@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/client/auth";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -33,26 +35,14 @@ export default function SignInPage() {
       {error && <p className="text-red-500">{error}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          required
-          className="w-full rounded-md bg-neutral-900 border border-neutral-700 px-3 py-2"
-        />
-        <input
+        <Input name="email" type="email" placeholder="Email" required />
+        <Input
           name="password"
           type="password"
           placeholder="Password"
           required
-          className="w-full rounded-md bg-neutral-900 border border-neutral-700 px-3 py-2"
         />
-        <button
-          type="submit"
-          className="w-full bg-white text-black font-medium rounded-md px-4 py-2 hover:bg-gray-200"
-        >
-          Sign In
-        </button>
+        <Button type="submit">Sign In</Button>
       </form>
     </main>
   );

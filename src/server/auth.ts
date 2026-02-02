@@ -1,8 +1,9 @@
-import "server-only";
+// import "server-only";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "@/server/db/prisma";
-import { username } from "better-auth/plugins";
+import { admin, username } from "better-auth/plugins";
+import { ac, roles } from "@/lib/auth-access";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -11,5 +12,13 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
-  plugins: [username()],
+  plugins: [
+    username(),
+    admin({
+      ac,
+      roles,
+      adminRoles: ["admin"],
+      defaultRole: "korda",
+    }),
+  ],
 });

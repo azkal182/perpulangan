@@ -1,4 +1,4 @@
-import "server-only";
+// import "server-only";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -24,7 +24,10 @@ const parsed = envSchema.safeParse({
 });
 
 if (!parsed.success) {
-  console.error("Invalid environment variables", parsed.error.flatten().fieldErrors);
+  console.error(
+    "Invalid environment variables",
+    parsed.error.flatten().fieldErrors,
+  );
   throw new Error("Invalid environment variables");
 }
 

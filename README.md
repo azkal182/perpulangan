@@ -30,6 +30,22 @@ export async function GET(req: Request) {
 }
 ```
 
+## Seeder Admin
+
+Set environment berikut lalu jalankan seed:
+
+```
+ADMIN_SEED_EMAIL=admin@local.test
+ADMIN_SEED_NAME=Admin
+ADMIN_SEED_PASSWORD=your-strong-password
+```
+
+Jalankan:
+
+```
+pnpm seed:admin
+```
+
 ## Getting Started
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).

@@ -3,25 +3,18 @@
 import * as React from "react";
 import {
   AudioWaveform,
-  BookOpen,
+  Banknote,
   Bot,
+  Bus,
+  Calendar,
   ChevronDown,
-  ChevronRight,
+  ClipboardMinus,
   Command,
-  Frame,
   GalleryVerticalEnd,
   Home,
-  Inbox,
-  LifeBuoy,
-  Map,
-  PieChart,
+  MapPin,
   Plus,
-  Search,
-  Send,
   Settings,
-  Settings2,
-  SquareTerminal,
-  Trash2,
   User2,
 } from "lucide-react";
 
@@ -30,19 +23,13 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import {
@@ -54,11 +41,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // Data untuk workspace/team selector
@@ -87,95 +70,62 @@ const navMain = [
     url: "/dashboard",
     icon: Home,
     isActive: true,
-    badge: "5",
   },
   {
-    title: "Inbox",
-    url: "/inbox",
-    icon: Inbox,
-    badge: "12",
+    title: "Event",
+    url: "/event",
+    icon: Calendar,
   },
   {
-    title: "Projects",
-    url: "#",
-    icon: SquareTerminal,
-    items: [
-      {
-        title: "Website Redesign",
-        url: "/projects/website",
-      },
-      {
-        title: "Mobile App",
-        url: "/projects/mobile",
-      },
-      {
-        title: "Marketing Campaign",
-        url: "/projects/marketing",
-      },
-    ],
-  },
-  {
-    title: "Analytics",
-    url: "#",
-    icon: PieChart,
-    items: [
-      {
-        title: "Overview",
-        url: "/analytics/overview",
-      },
-      {
-        title: "Traffic",
-        url: "/analytics/traffic",
-      },
-      {
-        title: "Conversions",
-        url: "/analytics/conversions",
-      },
-    ],
-  },
-  {
-    title: "Documentation",
-    url: "/docs",
-    icon: BookOpen,
+    title: "Santri",
+    url: "/dashboard/users",
+    icon: User2,
   },
 ];
 
 // Data untuk secondary navigation
-const navSecondary = [
+
+// Data Manajemen
+const managements = [
   {
-    title: "Support",
-    url: "#",
-    icon: LifeBuoy,
+    title: "Rombongan",
+    url: "/rombongan",
+    icon: Bus,
   },
   {
-    title: "Feedback",
-    url: "#",
-    icon: Send,
+    title: "Titik Turun",
+    url: "/titik_turun",
+    icon: MapPin,
+  },
+  {
+    title: "Pembayaran",
+    url: "/pembayaran",
+    icon: Banknote,
   },
 ];
 
-// Data untuk projects
-const projects = [
+// Data Lainnya
+const others = [
   {
-    name: "Design Engineering",
-    url: "#",
-    icon: Frame,
+    title: "laporan",
+    url: "/laporan",
+    icon: ClipboardMinus,
+    badge: "5",
   },
   {
-    name: "Sales & Marketing",
-    url: "#",
-    icon: PieChart,
+    title: "Pengaturan",
+    url: "/titik_turun",
+    icon: Settings,
   },
   {
-    name: "Travel",
-    url: "#",
-    icon: Map,
+    title: "Pembayaran",
+    url: "/pembayaran",
+    icon: Banknote,
   },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [activeTeam, setActiveTeam] = React.useState(teams[0]);
-  const [isLoading, setIsLoading] = React.useState(false);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -183,83 +133,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <activeTeam.logo className="size-4" />
-                  </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">
-                      {activeTeam.name}
-                    </span>
-                    <span className="truncate text-xs">{activeTeam.plan}</span>
-                  </div>
-                  <ChevronDown className="ml-auto" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                align="start"
-                side="bottom"
-                sideOffset={4}
-              >
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
-                  Teams
-                </DropdownMenuLabel>
-                {teams.map((team, index) => (
-                  <DropdownMenuItem
-                    key={team.name}
-                    onClick={() => setActiveTeam(team)}
-                    className="gap-2 p-2"
-                  >
-                    <div className="flex size-6 items-center justify-center rounded-sm border">
-                      <team.logo className="size-4 shrink-0" />
-                    </div>
-                    {team.name}
-                    <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="gap-2 p-2">
-                  <div className="flex size-6 items-center justify-center rounded-md border bg-background">
-                    <Plus className="size-4" />
-                  </div>
-                  <div className="font-medium text-muted-foreground">
-                    Add team
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SidebarMenuButton size="lg" asChild>
+              <a href="#">
+                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <Bus className="size-4" />
+                </div>
+                <div className="flex flex-col gap-0.5 leading-none">
+                  <span className="font-medium">Perpulangan</span>
+                  <span className="">PPDF</span>
+                </div>
+              </a>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
       {/* Content */}
       <SidebarContent>
-        {/* Search Group */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/search">
-                    <Search />
-                    <span>Search</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>⌘K</SidebarMenuBadge>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
         {/* Main Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel>Platform</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navMain.map((item) => (
@@ -277,29 +169,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       >
                         {item.icon && <item.icon />}
                         <span>{item.title}</span>
-                        {item.items && (
-                          <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                        )}
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
-                    {item.badge && (
-                      <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
-                    )}
-                    {item.items && (
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild>
-                                <a href={subItem.url}>
-                                  <span>{subItem.title}</span>
-                                </a>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    )}
                   </SidebarMenuItem>
                 </Collapsible>
               ))}
@@ -307,84 +178,58 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Projects Group with Action */}
+        {/* Management Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel>Projects</SidebarGroupLabel>
-          <SidebarGroupAction title="Add Project">
-            <Plus /> <span className="sr-only">Add Project</span>
-          </SidebarGroupAction>
+          <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {isLoading
-                ? // Loading skeleton
-                  Array.from({ length: 3 }).map((_, index) => (
-                    <SidebarMenuItem key={index}>
-                      <SidebarMenuSkeleton showIcon />
-                    </SidebarMenuItem>
-                  ))
-                : projects.map((item) => (
-                    <SidebarMenuItem key={item.name}>
-                      <SidebarMenuButton asChild>
-                        <a href={item.url}>
-                          <item.icon />
-                          <span>{item.name}</span>
-                        </a>
+              {managements.map((item) => (
+                <Collapsible
+                  key={item.title}
+                  asChild
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={item.title}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
                       </SidebarMenuButton>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <SidebarMenuAction showOnHover>
-                            <Settings2 />
-                            <span className="sr-only">More</span>
-                          </SidebarMenuAction>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          className="w-48 rounded-lg"
-                          side="bottom"
-                          align="end"
-                        >
-                          <DropdownMenuItem>
-                            <Settings className="mr-2 h-4 w-4" />
-                            <span>Project Settings</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            <span>Delete Project</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </SidebarMenuItem>
-                  ))}
+                    </CollapsibleTrigger>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Secondary Navigation - Collapsible */}
-        <Collapsible defaultOpen className="group/collapsible">
-          <SidebarGroup>
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger>
-                Help & Support
-                <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navSecondary.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <a href={item.url}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </a>
+        {/* Others Navigation */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Lainnya</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {others.map((item) => (
+                <Collapsible
+                  key={item.title}
+                  asChild
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={item.title}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
                       </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </SidebarGroup>
-        </Collapsible>
+                    </CollapsibleTrigger>
+                    {item.badge && (
+                      <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       {/* Footer - User Menu */}
