@@ -24,7 +24,7 @@ export type StudentDTO = {
   tgl_lahir: Date;
   tgl_lahir_formatted: string;
   ttl: string;
-  alamat: Alamat;
+  alamat: Address;
   kontak: Kontak;
   status_anggota: Asrama;
   kelas: Asrama;
@@ -48,21 +48,26 @@ export type Display = {
   foto_url?: string;
 };
 
-export type Alamat = {
-  provinsi: Asrama;
-  kabupaten: Asrama;
-  kecamatan: Asrama;
-  desa: string;
-  rt: number | null;
-  rw: number | null;
-  kodepos: string;
-  alamat_lengkap: string;
-};
-
 export type Asrama = {
   id: number | null | string;
   nama: null | string;
 };
+
+interface RegionDetail {
+  id: string;
+  nama: string;
+}
+
+interface Address {
+  provinsi: RegionDetail;
+  kabupaten: RegionDetail;
+  kecamatan: RegionDetail;
+  desa: string;
+  rt: number;
+  rw: number;
+  kodepos: string;
+  alamat_lengkap: string;
+}
 
 export type Foto = {
   filename: string;
@@ -77,7 +82,7 @@ export type Keluarga = {
 
 export type Kontak = {
   hp: string;
-  hp_ortu: string;
+  hp_ortu?: string;
 };
 
 export type Pagination = {

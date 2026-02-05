@@ -5,82 +5,184 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+    provider = "prisma-client"
+    output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
+    provider = "postgresql"
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+    id            String    @id
+    name          String
+    email         String
+    emailVerified Boolean   @default(false)
+    image         String?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    sessions      Session[]
+    accounts      Account[]
 
-  username        String?
-  displayUsername String?
-  role            String    @default("korda")
-  banned          Boolean   @default(false)
-  banReason       String?
-  banExpires      DateTime?
+    username        String?
+    displayUsername String?
+    role            String    @default("korda")
+    banned          Boolean   @default(false)
+    banReason       String?
+    banExpires      DateTime?
 
-  @@unique([email])
-  @@map("user")
-  @@unique([username])
+    @@unique([email])
+    @@unique([username])
+    @@map("user")
 }
 
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  impersonatedBy String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    id             String   @id
+    expiresAt      DateTime
+    token          String
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+    ipAddress      String?
+    userAgent      String?
+    impersonatedBy String?
+    userId         String
+    user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([token])
-  @@index([userId])
-  @@map("session")
+    @@unique([token])
+    @@index([userId])
+    @@map("session")
 }
 
 model Account {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+    id                    String    @id
+    accountId             String
+    providerId            String
+    userId                String
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    password              String?
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
 
-  @@index([userId])
-  @@map("account")
+    @@index([userId])
+    @@map("account")
 }
 
 model Verification {
-  id         String   @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+    id         String   @id
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
 
-  @@index([identifier])
-  @@map("verification")
+    @@index([identifier])
+    @@map("verification")
+}
+
+model Student {
+    id     String @id @default(uuid())
+    idApi  String @unique
+    nis    String @unique
+    name   String
+    gender String
+
+    status String
+    ttl    String
+
+    photoUrl String?
+
+    parrentPhone String?
+    dormitory    String
+
+    fullAddress String
+    village     String
+    province    Province? @relation(fields: [provinceId], references: [id])
+    provinceId  Int?
+    regency     Regency?  @relation(fields: [regencyId], references: [id])
+    regencyId   Int?
+    district    District? @relation(fields: [districtId], references: [id])
+    districtId  Int?
+    // village     Village?  @relation(fields: [villageId], references: [id])
+    // villageId   Int?
+
+    @@index([status])
+    @@index([name])
+    @@index([regencyId])
+    @@index([dormitory])
+}
+
+model Province {
+    id   Int    @id @default(autoincrement())
+    name String
+    code String
+
+    regencies Regency[]
+    Student   Student[]
+
+    @@index([name])
+}
+
+model Regency {
+    id        Int        @id @default(autoincrement())
+    name      String
+    label     String?
+    type      String?
+    code      String
+    fullCode  String
+    districts District[]
+
+    provinceId Int
+    province   Province  @relation(fields: [provinceId], references: [id])
+    Student    Student[]
+
+    @@index([provinceId])
+    @@index([name])
+    @@index([label])
+}
+
+model District {
+    id       Int       @id @default(autoincrement())
+    name     String
+    code     String
+    fullCode String
+    villages Village[]
+
+    regencyId Int
+    regency   Regency   @relation(fields: [regencyId], references: [id])
+    Student   Student[]
+
+    @@index([regencyId])
+    @@index([name])
+}
+
+model Village {
+    id         Int    @id @default(autoincrement())
+    name       String
+    code       String
+    fullCode   String
+    postalCode String
+
+    districtId Int
+    district   District @relation(fields: [districtId], references: [id])
+
+    @@index([districtId])
+    @@index([name])
+}
+
+model SyncLog {
+    id          String    @id @default(uuid())
+    key         String    @unique // contoh: "students"
+    lastSyncAt  DateTime?
+    lastStatus  String? // "success" | "failed"
+    lastSummary Json? // simpan ringkasan import (inserted/updated/failed, dll)
+    updatedAt   DateTime  @updatedAt
+    createdAt   DateTime  @default(now())
+
+    @@index([key])
 }

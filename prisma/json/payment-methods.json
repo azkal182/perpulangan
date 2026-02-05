@@ -1,0 +1,122 @@
+[
+  {
+    "id": "alfamart",
+    "name": "Alfamart",
+    "category": "mitra-finpay"
+  },
+  {
+    "id": "dana",
+    "name": "DANA",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "idm",
+    "name": "Indomaret",
+    "category": "mitra-finpay"
+  },
+  {
+    "id": "indodana",
+    "name": "Indodana",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "jeniuspay",
+    "name": "Jenius Pay",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "kredivo",
+    "name": "Kredivo",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "linkaja",
+    "name": "LinkAja Applink",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "linkajawco",
+    "name": "LinkAja Web Checkout",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "ovo",
+    "name": "Ovo",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "qris",
+    "name": "QRIS",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "shopeepay",
+    "name": "ShopeePay",
+    "category": "E-Wallet"
+  },
+  {
+    "id": "vabca",
+    "name": "Virtual Account BCA",
+    "category": "Bank"
+  },
+  {
+    "id": "vabjb",
+    "name": "Virtual Account BJB",
+    "category": "Bank"
+  },
+  {
+    "id": "vabnc",
+    "name": "Virtual Account BNC",
+    "category": "Bank"
+  },
+  {
+    "id": "vabni",
+    "name": "Virtual Account BNI",
+    "category": "Bank"
+  },
+  {
+    "id": "vabri",
+    "name": "Virtual Account BRI",
+    "category": "Bank"
+  },
+  {
+    "id": "vabsi",
+    "name": "Virtual Account BSI",
+    "category": "Bank"
+  },
+  {
+    "id": "vabtn",
+    "name": "Virtual Account BTN",
+    "category": "Bank"
+  },
+  {
+    "id": "vamandiri",
+    "name": "Virtual Account Mandiri",
+    "category": "Bank"
+  },
+  {
+    "id": "vamaybank",
+    "name": "Virtual Account Maybank",
+    "category": "Bank"
+  },
+  {
+    "id": "vamega",
+    "name": "Virtual Account Mega",
+    "category": "Bank"
+  },
+  {
+    "id": "vanagari",
+    "name": "Virtual Account Nagari",
+    "category": "Bank"
+  },
+  {
+    "id": "vapermata",
+    "name": "Virtual Account Permata",
+    "category": "Bank"
+  },
+  {
+    "id": "virgo",
+    "name": "Virgo",
+    "category": "E-Wallet"
+  }
+]
