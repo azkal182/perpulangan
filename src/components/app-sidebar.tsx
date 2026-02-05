@@ -1,21 +1,15 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
-  AudioWaveform,
-  Banknote,
-  Bot,
-  Bus,
-  Calendar,
   ChevronDown,
-  ClipboardMinus,
-  Command,
-  GalleryVerticalEnd,
-  Home,
-  MapPin,
   Plus,
-  Settings,
   User2,
+  Bot,
+  Settings,
+  Bus,
 } from "lucide-react";
 
 import {
@@ -41,91 +35,20 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-// Data untuk workspace/team selector
-const teams = [
-  {
-    name: "Acme Inc",
-    logo: GalleryVerticalEnd,
-    plan: "Enterprise",
-  },
-  {
-    name: "Acme Corp.",
-    logo: AudioWaveform,
-    plan: "Startup",
-  },
-  {
-    name: "Evil Corp.",
-    logo: Command,
-    plan: "Free",
-  },
-];
-
-// Data untuk navigation utama
-const navMain = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: Home,
-    isActive: true,
-  },
-  {
-    title: "Event",
-    url: "/event",
-    icon: Calendar,
-  },
-  {
-    title: "Santri",
-    url: "/dashboard/users",
-    icon: User2,
-  },
-];
-
-// Data untuk secondary navigation
-
-// Data Manajemen
-const managements = [
-  {
-    title: "Rombongan",
-    url: "/rombongan",
-    icon: Bus,
-  },
-  {
-    title: "Titik Turun",
-    url: "/titik_turun",
-    icon: MapPin,
-  },
-  {
-    title: "Pembayaran",
-    url: "/pembayaran",
-    icon: Banknote,
-  },
-];
-
-// Data Lainnya
-const others = [
-  {
-    title: "laporan",
-    url: "/laporan",
-    icon: ClipboardMinus,
-    badge: "5",
-  },
-  {
-    title: "Pengaturan",
-    url: "/titik_turun",
-    icon: Settings,
-  },
-  {
-    title: "Pembayaran",
-    url: "/pembayaran",
-    icon: Banknote,
-  },
-];
+import { teams, navMain, managements, others } from "@/config/sidebar-data";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [activeTeam, setActiveTeam] = React.useState(teams[0]);
+  const pathname = usePathname();
+
+  // Helper to check if a url is active
+  const isActive = (url: string) => {
+    if (url === "/dashboard" && pathname === "/dashboard") return true;
+    if (url !== "/dashboard" && pathname.startsWith(url)) return true;
+    return false;
+  };
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -134,7 +57,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="#">
+              <Link href="/dashboard">
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Bus className="size-4" />
                 </div>
@@ -142,7 +65,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <span className="font-medium">Perpulangan</span>
                   <span className="">PPDF</span>
                 </div>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -155,24 +78,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               {navMain.map((item) => (
-                <Collapsible
-                  key={item.title}
-                  asChild
-                  defaultOpen={item.isActive}
-                  className="group/collapsible"
-                >
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        tooltip={item.title}
-                        isActive={item.isActive}
-                      >
-                        {item.icon && <item.icon />}
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                  </SidebarMenuItem>
-                </Collapsible>
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={isActive(item.url)}
+                  >
+                    <Link href={item.url}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -184,20 +101,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               {managements.map((item) => (
-                <Collapsible
-                  key={item.title}
-                  asChild
-                  className="group/collapsible"
-                >
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={item.title}>
-                        {item.icon && <item.icon />}
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                  </SidebarMenuItem>
-                </Collapsible>
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={isActive(item.url)}
+                  >
+                    <Link href={item.url}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -209,23 +124,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               {others.map((item) => (
-                <Collapsible
-                  key={item.title}
-                  asChild
-                  className="group/collapsible"
-                >
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={item.title}>
-                        {item.icon && <item.icon />}
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    {item.badge && (
-                      <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
-                    )}
-                  </SidebarMenuItem>
-                </Collapsible>
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={isActive(item.url)}
+                  >
+                    <Link href={item.url}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {item.badge && (
+                    <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>

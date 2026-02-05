@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { admin, useSession } from "@/client/auth";
-import { roleOptions } from "@/lib/auth-access";
+import { roleOptions, type AppRole } from "@/lib/auth-access";
 import {
   Search,
   RefreshCw,
@@ -70,7 +70,7 @@ export default function UserManagementPage() {
   }, [isPending, session, router]);
 
   const roleValue = useMemo(
-    () => session?.user?.role ?? "korda",
+    () => (session?.user?.role as AppRole) ?? "korda",
     [session?.user?.role],
   );
 
@@ -114,7 +114,7 @@ export default function UserManagementPage() {
     });
   }, [roleValue, session?.user]);
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
     if (!canList) return;
     setError(null);
     setIsLoading(true);
@@ -133,13 +133,13 @@ export default function UserManagementPage() {
     }
 
     setIsLoading(false);
-  }
+  }, [canList, searchValue]);
 
   useEffect(() => {
     if (session?.user && canList) {
       void loadUsers();
     }
-  }, [session?.user, canList]);
+  }, [session?.user, canList, loadUsers]);
 
   async function handleCreateUser(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -152,7 +152,7 @@ export default function UserManagementPage() {
       name: createForm.name,
       email: createForm.email,
       password: createForm.password || undefined,
-      role: createForm.role,
+      role: createForm.role as AppRole,
     });
 
     if (res.error) {
@@ -172,7 +172,7 @@ export default function UserManagementPage() {
     if (!nextRole) return;
 
     setError(null);
-    const res = await admin.setRole({ userId, role: nextRole });
+    const res = await admin.setRole({ userId, role: nextRole as AppRole });
     if (res.error) {
       setError(res.error.message || "Failed to update role.");
     } else {
