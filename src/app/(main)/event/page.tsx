@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EventFormDialog } from "@/features/event/components/EventFormDialog.client";
-import { EventTableCard } from "@/features/event/components/EventTableCard";
+import { EventCardGrid } from "@/features/event/components/EventCardGrid";
 
 export default function EventPage() {
   return (
@@ -22,7 +22,7 @@ export default function EventPage() {
         </div>
       </div>
 
-      <EventTableCard />
+      <EventCardGrid />
     </div>
   );
 }
