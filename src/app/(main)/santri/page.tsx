@@ -5,7 +5,13 @@ import { getStudentsLastSync } from "@/features/santri/services/synclog.db";
 export default async function SantriPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string; q?: string; status?: string }>;
+  searchParams?: Promise<{
+    page?: string;
+    q?: string;
+    status?: string;
+    perPage?: string;
+    pageSize?: string;
+  }>;
 }) {
   const params = await searchParams;
 
@@ -14,6 +20,10 @@ export default async function SantriPage({
 
   // URL: all | active | inactive
   const status = (params?.status ?? "all").trim();
+
+  const rawPageSize = Number(params?.perPage ?? params?.pageSize ?? "6");
+  const pageSizeOptions = new Set([6, 10, 20, 50]);
+  const pageSize = pageSizeOptions.has(rawPageSize) ? rawPageSize : 6;
 
   const sync = await getStudentsLastSync();
 
@@ -28,7 +38,7 @@ export default async function SantriPage({
 
       <SantriTableCard
         page={page}
-        pageSize={6}
+        pageSize={pageSize}
         basePath="/santri"
         query={q}
         status={status}

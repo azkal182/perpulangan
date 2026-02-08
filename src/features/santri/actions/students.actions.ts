@@ -107,7 +107,7 @@ export async function bulkUpsertStudents(
   };
 
   if (!Array.isArray(rawRows) || rawRows.length === 0) return result;
-  console.log(JSON.stringify(rawRows[0], null, 2));
+  //   console.log(JSON.stringify(rawRows[0], null, 2));
 
   // 1) normalize + validate
   const rows: { index: number; data: StudentNormalized }[] = [];

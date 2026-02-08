@@ -26,8 +26,12 @@ export async function getStudentsPage(
     where.status = status === "active" ? true : false;
   }
 
+  //   where.dormitory = {
+  //     not: "Pengurus (PA)",
+  //   };
+
   const [total, students] = await prisma.$transaction([
-    prisma.student.count(),
+    prisma.student.count({ where }),
     prisma.student.findMany({
       where,
       skip,
@@ -39,6 +43,7 @@ export async function getStudentsPage(
         nis: true,
         dormitory: true,
         status: true,
+
         // kalau belum punya field pembayaran/rombongan/titikTurun, kita akan fallback
       },
     }),

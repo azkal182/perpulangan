@@ -11,6 +11,7 @@ import { Loader2, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {  cn } from '@/lib/utils'
+import { signIn } from '@/client/auth'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -53,8 +54,28 @@ export function UserAuthForm({
     },
   })
 
-  function onSubmit(data: z.infer<typeof formSchema>) {
+  async function onSubmit(data: z.infer<typeof formSchema>) {
+    setIsLoading(true)
+    try {
+      const res = await signIn.email({
+        email: data.email,
+        password: data.password,
+      })
 
+      if (res?.error) {
+        toast.error(res.error.message || 'Email atau password salah.')
+        return
+      }
+
+      toast.success('Berhasil masuk.')
+      router.push(redirectTo || '/dashboard')
+      router.refresh()
+    } catch (err) {
+      toast.error('Gagal masuk. Coba lagi.')
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

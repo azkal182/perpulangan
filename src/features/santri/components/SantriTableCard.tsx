@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
+import { SantriPageSizeSelect } from "@/features/santri/components/SantriPageSizeSelect.client";
 
 type PaymentStatus = "Lunas" | "Kurang" | "Belum";
 
@@ -77,16 +78,29 @@ export async function SantriTableCard({
   const showingTo = Math.min(clampedPage * pageSize, total);
 
   const pagesToShow = (() => {
-    const arr: number[] = [];
-    const from = Math.max(1, clampedPage - 1);
-    const to = Math.min(totalPages, from + 2);
-    for (let p = Math.max(1, to - 2); p <= to; p++) arr.push(p);
-    return arr;
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const items: Array<number | "ellipsis"> = [];
+    const start = Math.max(2, clampedPage - 1);
+    const end = Math.min(totalPages - 1, clampedPage + 1);
+
+    items.push(1);
+    if (start > 2) items.push("ellipsis");
+
+    for (let p = start; p <= end; p++) items.push(p);
+
+    if (end < totalPages - 1) items.push("ellipsis");
+    items.push(totalPages);
+
+    return items;
   })();
 
   const hrefPage = (p: number) => {
     const params = new URLSearchParams();
     params.set("page", String(p));
+    params.set("perPage", String(pageSize));
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
     return `${basePath}?${params.toString()}`;
@@ -190,7 +204,14 @@ export async function SantriTableCard({
           Menampilkan {showingFrom}-{showingTo} dari {total} santri
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="opacity-70">Show</span>
+            <SantriPageSizeSelect pageSize={pageSize} />
+            <span className="opacity-70">per halaman</span>
+          </div>
+
+          <div className="flex items-center gap-2">
           <Button
             asChild
             variant="outline"
@@ -203,19 +224,28 @@ export async function SantriTableCard({
             </Link>
           </Button>
 
-          {pagesToShow.map((p) => (
-            <Button
-              key={p}
-              asChild
-              variant={p === clampedPage ? "default" : "outline"}
-              size="icon"
-              aria-label={`Halaman ${p}`}
-            >
-              <Link href={hrefPage(p)} scroll={false}>
-                {p}
-              </Link>
-            </Button>
-          ))}
+          {pagesToShow.map((p, idx) =>
+            p === "ellipsis" ? (
+              <span
+                key={`ellipsis-${idx}`}
+                className="px-2 text-sm text-muted-foreground"
+              >
+                ...
+              </span>
+            ) : (
+              <Button
+                key={p}
+                asChild
+                variant={p === clampedPage ? "default" : "outline"}
+                size="icon"
+                aria-label={`Halaman ${p}`}
+              >
+                <Link href={hrefPage(p)} scroll={false}>
+                  {p}
+                </Link>
+              </Button>
+            ),
+          )}
 
           <Button
             asChild
@@ -231,6 +261,7 @@ export async function SantriTableCard({
               <ChevronRight className="h-4 w-4" />
             </Link>
           </Button>
+          </div>
         </div>
       </CardFooter>
     </Card>
