@@ -4,7 +4,7 @@ export type Student = {
   nis: string;
   name: string;
   gender: string;
-  status: string;
+  status: boolean;
   ttl: string;
   photoUrl: string;
   parrentPhone?: string;
@@ -12,6 +12,6 @@ export type Student = {
   provinceId?: number;
   regencyId?: number;
   districtId?: number;
-  village: string;
+  villageId?: number;
   fullAddress: string;
 };

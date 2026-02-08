@@ -10,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import {
   Dialog,
   DialogContent,
@@ -25,13 +24,27 @@ import { Student } from "@/features/santri/domain/student.model";
 import { getStudents } from "@/features/santri/services/students.repository";
 
 import { Download, Filter, Info, Search, UserPlus, XIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
+type StatusParam = "all" | "active" | "inactive";
+
+function normalizeStatusParam(v: string): StatusParam {
+  if (v === "active" || v === "inactive" || v === "all") return v;
+  return "all";
+}
 
 function summarize(students: Student[]) {
   const total = students.length;
 
+  // status boolean -> bucket
   const statusCount = students.reduce<Record<string, number>>((acc, s) => {
-    const key = (s.status || "unknown").toLowerCase();
+    const key =
+      s.status === true
+        ? "active"
+        : s.status === false
+          ? "inactive"
+          : "unknown";
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
@@ -57,10 +70,12 @@ function summarize(students: Student[]) {
       if (!s.nis) missing.push("nis");
       if (!s.name) missing.push("name");
       if (!s.gender) missing.push("gender");
-      if (!s.status) missing.push("status");
+
+      // status boolean: missing kalau null/undefined (bukan !s.status)
+      if (s.status === null || s.status === undefined) missing.push("status");
+
       if (!s.ttl) missing.push("ttl");
       if (!s.dormitory) missing.push("dormitory");
-      if (!s.village) missing.push("village");
       if (!s.fullAddress) missing.push("fullAddress");
       return missing.length
         ? { index: i, idApi: s.idApi, nis: s.nis, missing }
@@ -76,18 +91,90 @@ function summarize(students: Student[]) {
   return { total, statusCount, genderCount, dupIdApi, dupNis, invalid };
 }
 
+function useDebouncedValue<T>(value: T, delay = 400) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(t);
+  }, [value, delay]);
+
+  return debounced;
+}
+
 export function SantriToolbarClient({
   lastSyncAt,
   lastStatus,
+  initialQuery,
+  initialStatus,
 }: {
   lastSyncAt: string | null; // ISO
   lastStatus: string | null;
+  initialQuery: string;
+  initialStatus: string; // dari URL
 }) {
   const [openConfirm, setOpenConfirm] = useState(false);
 
   const [previewRows, setPreviewRows] = useState<Student[] | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+
+  // URL values
+  const urlQ = (sp.get("q") ?? "").trim();
+  const urlStatus = normalizeStatusParam((sp.get("status") ?? "all").trim());
+
+  // UI state
+  const [q, setQ] = useState(initialQuery);
+  const [status, setStatus] = useState<StatusParam>(
+    normalizeStatusParam(initialStatus),
+  );
+
+  // debounce hanya untuk search
+  const debouncedQ = useDebouncedValue(q, 400);
+
+  // Sync URL -> UI (anti loop)
+  useEffect(() => {
+    setQ((prev) => (prev === urlQ ? prev : urlQ));
+  }, [urlQ]);
+
+  useEffect(() => {
+    setStatus((prev) => (prev === urlStatus ? prev : urlStatus));
+  }, [urlStatus]);
+
+  // Sync UI -> URL (anti loop)
+  const isFirst = useRef(true);
+  useEffect(() => {
+    if (isFirst.current) {
+      isFirst.current = false;
+      return;
+    }
+
+    const nextQ = debouncedQ.trim();
+    const nextStatus = status;
+
+    // jika sama persis, skip
+    if (nextQ === urlQ && nextStatus === urlStatus) return;
+
+    const params = new URLSearchParams(sp.toString());
+
+    // reset page saat filter berubah
+    params.delete("page");
+
+    if (nextQ) params.set("q", nextQ);
+    else params.delete("q");
+
+    if (nextStatus !== "all") params.set("status", nextStatus);
+    else params.delete("status");
+
+    const qs = params.toString();
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+
+    router.replace(nextUrl, { scroll: false });
+  }, [debouncedQ, status, pathname, router, sp, urlQ, urlStatus]);
 
   const lastSyncLabel = (() => {
     if (!lastSyncAt) return "Belum pernah sync";
@@ -114,6 +201,8 @@ export function SantriToolbarClient({
     try {
       setLoadingPreview(true);
       const apiStudents = await getStudents();
+      console.log(apiStudents);
+
       setPreviewRows(apiStudents);
       setOpenConfirm(true);
     } catch {
@@ -134,7 +223,6 @@ export function SantriToolbarClient({
       return;
     }
 
-    // optional guard untuk duplikat payload
     if (
       (previewInfo?.dupIdApi?.length ?? 0) > 0 ||
       (previewInfo?.dupNis?.length ?? 0) > 0
@@ -188,6 +276,7 @@ export function SantriToolbarClient({
             <AlertDescription>Liburan Ramadhan 2026</AlertDescription>
           </div>
         </div>
+
         <Button className="pl-0!" size="icon" variant="ghost">
           <XIcon className="h-5 w-5" />
         </Button>
@@ -207,11 +296,17 @@ export function SantriToolbarClient({
               className="pl-9"
               placeholder="Cari nama atau NIS..."
               aria-label="Cari nama atau NIS"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
             />
           </div>
 
           <div className="flex w-full gap-3 md:w-auto md:items-center">
-            <Select defaultValue="all">
+            {/* STATUS FILTER (controlled) */}
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(normalizeStatusParam(v))}
+            >
               <SelectTrigger className="w-full md:w-[170px]">
                 <SelectValue placeholder="Semua Status" />
               </SelectTrigger>
@@ -368,7 +463,13 @@ export function SantriToolbarClient({
                         <tr key={s.idApi} className="border-t">
                           <td className="py-2 pr-2">{s.nis}</td>
                           <td className="py-2 pr-2">{s.name}</td>
-                          <td className="py-2 pr-2">{s.status}</td>
+                          <td className="py-2 pr-2">
+                            {s.status === true
+                              ? "active"
+                              : s.status === false
+                                ? "inactive"
+                                : "-"}
+                          </td>
                           <td className="py-2 pr-2">{s.dormitory}</td>
                           <td className="py-2 pr-2">{s.regencyId ?? "-"}</td>
                         </tr>

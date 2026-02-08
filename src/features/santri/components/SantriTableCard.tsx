@@ -30,7 +30,6 @@ import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
 
 type PaymentStatus = "Lunas" | "Kurang" | "Belum";
 
-// util
 function initials(name: string) {
   return name
     .split(" ")
@@ -46,30 +45,30 @@ function statusBadgeVariant(status: PaymentStatus) {
   return "outline";
 }
 
-/**
- * Mapping status Student (string bebas) -> PaymentStatus (demo)
- * Kamu bisa sesuaikan aturan mapping sesuai kebutuhan.
- */
-function mapStudentStatusToPaymentStatus(
-  status: string | null | undefined,
-): PaymentStatus {
-  const s = (status ?? "").toLowerCase();
-  if (s.includes("lunas") || s.includes("paid") || s.includes("aktif"))
-    return "Lunas";
-  if (s.includes("kurang") || s.includes("partial")) return "Kurang";
-  return "Belum";
+// Contoh mapping demo saja (kamu bebas ubah)
+function mapStudentStatusToPaymentStatus(status: boolean): PaymentStatus {
+  return status ? "Lunas" : "Belum";
 }
 
 export async function SantriTableCard({
   page = 1,
   pageSize = 6,
   basePath = "/santri",
+  query = "",
+  status = "all",
 }: {
   page?: number;
   pageSize?: number;
-  basePath?: string; // path halaman yg menampilkan tabel
+  basePath?: string;
+  query?: string;
+  status?: string; // "all" | "active" | "inactive"
 }) {
-  const { total, students } = await getStudentsPage(page, pageSize);
+  const { total, students } = await getStudentsPage(
+    page,
+    pageSize,
+    query,
+    status,
+  );
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const clampedPage = Math.min(Math.max(page, 1), totalPages);
@@ -85,7 +84,13 @@ export async function SantriTableCard({
     return arr;
   })();
 
-  const hrefPage = (p: number) => `${basePath}?page=${p}`;
+  const hrefPage = (p: number) => {
+    const params = new URLSearchParams();
+    params.set("page", String(p));
+    if (query.trim()) params.set("q", query.trim());
+    if (status !== "all") params.set("status", status);
+    return `${basePath}?${params.toString()}`;
+  };
 
   return (
     <Card className="w-full">
@@ -110,11 +115,9 @@ export async function SantriTableCard({
 
             <TableBody>
               {students.map((s) => {
-                // Field yang ada di DB kamu saat ini:
-                // name, nis, dormitory, status
-                // Sisanya belum ada -> fallback "-"
-
+                // s.status boolean
                 const paymentStatus = mapStudentStatusToPaymentStatus(s.status);
+
                 return (
                   <TableRow key={s.id}>
                     <TableCell>
@@ -132,13 +135,8 @@ export async function SantriTableCard({
 
                     <TableCell className="opacity-80">{s.dormitory}</TableCell>
 
-                    {/* Rombongan (belum ada di schema) */}
                     <TableCell className="opacity-70">-</TableCell>
-
-                    {/* Titik turun (belum ada di schema) */}
                     <TableCell className="opacity-70">-</TableCell>
-
-                    {/* Pembayaran (belum ada di schema) */}
                     <TableCell className="text-right opacity-70">-</TableCell>
 
                     <TableCell>

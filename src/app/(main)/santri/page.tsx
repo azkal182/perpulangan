@@ -5,11 +5,15 @@ import { getStudentsLastSync } from "@/features/santri/services/synclog.db";
 export default async function SantriPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; q?: string; status?: string }>;
 }) {
   const params = await searchParams;
 
   const page = Number(params?.page ?? "1") || 1;
+  const q = (params?.q ?? "").trim();
+
+  // URL: all | active | inactive
+  const status = (params?.status ?? "all").trim();
 
   const sync = await getStudentsLastSync();
 
@@ -18,8 +22,17 @@ export default async function SantriPage({
       <SantriToolbarClient
         lastSyncAt={sync.lastSyncAt?.toISOString() ?? null}
         lastStatus={sync.lastStatus}
+        initialQuery={q}
+        initialStatus={status}
       />
-      <SantriTableCard page={page} pageSize={6} basePath="/santri" />
+
+      <SantriTableCard
+        page={page}
+        pageSize={6}
+        basePath="/santri"
+        query={q}
+        status={status}
+      />
     </div>
   );
 }

@@ -1,6 +1,14 @@
 import type { StudentDTO } from "../api/students.dto";
 import type { Student } from "./student.model";
 
+function mapStatusParamToBoolean(status?: string): boolean {
+  if (status?.toLowerCase() === "aktif") {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 export function mapStudent(dto: StudentDTO): Student {
   return {
     id: String(dto.id_anggota),
@@ -8,7 +16,10 @@ export function mapStudent(dto: StudentDTO): Student {
     nis: dto.nis_santri,
     name: dto.nama,
     gender: dto.kelamin,
-    status: dto.status_anggota.nama ?? "",
+    status:
+      dto.status_anggota.nama !== null
+        ? mapStatusParamToBoolean(dto.status_anggota.nama)
+        : false,
     ttl: dto.ttl,
     photoUrl: dto.foto.url,
     parrentPhone: dto.kontak.hp_ortu,
@@ -22,7 +33,9 @@ export function mapStudent(dto: StudentDTO): Student {
     districtId: dto.alamat_new.kecamatan.id
       ? Number(dto.alamat_new.kecamatan.id)
       : undefined,
-    village: dto.alamat_new.desa,
+    villageId: dto.alamat_new.desa.id
+      ? Number(dto.alamat_new.desa.id)
+      : undefined,
     fullAddress: dto.alamat_new.alamat_lengkap,
   };
 }

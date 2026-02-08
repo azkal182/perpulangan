@@ -62,7 +62,7 @@ interface Address {
   provinsi: RegionDetail;
   kabupaten: RegionDetail;
   kecamatan: RegionDetail;
-  desa: string;
+  desa: RegionDetail;
   rt: number;
   rw: number;
   kodepos: string;

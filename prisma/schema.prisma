@@ -94,7 +94,7 @@ model Student {
     name   String
     gender String
 
-    status String
+    status Boolean
     ttl    String
 
     photoUrl String?
@@ -103,15 +103,15 @@ model Student {
     dormitory    String
 
     fullAddress String
-    village     String
+    // village     String?
     province    Province? @relation(fields: [provinceId], references: [id])
     provinceId  Int?
     regency     Regency?  @relation(fields: [regencyId], references: [id])
     regencyId   Int?
     district    District? @relation(fields: [districtId], references: [id])
     districtId  Int?
-    // village     Village?  @relation(fields: [villageId], references: [id])
-    // villageId   Int?
+    village     Village?  @relation(fields: [villageId], references: [id])
+    villageId   Int?
 
     @@index([status])
     @@index([name])
@@ -173,7 +173,8 @@ model Village {
     postalCode String
 
     districtId Int
-    district   District @relation(fields: [districtId], references: [id])
+    district   District  @relation(fields: [districtId], references: [id])
+    students   Student[]
 
     @@index([districtId])
     @@index([name])
