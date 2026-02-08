@@ -43,6 +43,16 @@ export async function getStudentsPage(
         nis: true,
         dormitory: true,
         status: true,
+        regency: {
+          select: {
+            name: true,
+            korda: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
 
         // kalau belum punya field pembayaran/rombongan/titikTurun, kita akan fallback
       },

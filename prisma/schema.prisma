@@ -140,9 +140,11 @@ model Regency {
     districts District[]
 
     provinceId Int
-    province   Province  @relation(fields: [provinceId], references: [id])
+    province   Province @relation(fields: [provinceId], references: [id])
     kordaId    String?
-    Student    Student[]
+    korda      Korda?   @relation(fields: [kordaId], references: [id], onDelete: SetNull)
+
+    Student Student[]
 
     @@index([provinceId])
     @@index([kordaId])
@@ -192,6 +194,25 @@ model SyncLog {
     @@index([key])
 }
 
+enum EventStatus {
+    DRAFT
+    ACTIVE
+    COMPLETED
+}
+
+model Event {
+    id        String      @id @default(uuid())
+    name      String
+    startDate DateTime
+    endDate   DateTime
+    status    EventStatus @default(DRAFT)
+    createdAt DateTime    @default(now())
+    updatedAt DateTime    @updatedAt
+
+    @@index([status])
+    @@index([startDate])
+}
+
 model Korwil {
     id   String @id @default(uuid())
     name String
@@ -220,7 +241,9 @@ model Korda {
     picUser   User?   @relation("KordaPIC", fields: [picUserId], references: [id], onDelete: SetNull)
 
     korwilId  String?
-    korwil    Korwil?  @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+    korwil    Korwil?   @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+    regencies Regency[]
+
     updatedAt DateTime @updatedAt
     createdAt DateTime @default(now())
 }

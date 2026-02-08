@@ -117,7 +117,7 @@ export async function SantriTableCard({
               <TableRow>
                 <TableHead className="w-[320px]">Santri</TableHead>
                 <TableHead className="w-[160px]">Kamar</TableHead>
-                <TableHead className="w-[220px]">Rombongan</TableHead>
+                <TableHead className="w-[220px]">Korda</TableHead>
                 <TableHead className="w-[220px]">Titik Turun</TableHead>
                 <TableHead className="w-[190px] text-right">
                   Pembayaran
@@ -149,8 +149,12 @@ export async function SantriTableCard({
 
                     <TableCell className="opacity-80">{s.dormitory}</TableCell>
 
-                    <TableCell className="opacity-70">-</TableCell>
-                    <TableCell className="opacity-70">-</TableCell>
+                    <TableCell className="opacity-70">
+                      {s.regency?.korda?.name ?? "-"}
+                    </TableCell>
+                    <TableCell className="opacity-70">
+                      {s.regency?.name ?? "-"}
+                    </TableCell>
                     <TableCell className="text-right opacity-70">-</TableCell>
 
                     <TableCell>
@@ -212,55 +216,58 @@ export async function SantriTableCard({
           </div>
 
           <div className="flex items-center gap-2">
-          <Button
-            asChild
-            variant="outline"
-            size="icon"
-            disabled={clampedPage === 1}
-            aria-label="Sebelumnya"
-          >
-            <Link href={hrefPage(Math.max(1, clampedPage - 1))} scroll={false}>
-              <ChevronLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-
-          {pagesToShow.map((p, idx) =>
-            p === "ellipsis" ? (
-              <span
-                key={`ellipsis-${idx}`}
-                className="px-2 text-sm text-muted-foreground"
-              >
-                ...
-              </span>
-            ) : (
-              <Button
-                key={p}
-                asChild
-                variant={p === clampedPage ? "default" : "outline"}
-                size="icon"
-                aria-label={`Halaman ${p}`}
-              >
-                <Link href={hrefPage(p)} scroll={false}>
-                  {p}
-                </Link>
-              </Button>
-            ),
-          )}
-
-          <Button
-            asChild
-            variant="outline"
-            size="icon"
-            disabled={clampedPage === totalPages}
-            aria-label="Berikutnya"
-          >
-            <Link
-              href={hrefPage(Math.min(totalPages, clampedPage + 1))}
-              scroll={false}
+            <Button
+              asChild
+              variant="outline"
+              size="icon"
+              disabled={clampedPage === 1}
+              aria-label="Sebelumnya"
             >
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          </Button>
+              <Link
+                href={hrefPage(Math.max(1, clampedPage - 1))}
+                scroll={false}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+
+            {pagesToShow.map((p, idx) =>
+              p === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-2 text-sm text-muted-foreground"
+                >
+                  ...
+                </span>
+              ) : (
+                <Button
+                  key={p}
+                  asChild
+                  variant={p === clampedPage ? "default" : "outline"}
+                  size="icon"
+                  aria-label={`Halaman ${p}`}
+                >
+                  <Link href={hrefPage(p)} scroll={false}>
+                    {p}
+                  </Link>
+                </Button>
+              ),
+            )}
+
+            <Button
+              asChild
+              variant="outline"
+              size="icon"
+              disabled={clampedPage === totalPages}
+              aria-label="Berikutnya"
+            >
+              <Link
+                href={hrefPage(Math.min(totalPages, clampedPage + 1))}
+                scroll={false}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </Button>
           </div>
         </div>
       </CardFooter>
