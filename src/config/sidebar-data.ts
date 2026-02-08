@@ -62,6 +62,11 @@ export const managements = [
     icon: Bus,
   },
   {
+    title: "registrasi Rombongan",
+    url: "/registrasi",
+    icon: Bus,
+  },
+  {
     title: "Rombongan",
     url: "/rombongan",
     icon: Bus,
