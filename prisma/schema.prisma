@@ -30,6 +30,8 @@ model User {
     banned          Boolean   @default(false)
     banReason       String?
     banExpires      DateTime?
+    kordapic        Korda?    @relation("KordaPIC")
+    korwilpic       Korwil?   @relation("KorwilPIC")
 
     @@unique([email])
     @@unique([username])
@@ -139,9 +141,11 @@ model Regency {
 
     provinceId Int
     province   Province  @relation(fields: [provinceId], references: [id])
+    kordaId    String?
     Student    Student[]
 
     @@index([provinceId])
+    @@index([kordaId])
     @@index([name])
     @@index([label])
 }
@@ -185,4 +189,37 @@ model SyncLog {
     createdAt   DateTime  @default(now())
 
     @@index([key])
+}
+
+model Korwil {
+    id   String @id @default(uuid())
+    name String
+
+    // Placeholder sebelum punya user
+    picName  String?
+    picPhone String?
+
+    picUserId String? @unique
+    picUser   User?   @relation("KorwilPIC", fields: [picUserId], references: [id], onDelete: SetNull)
+
+    kordas Korda[]
+
+    updatedAt DateTime @updatedAt
+    createdAt DateTime @default(now())
+}
+
+model Korda {
+    id   String @id @default(uuid())
+    name String
+
+    picName  String?
+    picPhone String?
+
+    picUserId String? @unique
+    picUser   User?   @relation("KordaPIC", fields: [picUserId], references: [id], onDelete: SetNull)
+
+    korwilId  String?
+    korwil    Korwil?  @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+    updatedAt DateTime @updatedAt
+    createdAt DateTime @default(now())
 }

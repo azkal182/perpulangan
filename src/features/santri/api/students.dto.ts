@@ -24,7 +24,7 @@ export type StudentDTO = {
   tgl_lahir: Date;
   tgl_lahir_formatted: string;
   ttl: string;
-  alamat: Address;
+  alamat_new: Address;
   kontak: Kontak;
   status_anggota: Asrama;
   kelas: Asrama;
@@ -54,8 +54,8 @@ export type Asrama = {
 };
 
 interface RegionDetail {
-  id: string;
-  nama: string;
+  id: string | null;
+  nama: string | null;
 }
 
 interface Address {

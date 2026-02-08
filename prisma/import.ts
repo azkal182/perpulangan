@@ -20,6 +20,13 @@ type VillageData = {
   pos_code: string;
   kecamatan_id: number;
 };
+// Fungsi untuk membersihkan karakter aneh (UTF-8 replacement character dll)
+function sanitizeString(str: string): string {
+  if (!str) return str;
+  // Menghapus karakter non-ASCII atau karakter yang sering bermasalah di WIN1252
+  // 0xEF 0xBF 0xBD adalah karakter "replacement"
+  return str.replace(/\uFFFD/g, "").trim();
+}
 
 export async function main() {
   console.log("--- Memulai Proses Seeding Database ---");
@@ -90,7 +97,7 @@ export async function main() {
 
     const formattedVillages = (Villages as VillageData[]).map((item) => ({
       id: item.id,
-      name: item.name,
+      name: sanitizeString(item.name),
       code: item.code,
       fullCode: item.full_code,
       postalCode: item.pos_code,

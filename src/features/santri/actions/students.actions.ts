@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 export type StudentInput = {
   idApi: string;
@@ -140,9 +141,9 @@ export async function bulkUpsertStudents(
                 photoUrl: s.photoUrl,
                 parrentPhone: s.parrentPhone,
                 dormitory: s.dormitory,
-                // provinceId: s.provinceId,
-                // regencyId: s.regencyId,
-                // districtId: s.districtId,
+                provinceId: s.provinceId,
+                regencyId: s.regencyId,
+                districtId: s.districtId,
                 village: s.village,
                 fullAddress: s.fullAddress,
               },
@@ -156,9 +157,9 @@ export async function bulkUpsertStudents(
                 photoUrl: s.photoUrl,
                 parrentPhone: s.parrentPhone,
                 dormitory: s.dormitory,
-                // provinceId: s.provinceId,
-                // regencyId: s.regencyId,
-                // districtId: s.districtId,
+                provinceId: s.provinceId,
+                regencyId: s.regencyId,
+                districtId: s.districtId,
                 village: s.village,
                 fullAddress: s.fullAddress,
               },
@@ -214,6 +215,8 @@ export async function bulkUpsertStudents(
       },
     },
   });
+
+  revalidatePath("/santri");
 
   return result;
 }

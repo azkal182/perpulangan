@@ -13,10 +13,16 @@ export function mapStudent(dto: StudentDTO): Student {
     photoUrl: dto.foto.url,
     parrentPhone: dto.kontak.hp_ortu,
     dormitory: dto.asrama.nama || "",
-    provinceId: Number(dto.alamat.provinsi.id),
-    regencyId: Number(dto.alamat.kabupaten.id),
-    districtId: Number(dto.alamat.kecamatan.id),
-    village: dto.alamat.desa,
-    fullAddress: dto.alamat.alamat_lengkap,
+    provinceId: dto.alamat_new.provinsi.id
+      ? Number(dto.alamat_new.provinsi.id)
+      : undefined,
+    regencyId: dto.alamat_new.kabupaten.id
+      ? Number(dto.alamat_new.kabupaten.id)
+      : undefined,
+    districtId: dto.alamat_new.kecamatan.id
+      ? Number(dto.alamat_new.kecamatan.id)
+      : undefined,
+    village: dto.alamat_new.desa,
+    fullAddress: dto.alamat_new.alamat_lengkap,
   };
 }

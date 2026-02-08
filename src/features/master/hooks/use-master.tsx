@@ -1,35 +1,46 @@
 "use client";
 
 import * as React from "react";
-import type { Id, State } from "../types";
-import { uid } from "../lib/uid";
+import type { Id, Korda, State } from "../types";
+import {
+  getKorwil,
+  createKorwil,
+  deleteKorwil as deleteKorwilAction,
+} from "../actions/korwil.action";
+import {
+  getKorda,
+  createKorda,
+  deleteKorda as deleteKordaAction,
+} from "../actions/korda.action";
+import {
+  getKota,
+  createKota,
+  deleteKota as deleteKotaAction,
+} from "../actions/kota.action";
 
 const initialState: State = {
   selectedKorwilId: null,
   selectedKordaId: null,
-  korwils: [
-    { id: "kw-1", name: "Jawa Barat" },
-    { id: "kw-2", name: "Jawa Timur" },
-  ],
-  kordasByKorwil: {
-    "kw-1": [
-      { id: "kd-1", name: "Bandung Raya" },
-      { id: "kd-2", name: "Bogor Depok" },
-    ],
-    "kw-2": [{ id: "kd-3", name: "Surabaya Raya" }],
-  },
-  kotasByKorda: {
-    "kd-1": [
-      { id: "kt-1", name: "Kota Bandung" },
-      { id: "kt-2", name: "Kab. Bandung" },
-    ],
-    "kd-2": [{ id: "kt-3", name: "Kota Bogor" }],
-    "kd-3": [{ id: "kt-4", name: "Kota Surabaya" }],
-  },
+  korwils: [],
+  kordasByKorwil: {},
+  kotasByKorda: {},
 };
+
+function groupKordasByKorwil(items: Korda[]) {
+  const out: Record<Id, Korda[]> = {};
+  for (const item of items) {
+    if (!item.korwilId) continue;
+    if (!out[item.korwilId]) out[item.korwilId] = [];
+    out[item.korwilId].push(item);
+  }
+  return out;
+}
 
 export function useMaster() {
   const [state, setState] = React.useState<State>(() => initialState);
+  const [loadingKorwil, setLoadingKorwil] = React.useState(false);
+  const [loadingKorda, setLoadingKorda] = React.useState(false);
+  const [loadingKota, setLoadingKota] = React.useState(false);
 
   // dialog open
   const [openAddKorwil, setOpenAddKorwil] = React.useState(false);
@@ -39,12 +50,68 @@ export function useMaster() {
   // form inputs
   const [korwilName, setKorwilName] = React.useState("");
   const [kordaName, setKordaName] = React.useState("");
-  const [kotaName, setKotaName] = React.useState("");
-
   // search
   const [qKorwil, setQKorwil] = React.useState("");
   const [qKorda, setQKorda] = React.useState("");
   const [qKota, setQKota] = React.useState("");
+
+  const loadKorwils = React.useCallback(async () => {
+    try {
+      setLoadingKorwil(true);
+      const res = await getKorwil();
+      if (!res.success) {
+        alert(res.error ?? "Gagal mengambil data korwil.");
+        return;
+      }
+      const items = Array.isArray(res.data) ? res.data : res.data.items;
+      setState((s) => ({ ...s, korwils: items }));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal mengambil data korwil.");
+    } finally {
+      setLoadingKorwil(false);
+    }
+  }, [getKorwil]);
+
+  const loadKordas = React.useCallback(
+    async (korwilId?: Id) => {
+      try {
+        setLoadingKorda(true);
+        const res = await getKorda(korwilId ? { korwilId } : undefined);
+        if (!res.success) {
+          alert(res.error ?? "Gagal mengambil data korda.");
+          return;
+        }
+        const items = Array.isArray(res.data) ? res.data : res.data.items;
+        setState((s) => {
+          if (korwilId) {
+            return {
+              ...s,
+              kordasByKorwil: { ...s.kordasByKorwil, [korwilId]: items },
+            };
+          }
+          const grouped = groupKordasByKorwil(items);
+          for (const kw of s.korwils) {
+            if (!grouped[kw.id]) grouped[kw.id] = [];
+          }
+          return { ...s, kordasByKorwil: grouped };
+        });
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        alert("Gagal mengambil data korda.");
+      } finally {
+        setLoadingKorda(false);
+      }
+    },
+    [getKorda],
+  );
+
+  React.useEffect(() => {
+    void (async () => {
+      await loadKorwils();
+      await loadKordas();
+    })();
+  }, [loadKorwils, loadKordas]);
 
   const selectedKorwil = React.useMemo(
     () => state.korwils.find((k) => k.id === state.selectedKorwilId) ?? null,
@@ -92,11 +159,17 @@ export function useMaster() {
     }));
     setQKorda("");
     setQKota("");
+    if (!state.kordasByKorwil[id]) {
+      void loadKordas(id);
+    }
   }
 
   function selectKorda(id: Id) {
     setState((s) => ({ ...s, selectedKordaId: id }));
     setQKota("");
+    if (!state.kotasByKorda[id]) {
+      void loadKotas(id);
+    }
   }
 
   function resetSelection() {
@@ -105,124 +178,219 @@ export function useMaster() {
     setQKota("");
   }
 
-  function addKorwil() {
+  async function addKorwil() {
     const name = korwilName.trim();
     if (!name) return;
 
-    const id = uid("kw");
-    setState((s) => ({
-      ...s,
-      korwils: [...s.korwils, { id, name }],
-      kordasByKorwil: { ...s.kordasByKorwil, [id]: [] },
-      selectedKorwilId: id,
-      selectedKordaId: null,
-    }));
+    try {
+      const res = await createKorwil({ name });
+      if (!res.success) {
+        alert(res.error ?? "Gagal membuat korwil.");
+        return;
+      }
+
+      const created = res.data;
+      setState((s) => ({
+        ...s,
+        korwils: [...s.korwils, created],
+        kordasByKorwil: { ...s.kordasByKorwil, [created.id]: [] },
+        selectedKorwilId: created.id,
+        selectedKordaId: null,
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal membuat korwil.");
+      return;
+    }
 
     setKorwilName("");
     setQKorwil("");
     setOpenAddKorwil(false);
   }
 
-  function addKorda() {
+  async function addKorda() {
     const korwilId = state.selectedKorwilId;
     if (!korwilId) return;
 
     const name = kordaName.trim();
     if (!name) return;
 
-    const id = uid("kd");
-    setState((s) => ({
-      ...s,
-      kordasByKorwil: {
-        ...s.kordasByKorwil,
-        [korwilId]: [...(s.kordasByKorwil[korwilId] ?? []), { id, name }],
-      },
-      kotasByKorda: { ...s.kotasByKorda, [id]: [] },
-      selectedKordaId: id,
-    }));
+    try {
+      const res = await createKorda({ name, korwilId });
+      if (!res.success) {
+        alert(res.error ?? "Gagal membuat korda.");
+        return;
+      }
+
+      const created = res.data;
+      setState((s) => ({
+        ...s,
+        kordasByKorwil: {
+          ...s.kordasByKorwil,
+          [korwilId]: [...(s.kordasByKorwil[korwilId] ?? []), created],
+        },
+        kotasByKorda: { ...s.kotasByKorda, [created.id]: [] },
+        selectedKordaId: created.id,
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal membuat korda.");
+      return;
+    }
 
     setKordaName("");
     setQKorda("");
     setOpenAddKorda(false);
   }
 
-  function addKota() {
+  const loadKotas = React.useCallback(
+    async (kordaId: Id) => {
+      try {
+        setLoadingKota(true);
+        const res = await getKota({ kordaId });
+        if (!res.success) {
+          alert(res.error ?? "Gagal mengambil data kota.");
+          return;
+        }
+        const items = res.data;
+        setState((s) => ({
+          ...s,
+          kotasByKorda: { ...s.kotasByKorda, [kordaId]: items },
+        }));
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        alert("Gagal mengambil data kota.");
+      } finally {
+        setLoadingKota(false);
+      }
+    },
+    [getKota],
+  );
+
+  async function addKota(regencyId: number): Promise<boolean> {
     const kordaId = state.selectedKordaId;
-    if (!kordaId) return;
+    if (!kordaId) return false;
+    if (!regencyId) return false;
 
-    const name = kotaName.trim();
-    if (!name) return;
+    try {
+      const res = await createKota({ kordaId, regencyId });
+      if (!res.success) {
+        alert(res.error ?? "Gagal menambahkan kota.");
+        return false;
+      }
 
-    const id = uid("kt");
-    setState((s) => ({
-      ...s,
-      kotasByKorda: {
-        ...s.kotasByKorda,
-        [kordaId]: [...(s.kotasByKorda[kordaId] ?? []), { id, name }],
-      },
-    }));
-
-    setKotaName("");
-    setQKota("");
-    setOpenAddKota(false);
+      const created = res.data;
+      setState((s) => ({
+        ...s,
+        kotasByKorda: {
+          ...s.kotasByKorda,
+          [kordaId]: (() => {
+            const current = s.kotasByKorda[kordaId] ?? [];
+            if (current.some((x) => x.id === created.id)) return current;
+            return [...current, created].sort((a, b) =>
+              a.name.localeCompare(b.name, "id-ID"),
+            );
+          })(),
+        },
+      }));
+      setQKota("");
+      return true;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal menambahkan kota.");
+      return false;
+    }
   }
 
   // DELETE (tetap simple + cleanup mapping agar tidak orphan)
-  function deleteKorwil(korwilId: Id) {
-    setState((s) => {
-      const next: State = { ...s };
-      const kordasOfKorwil = next.kordasByKorwil[korwilId] ?? [];
-
-      next.korwils = next.korwils.filter((k) => k.id !== korwilId);
-
-      next.kordasByKorwil = { ...next.kordasByKorwil };
-      delete next.kordasByKorwil[korwilId];
-
-      next.kotasByKorda = { ...next.kotasByKorda };
-      for (const kd of kordasOfKorwil) delete next.kotasByKorda[kd.id];
-
-      if (next.selectedKorwilId === korwilId) {
-        next.selectedKorwilId = null;
-        next.selectedKordaId = null;
+  async function deleteKorwil(korwilId: Id) {
+    try {
+      const res = await deleteKorwilAction(korwilId);
+      if (!res.success) {
+        alert(res.error ?? "Gagal menghapus korwil.");
+        return;
       }
-      return next;
-    });
+
+      setState((s) => {
+        const next: State = { ...s };
+        const kordasOfKorwil = next.kordasByKorwil[korwilId] ?? [];
+
+        next.korwils = next.korwils.filter((k) => k.id !== korwilId);
+
+        next.kordasByKorwil = { ...next.kordasByKorwil };
+        delete next.kordasByKorwil[korwilId];
+
+        next.kotasByKorda = { ...next.kotasByKorda };
+        for (const kd of kordasOfKorwil) delete next.kotasByKorda[kd.id];
+
+        if (next.selectedKorwilId === korwilId) {
+          next.selectedKorwilId = null;
+          next.selectedKordaId = null;
+        }
+        return next;
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal menghapus korwil.");
+    }
 
     setQKorda("");
     setQKota("");
   }
 
-  function deleteKorda(kordaId: Id) {
+  async function deleteKorda(kordaId: Id) {
     const korwilId = state.selectedKorwilId;
     if (!korwilId) return;
 
-    setState((s) => {
-      const next: State = { ...s };
+    try {
+      const res = await deleteKordaAction(kordaId);
+      if (!res.success) {
+        alert(res.error ?? "Gagal menghapus korda.");
+        return;
+      }
 
-      next.kordasByKorwil = { ...next.kordasByKorwil };
-      next.kordasByKorwil[korwilId] = (next.kordasByKorwil[korwilId] ?? []).filter((k) => k.id !== kordaId);
+      setState((s) => {
+        const next: State = { ...s };
 
-      next.kotasByKorda = { ...next.kotasByKorda };
-      delete next.kotasByKorda[kordaId];
+        next.kordasByKorwil = { ...next.kordasByKorwil };
+        next.kordasByKorwil[korwilId] = (next.kordasByKorwil[korwilId] ?? []).filter((k) => k.id !== kordaId);
 
-      if (next.selectedKordaId === kordaId) next.selectedKordaId = null;
-      return next;
-    });
+        next.kotasByKorda = { ...next.kotasByKorda };
+        delete next.kotasByKorda[kordaId];
+
+        if (next.selectedKordaId === kordaId) next.selectedKordaId = null;
+        return next;
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal menghapus korda.");
+    }
 
     setQKota("");
   }
 
-  function deleteKota(kotaId: Id) {
+  async function deleteKota(kotaId: number) {
     const kordaId = state.selectedKordaId;
     if (!kordaId) return;
 
-    setState((s) => ({
-      ...s,
-      kotasByKorda: {
-        ...s.kotasByKorda,
-        [kordaId]: (s.kotasByKorda[kordaId] ?? []).filter((x) => x.id !== kotaId),
-      },
-    }));
+    try {
+      const res = await deleteKotaAction({ id: kotaId, kordaId });
+      if (!res.success) {
+        alert(res.error ?? "Gagal menghapus kota.");
+        return;
+      }
+
+      setState((s) => ({
+        ...s,
+        kotasByKorda: {
+          ...s.kotasByKorda,
+          [kordaId]: (s.kotasByKorda[kordaId] ?? []).filter((x) => x.id !== kotaId),
+        },
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      alert("Gagal menghapus kota.");
+    }
   }
 
   const currentStep = state.selectedKorwilId ? (state.selectedKordaId ? 3 : 2) : 1;
@@ -238,6 +406,9 @@ export function useMaster() {
     kordasFiltered,
     kotasFiltered,
     currentStep,
+    loadingKorwil,
+    loadingKorda,
+    loadingKota,
 
     // dialog state
     openAddKorwil,
@@ -252,8 +423,6 @@ export function useMaster() {
     setKorwilName,
     kordaName,
     setKordaName,
-    kotaName,
-    setKotaName,
 
     // search
     qKorwil,

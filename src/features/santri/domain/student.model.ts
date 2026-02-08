@@ -9,9 +9,9 @@ export type Student = {
   photoUrl: string;
   parrentPhone?: string;
   dormitory: string;
-  provinceId: number;
-  regencyId: number;
-  districtId: number;
+  provinceId?: number;
+  regencyId?: number;
+  districtId?: number;
   village: string;
   fullAddress: string;
 };

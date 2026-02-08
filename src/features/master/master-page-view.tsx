@@ -10,6 +10,7 @@ import { useMaster } from "./hooks/use-master";
 import { TopBar } from "./components/TopBar";
 import { ColumnCard } from "./components/ColumnCard";
 import { AddEntityDialog } from "./components/AddEntityDialog";
+import { AddKotaDialog } from "./components/AddKotaDialog";
 import { ListRow } from "./components/ListRow";
 import { ConfirmDeleteButton } from "./components/ConfirmDeleteButton";
 
@@ -58,35 +59,41 @@ export default function MasterPageView() {
 
               <ScrollArea className="h-[360px] pr-2">
                 <div className="mt-3 space-y-2">
-                  {h.korwilsFiltered.map((k) => {
-                    const active = h.state.selectedKorwilId === k.id;
-                    const childCount = (h.state.kordasByKorwil[k.id] ?? []).length;
+                  {h.loadingKorwil ? (
+                    <div className="text-sm text-muted-foreground">Memuat korwil...</div>
+                  ) : (
+                    <>
+                      {h.korwilsFiltered.map((k) => {
+                        const active = h.state.selectedKorwilId === k.id;
+                        const childCount = (h.state.kordasByKorwil[k.id] ?? []).length;
 
-                    return (
-                      <ListRow
-                        key={k.id}
-                        active={active}
-                        title={k.name}
-                        meta={`${childCount} korda`}
-                        onSelect={() => h.selectKorwil(k.id)}
-                        right={
-                          <ConfirmDeleteButton
-                            title="Hapus Korwil?"
-                            description={
-                              <>
-                                Korwil <b>{k.name}</b> akan dihapus. Perilaku delete tetap simple (tanpa blok). Data anak di-cleanup dari
-                                UI state.
-                              </>
+                        return (
+                          <ListRow
+                            key={k.id}
+                            active={active}
+                            title={k.name}
+                            meta={`${childCount} korda`}
+                            onSelect={() => h.selectKorwil(k.id)}
+                            right={
+                              <ConfirmDeleteButton
+                                title="Hapus Korwil?"
+                                description={
+                                  <>
+                                    Korwil <b>{k.name}</b> akan dihapus. Perilaku delete tetap simple (tanpa blok). Data anak di-cleanup dari
+                                    UI state.
+                                  </>
+                                }
+                                onConfirm={() => h.deleteKorwil(k.id)}
+                              />
                             }
-                            onConfirm={() => h.deleteKorwil(k.id)}
                           />
-                        }
-                      />
-                    );
-                  })}
+                        );
+                      })}
 
-                  {h.korwilsFiltered.length === 0 && (
-                    <div className="text-sm text-muted-foreground">Tidak ada hasil.</div>
+                      {h.korwilsFiltered.length === 0 && (
+                        <div className="text-sm text-muted-foreground">Tidak ada hasil.</div>
+                      )}
+                    </>
                   )}
                 </div>
               </ScrollArea>
@@ -134,37 +141,44 @@ export default function MasterPageView() {
 
                 <ScrollArea className="h-[360px] pr-2">
                   <div className="mt-3 space-y-2">
-                    {h.kordasFiltered.map((kd) => {
-                      const active = h.state.selectedKordaId === kd.id;
-                      const cityCount = (h.state.kotasByKorda[kd.id] ?? []).length;
+                    {h.loadingKorda ? (
+                      <div className="text-sm text-muted-foreground">Memuat korda...</div>
+                    ) : (
+                      <>
+                        {h.kordasFiltered.map((kd) => {
+                          const active = h.state.selectedKordaId === kd.id;
+                        const cityCount = h.state.kotasByKorda[kd.id];
+                        const cityCountLabel = cityCount ? `${cityCount.length} kota` : "—";
 
-                      return (
-                        <ListRow
-                          key={kd.id}
-                          active={active}
-                          title={kd.name}
-                          meta={`${cityCount} kota`}
-                          onSelect={() => h.selectKorda(kd.id)}
-                          right={
-                            <ConfirmDeleteButton
-                              title="Hapus Korda?"
-                              description={
-                                <>
-                                  Korda <b>{kd.name}</b> akan dihapus. Perilaku delete tetap (tidak memblok walau punya kota).
-                                </>
+                          return (
+                            <ListRow
+                              key={kd.id}
+                              active={active}
+                              title={kd.name}
+                            meta={cityCountLabel}
+                              onSelect={() => h.selectKorda(kd.id)}
+                              right={
+                                <ConfirmDeleteButton
+                                  title="Hapus Korda?"
+                                  description={
+                                    <>
+                                      Korda <b>{kd.name}</b> akan dihapus. Perilaku delete tetap (tidak memblok walau punya kota).
+                                    </>
+                                  }
+                                  onConfirm={() => h.deleteKorda(kd.id)}
+                                />
                               }
-                              onConfirm={() => h.deleteKorda(kd.id)}
                             />
-                          }
-                        />
-                      );
-                    })}
+                          );
+                        })}
 
-                    {h.kordasFiltered.length === 0 && (
-                      <div className="text-sm text-muted-foreground">Tidak ada hasil.</div>
-                    )}
-                    {h.kordas.length === 0 && (
-                      <div className="text-sm text-muted-foreground">Belum ada korda untuk korwil ini.</div>
+                        {h.kordasFiltered.length === 0 && (
+                          <div className="text-sm text-muted-foreground">Tidak ada hasil.</div>
+                        )}
+                        {h.kordas.length === 0 && (
+                          <div className="text-sm text-muted-foreground">Belum ada korda untuk korwil ini.</div>
+                        )}
+                      </>
                     )}
                   </div>
                 </ScrollArea>
@@ -177,7 +191,7 @@ export default function MasterPageView() {
             title="Cakupan Kota"
             description="Step 3 — tergantung Korda"
             headerRight={
-              <AddEntityDialog
+              <AddKotaDialog
                 open={h.openAddKota}
                 onOpenChange={(v) => {
                   if (!h.state.selectedKordaId) return;
@@ -186,12 +200,10 @@ export default function MasterPageView() {
                 triggerLabel="+ Tambah"
                 title="Tambah Kota"
                 description={h.selectedKorda ? `Korda: ${h.selectedKorda.name}` : ""}
-                inputLabel="Nama Kota"
-                placeholder="Contoh: Kota Bandung"
-                value={h.kotaName}
-                onChange={h.setKotaName}
                 onSubmit={h.addKota}
                 disabled={!h.state.selectedKordaId}
+                currentKordaId={h.state.selectedKordaId}
+                usedRegencyIds={h.kotas.map((x) => x.id)}
               />
             }
             top={
@@ -213,31 +225,37 @@ export default function MasterPageView() {
 
                 <ScrollArea className="h-[360px] pr-2">
                   <div className="mt-3 space-y-2">
-                    {h.kotasFiltered.map((kt) => (
-                      <ListRow
-                        key={kt.id}
-                        title={kt.name}
-                        meta={kt.id} // kalau mau sembunyikan id, hapus meta ini
-                        disabled
-                        right={
-                          <ConfirmDeleteButton
-                            title="Hapus Kota?"
-                            description={
-                              <>
-                                Kota <b>{kt.name}</b> akan dihapus.
-                              </>
+                    {h.loadingKota ? (
+                      <div className="text-sm text-muted-foreground">Memuat kota...</div>
+                    ) : (
+                      <>
+                        {h.kotasFiltered.map((kt) => (
+                          <ListRow
+                            key={kt.id}
+                            title={kt.name}
+                            meta={kt.provinceName ?? kt.regencyName}
+                            disabled
+                            right={
+                              <ConfirmDeleteButton
+                                title="Hapus Kota?"
+                                description={
+                                  <>
+                                    Kota <b>{kt.name}</b> akan dihapus.
+                                  </>
+                                }
+                                onConfirm={() => h.deleteKota(kt.id)}
+                              />
                             }
-                            onConfirm={() => h.deleteKota(kt.id)}
                           />
-                        }
-                      />
-                    ))}
+                        ))}
 
-                    {h.kotasFiltered.length === 0 && (
-                      <div className="text-sm text-muted-foreground">Tidak ada hasil.</div>
-                    )}
-                    {h.kotas.length === 0 && (
-                      <div className="text-sm text-muted-foreground">Belum ada kota untuk korda ini.</div>
+                        {h.kotasFiltered.length === 0 && (
+                          <div className="text-sm text-muted-foreground">Tidak ada hasil.</div>
+                        )}
+                        {h.kotas.length === 0 && (
+                          <div className="text-sm text-muted-foreground">Belum ada kota untuk korda ini.</div>
+                        )}
+                      </>
                     )}
                   </div>
                 </ScrollArea>
