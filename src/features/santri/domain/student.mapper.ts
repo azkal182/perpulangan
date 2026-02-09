@@ -9,12 +9,31 @@ function mapStatusParamToBoolean(status?: string): boolean {
   }
 }
 
+/**
+ * Membersihkan nama dari teks di dalam kurung dan spasi berlebih
+ * @param name - Nama mentah yang mengandung keterangan dalam kurung
+ * @returns Nama yang sudah bersih
+ */
+function normalizeName(name: string): string {
+    if (!name) return "";
+
+    return name
+        // 1. Regex untuk mencari teks di dalam kurung: \(.*?\)
+        // g = global (semua kurung), s = dotAll (termasuk line breaks)
+        .replace(/\([\s\S]*?\)/g, "")        
+        // 2. Menghapus spasi ganda yang mungkin muncul setelah penghapusan
+        .replace(/\s+/g, " ")
+        
+        // 3. Membersihkan spasi di awal dan akhir string
+        .trim();
+}
+
 export function mapStudent(dto: StudentDTO): Student {
   return {
     id: String(dto.id_anggota),
     idApi: dto.id_anggota,
     nis: dto.nis_santri,
-    name: dto.nama,
+    name: normalizeName(dto.nama),
     gender: dto.kelamin,
     status:
       dto.status_anggota.nama !== null

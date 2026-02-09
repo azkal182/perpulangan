@@ -26,9 +26,11 @@ import { getKorwil } from "@/features/master/actions/korwil.action";
 import { getKorda } from "@/features/master/actions/korda.action";
 import type { Korwil, Korda } from "@/features/master/types";
 
-import { Download, Filter, Info, Search, UserPlus, XIcon } from "lucide-react";
+import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { getStudentsForPDFExport } from "../actions/export-pdf.action";
+import { generateStudentsPDF } from "../utils/pdf-generator";
 
 type StatusParam = "all" | "active" | "inactive";
 
@@ -147,6 +149,7 @@ export function SantriToolbarClient({
   const [previewRows, setPreviewRows] = useState<Student[] | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -342,6 +345,23 @@ export function SantriToolbarClient({
     return summarize(previewRows);
   }, [previewRows]);
 
+  const handleExportPDF = async () => {
+    setExportingPDF(true);
+    try {
+      const result = await getStudentsForPDFExport();
+      if (result.success && result.data) {
+        generateStudentsPDF(result.data);
+      } else {
+        alert(result.error || "Gagal mengambil data siswa");
+      }
+    } catch (error) {
+      console.error("PDF export error:", error);
+      alert("Terjadi kesalahan saat membuat PDF");
+    } finally {
+      setExportingPDF(false);
+    }
+  };
+
   const onPreviewImport = async () => {
     try {
       setLoadingPreview(true);
@@ -529,6 +549,16 @@ export function SantriToolbarClient({
 
         {/* RIGHT */}
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-end md:w-auto">
+          <Button
+            onClick={handleExportPDF}
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={exportingPDF}
+          >
+            <FileDown className="mr-2 h-4 w-4" />
+            {exportingPDF ? "Membuat PDF..." : "Export PDF"}
+          </Button>
+
           <Button
             onClick={onPreviewImport}
             variant="outline"
