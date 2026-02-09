@@ -53,30 +53,25 @@ function chunk<T>(arr: T[], size: number) {
   return out;
 }
 
-/*
+
+/* Unused helper functions - commented out
 function toIntOrNull(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
   if (typeof v === "string") {
-    const n = Number(v);
-    return Number.isFinite(n) ? Math.trunc(n) : null;
+    return parseInt(v.trim(), 10) || null;
   }
   return null;
 }
-*/
 
-/*
 function isAktifFromApi(row: StudentDTO): boolean {
   const byStatusAnggota =
     row.status_anggota?.nama?.trim().toLowerCase() === "aktif";
-  if (byStatusAnggota) return true;
-
-  // fallback 1: nama_lengkap mengandung "(Aktif)" / kata "aktif"
-  const nl = (row.nama_lengkap ?? "").toLowerCase();
-  if (nl.includes("(aktif)") || nl.includes(" aktif")) return true;
-
-  return false;
+  const byStatusPulang =
+    row.status_pulang?.nama?.trim().toLowerCase() !== "pulang";
+  return byStatusAnggota && byStatusPulang;
 }
+*/
 
 function validateStudent(s: StudentNormalized) {
   const missing: string[] = [];
