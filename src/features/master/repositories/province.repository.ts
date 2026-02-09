@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { logger } from "@/server/logger";
 import type { ProvinceOption } from "../types";
 
 export const provinceRepository = {
@@ -6,21 +7,28 @@ export const provinceRepository = {
     q?: string;
     limit?: number;
   }): Promise<ProvinceOption[]> {
-    const q = params?.q?.trim();
-    const take = params?.limit ?? 50;
+    try {
+      const q = params?.q?.trim();
+      const take = params?.limit ?? 50;
 
-    const items = await prisma.province.findMany({
-      where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
-      take,
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, code: true },
-    });
+      const items = await prisma.province.findMany({
+        where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
+        take,
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, code: true },
+      });
 
-    return items.map((item) => ({
-      value: item.id,
-      name: item.name,
-      label: item.name,
-      code: item.code,
-    }));
+      logger.debug({ q, count: items.length }, "provinceRepository.search success");
+
+      return items.map((item) => ({
+        value: item.id,
+        name: item.name,
+        label: item.name,
+        code: item.code,
+      }));
+    } catch (error) {
+      logger.error({ err: error, params }, "provinceRepository.search failed");
+      throw error;
+    }
   },
 };

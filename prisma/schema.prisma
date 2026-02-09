@@ -240,10 +240,25 @@ model Korda {
     picUserId String? @unique
     picUser   User?   @relation("KordaPIC", fields: [picUserId], references: [id], onDelete: SetNull)
 
-    korwilId  String?
-    korwil    Korwil?   @relation(fields: [korwilId], references: [id], onDelete: SetNull)
-    regencies Regency[]
+    korwilId   String?
+    korwil     Korwil?     @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+    regencies  Regency[]
+    dropPoints DropPoint[]
 
     updatedAt DateTime @updatedAt
     createdAt DateTime @default(now())
+}
+
+model DropPoint {
+    id    String @id @default(uuid())
+    name  String
+    price Int    @default(0)
+
+    kordaId String
+    korda   Korda  @relation(fields: [kordaId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([kordaId])
 }

@@ -2,32 +2,24 @@
 
 import * as React from "react";
 import type { DropPoint, Id, Korwil, Korda } from "../types";
-import { uid } from "../lib/uid";
+import { 
+  getDropPoints, 
+  createDropPoint, 
+  updateDropPoint, 
+  deleteDropPoint 
+} from "../actions/drop-point.action";
+import { getKorwil } from "@/features/master/actions/korwil.action";
+import { getKorda } from "@/features/master/actions/korda.action";
+// import { toast } from "sonner"; // Assuming sonner is used, or alert backup
 
 type FilterId = Id | "all";
 
-const seedKorwils: Korwil[] = [
-  { id: "kw-1", name: "Jawa Barat" },
-  { id: "kw-2", name: "Jawa Timur" },
-];
-
-const seedKordas: Korda[] = [
-  { id: "kd-1", name: "Bandung Raya", korwilId: "kw-1" },
-  { id: "kd-2", name: "Bogor Depok", korwilId: "kw-1" },
-  { id: "kd-3", name: "Surabaya Raya", korwilId: "kw-2" },
-];
-
-const seedDropPoints: DropPoint[] = [
-  { id: "dp-1", kordaId: "kd-1", name: "Turun Kota Bandung", price: 150000 },
-  { id: "dp-2", kordaId: "kd-1", name: "Turun Kab. Bandung", price: 140000 },
-  { id: "dp-3", kordaId: "kd-3", name: "Turun Kota Surabaya", price: 200000 },
-];
-
 export function useDropPoints() {
-  const [korwils] = React.useState<Korwil[]>(seedKorwils);
-  const [kordas] = React.useState<Korda[]>(seedKordas);
-  const [dropPoints, setDropPoints] =
-    React.useState<DropPoint[]>(seedDropPoints);
+  const [korwils, setKorwils] = React.useState<Korwil[]>([]);
+  const [kordas, setKordas] = React.useState<Korda[]>([]);
+  const [dropPoints, setDropPoints] = React.useState<DropPoint[]>([]);
+  
+  const [loading, setLoading] = React.useState(true);
 
   const [korwilId, setKorwilId] = React.useState<FilterId>("all");
   const [kordaId, setKordaId] = React.useState<FilterId>("all");
@@ -37,6 +29,56 @@ export function useDropPoints() {
   const [openCreate, setOpenCreate] = React.useState(false);
   const [openEdit, setOpenEdit] = React.useState(false);
   const [editing, setEditing] = React.useState<DropPoint | null>(null);
+
+  // 1. Fetch Master Data (Korwil & Korda)
+  React.useEffect(() => {
+    async function loadMasters() {
+      try {
+        const [resKorwil, resKorda] = await Promise.all([
+            getKorwil({ limit: 100 }),
+            getKorda({ limit: 100 }) // Fetch all kordas for mapping
+        ]);
+        
+        if (resKorwil.success && resKorwil.data) {
+             const items = Array.isArray(resKorwil.data) ? resKorwil.data : resKorwil.data.items;
+             setKorwils(items);
+        }
+        if (resKorda.success && resKorda.data) {
+             const items = Array.isArray(resKorda.data) ? resKorda.data : resKorda.data.items;
+             setKordas(items);
+        }
+      } catch (err) {
+        console.error("Failed to load master data", err);
+      }
+    }
+    loadMasters();
+  }, []);
+
+  // 2. Fetch Drop Points
+  React.useEffect(() => {
+    async function loadDropPoints() {
+      setLoading(true);
+      try {
+        const res = await getDropPoints();
+        if (res.success && res.data) {
+          setDropPoints(res.data as DropPoint[]);
+        }
+      } catch (err) {
+        console.error("Failed to load drop points", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDropPoints();
+  }, []); // Reload triggers handled manually or via revalidatePath
+
+  async function refresh() {
+      const res = await getDropPoints();
+      if (res.success && res.data) {
+        setDropPoints(res.data as DropPoint[]);
+      }
+  }
+
 
   // dependent filter: kalau korwil berubah, korda yang valid menyesuaikan
   const kordasFilteredByKorwil = React.useMemo(() => {
@@ -70,9 +112,15 @@ export function useDropPoints() {
     setQ("");
   }
 
-  function create(payload: { kordaId: Id; name: string; price: number }) {
-    const id = uid("dp");
-    setDropPoints((s) => [{ id, ...payload }, ...s]);
+  async function create(payload: { kordaId: Id; name: string; price: number }) {
+    const res = await createDropPoint(payload);
+    if (res.success && res.data) {
+        setOpenCreate(false);
+        refresh();
+        // toast.success("Titik turun berhasil dibuat");
+    } else {
+        alert("Gagal membuat titik turun");
+    }
   }
 
   function startEdit(item: DropPoint) {
@@ -80,16 +128,27 @@ export function useDropPoints() {
     setOpenEdit(true);
   }
 
-  function update(payload: { kordaId: Id; name: string; price: number }) {
+  async function update(payload: { kordaId: Id; name: string; price: number }) {
     if (!editing) return;
-    setDropPoints((s) =>
-      s.map((x) => (x.id === editing.id ? { ...x, ...payload } : x)),
-    );
-    setEditing(null);
+    const res = await updateDropPoint(editing.id, payload);
+    if (res.success) {
+        setOpenEdit(false);
+        setEditing(null);
+        refresh();
+        // toast.success("Titik turun berhasil diupdate");
+    } else {
+        alert("Gagal update titik turun");
+    }
   }
 
-  function remove(id: Id) {
-    setDropPoints((s) => s.filter((x) => x.id !== id));
+  async function remove(id: Id) {
+    if(!confirm("Yakin hapus?")) return;
+    const res = await deleteDropPoint(id);
+    if(res.success) {
+        refresh();
+    } else {
+        alert("Gagal hapus");
+    }
   }
 
   return {
@@ -123,5 +182,6 @@ export function useDropPoints() {
     startEdit,
     update,
     remove,
+    loading
   };
 }

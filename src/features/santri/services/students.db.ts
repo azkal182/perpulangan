@@ -1,5 +1,6 @@
 import { StudentWhereInput } from "@/generated/prisma/models";
 import prisma from "@/lib/prisma";
+import { logger } from "@/server/logger";
 
 export async function getStudentsPage(
   page: number,
@@ -41,42 +42,49 @@ export async function getStudentsPage(
 
   //   where.provinceId = 11;
 
-  const [total, students] = await prisma.$transaction([
-    prisma.student.count({ where }),
-    prisma.student.findMany({
-      where,
-      skip,
-      take: safeSize,
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        nis: true,
-        dormitory: true,
-        status: true,
-        gender: true,
-        regency: {
-          select: {
-            name: true,
-            korda: {
-              select: {
-                id: true,
-                name: true,
-                korwil: {
-                  select: {
-                    id: true,
-                    name: true,
+  try {
+    const [total, students] = await prisma.$transaction([
+      prisma.student.count({ where }),
+      prisma.student.findMany({
+        where,
+        skip,
+        take: safeSize,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          nis: true,
+          dormitory: true,
+          status: true,
+          gender: true,
+          regency: {
+            select: {
+              name: true,
+              korda: {
+                select: {
+                  id: true,
+                  name: true,
+                  korwil: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
                   },
                 },
               },
             },
           },
+
+          // kalau belum punya field pembayaran/rombongan/titikTurun, kita akan fallback
         },
+      }),
+    ]);
 
-        // kalau belum punya field pembayaran/rombongan/titikTurun, kita akan fallback
-      },
-    }),
-  ]);
 
-  return { total, students, page: safePage, pageSize: safeSize };
+    logger.debug({ count: students.length, total, page, pageSize }, "students.db.getStudentsPage success");
+    return { total, students, page: safePage, pageSize: safeSize };
+  } catch (error) {
+    logger.error({ err: error, page, pageSize, q, status, korwilId }, "students.db.getStudentsPage failed");
+    throw error;
+  }
 }

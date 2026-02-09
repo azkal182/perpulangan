@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { logger } from "@/server/logger";
 import type { Kota } from "../types";
 
 const regencySelect = {
@@ -33,37 +34,61 @@ function mapKota(item: RegencyRecord): Kota {
 
 export const kotaRepository = {
   async findManyByKorda(kordaId: string): Promise<Kota[]> {
-    const items = await prisma.regency.findMany({
-      where: { kordaId },
-      orderBy: { name: "asc" },
-      select: regencySelect,
-    });
-    return items.map(mapKota);
+    try {
+      const items = await prisma.regency.findMany({
+        where: { kordaId },
+        orderBy: { name: "asc" },
+        select: regencySelect,
+      });
+      logger.debug({ count: items.length, kordaId }, "kotaRepository.findManyByKorda success");
+      return items.map(mapKota);
+    } catch (error) {
+      logger.error({ err: error, kordaId }, "kotaRepository.findManyByKorda failed");
+      throw error;
+    }
   },
 
   async findById(regencyId: number): Promise<Kota | null> {
-    const item = await prisma.regency.findUnique({
-      where: { id: regencyId },
-      select: regencySelect,
-    });
-    return item ? mapKota(item) : null;
+    try {
+      const item = await prisma.regency.findUnique({
+        where: { id: regencyId },
+        select: regencySelect,
+      });
+      logger.debug({ regencyId, found: !!item }, "kotaRepository.findById success");
+      return item ? mapKota(item) : null;
+    } catch (error) {
+      logger.error({ err: error, regencyId }, "kotaRepository.findById failed");
+      throw error;
+    }
   },
 
   async assignToKorda(regencyId: number, kordaId: string): Promise<Kota> {
-    const item = await prisma.regency.update({
-      where: { id: regencyId },
-      data: { kordaId },
-      select: regencySelect,
-    });
-    return mapKota(item);
+    try {
+      const item = await prisma.regency.update({
+        where: { id: regencyId },
+        data: { kordaId },
+        select: regencySelect,
+      });
+      logger.info({ regencyId, kordaId }, "kotaRepository.assignToKorda success");
+      return mapKota(item);
+    } catch (error) {
+      logger.error({ err: error, regencyId, kordaId }, "kotaRepository.assignToKorda failed");
+      throw error;
+    }
   },
 
   async unassign(regencyId: number): Promise<Kota> {
-    const item = await prisma.regency.update({
-      where: { id: regencyId },
-      data: { kordaId: null },
-      select: regencySelect,
-    });
-    return mapKota(item);
+    try {
+      const item = await prisma.regency.update({
+        where: { id: regencyId },
+        data: { kordaId: null },
+        select: regencySelect,
+      });
+      logger.info({ regencyId }, "kotaRepository.unassign success");
+      return mapKota(item);
+    } catch (error) {
+      logger.error({ err: error, regencyId }, "kotaRepository.unassign failed");
+      throw error;
+    }
   },
 };

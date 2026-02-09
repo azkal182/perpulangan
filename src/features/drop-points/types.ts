@@ -1,7 +1,7 @@
 export type Id = string;
 
-export type Korwil = { id: Id; name: string };
-export type Korda = { id: Id; name: string; korwilId: Id };
+// Re-export from master to ensure consistency
+export type { Korwil, Korda } from "@/features/master/types";
 
 export type DropPoint = {
   id: Id;

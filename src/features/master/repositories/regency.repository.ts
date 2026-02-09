@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { logger } from "@/server/logger";
 import type { RegencyOption } from "../types";
 
 export const regencyRepository = {
@@ -7,53 +8,56 @@ export const regencyRepository = {
     provinceId?: number;
     limit?: number;
   }): Promise<RegencyOption[]> {
-    const q = params?.q?.trim();
-    const provinceId = params?.provinceId;
-    const take = params?.limit ?? 50;
+    try {
+      const q = params?.q?.trim();
+      const provinceId = params?.provinceId;
+      const take = params?.limit ?? 50;
 
-    console.log("regencyRepository.search called", { q, provinceId, take });
+      // logger.debug({ q, provinceId, take }, "regencyRepository.search called");
 
-    const where = {
-      ...(provinceId ? { provinceId } : {}),
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { label: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    };
+      const where = {
+        ...(provinceId ? { provinceId } : {}),
+        ...(q
+          ? {
+              OR: [
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                { name: { contains: q, mode: "insensitive" as any } },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                { label: { contains: q, mode: "insensitive" as any } },
+              ],
+            }
+          : {}),
+      };
 
-    const items = await prisma.regency.findMany({
-      where: Object.keys(where).length > 0 ? where : undefined,
-      take,
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        label: true,
-        type: true,
-        kordaId: true,
-        province: { select: { name: true } },
-        // korda: { select: { name: true } },
-      },
-    });
+      const items = await prisma.regency.findMany({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        take,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          label: true,
+          type: true,
+          kordaId: true,
+          province: { select: { name: true } },
+          // korda: { select: { name: true } },
+        },
+      });
 
-    console.log("regencyRepository.search", {
-      q,
-      provinceId,
-      take,
-      found: items.length,
-    });
-    return items.map((item) => ({
-      value: item.id,
-      name: item.name,
-      label: item.label ?? item.name,
-      type: item.type ?? null,
-      provinceName: item.province?.name ?? null,
-      kordaId: item.kordaId ?? null,
-      //   kordaName: item.korda?.name ?? null,
-    }));
+      logger.debug({ q, provinceId, count: items.length }, "regencyRepository.search success");
+
+      return items.map((item) => ({
+        value: item.id,
+        name: item.name,
+        label: item.label ?? item.name,
+        type: item.type ?? null,
+        provinceName: item.province?.name ?? null,
+        kordaId: item.kordaId ?? null,
+        //   kordaName: item.korda?.name ?? null,
+      }));
+    } catch (error) {
+      logger.error({ err: error, params }, "regencyRepository.search failed");
+      throw error;
+    }
   },
 };

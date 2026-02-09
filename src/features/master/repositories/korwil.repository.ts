@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { logger } from "@/server/logger";
 import type { Korwil } from "../types";
 
 export type KorwilCreateData = {
@@ -24,67 +25,102 @@ export const korwilRepository = {
   async findMany(
     params?: { page?: number; limit?: number },
   ): Promise<{ items: Korwil[]; totalCount: number }> {
-    if (!params?.page) {
-      const items = await prisma.korwil.findMany({
-        orderBy: { createdAt: "desc" },
-        select: korwilSelect,
-      });
-      return { items, totalCount: items.length };
+    try {
+      if (!params?.page) {
+        const items = await prisma.korwil.findMany({
+          orderBy: { createdAt: "desc" },
+          select: korwilSelect,
+        });
+        logger.debug({ count: items.length }, "korwilRepository.findMany success");
+        return { items, totalCount: items.length };
+      }
+
+      const page = params.page;
+      const limit = params.limit ?? 10;
+      const skip = (page - 1) * limit;
+
+      const [items, totalCount] = await prisma.$transaction([
+        prisma.korwil.findMany({
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+          select: korwilSelect,
+        }),
+        prisma.korwil.count(),
+      ]);
+
+      logger.debug({ count: items.length, totalCount, page }, "korwilRepository.findMany paginated success");
+      return { items, totalCount };
+    } catch (error) {
+      logger.error({ err: error, params }, "korwilRepository.findMany failed");
+      throw error;
     }
-
-    const page = params.page;
-    const limit = params.limit ?? 10;
-    const skip = (page - 1) * limit;
-
-    const [items, totalCount] = await prisma.$transaction([
-      prisma.korwil.findMany({
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-        select: korwilSelect,
-      }),
-      prisma.korwil.count(),
-    ]);
-
-    return { items, totalCount };
   },
 
   async findById(id: string): Promise<Korwil | null> {
-    return prisma.korwil.findUnique({
-      where: { id },
-      select: korwilSelect,
-    });
+    try {
+      const item = await prisma.korwil.findUnique({
+        where: { id },
+        select: korwilSelect,
+      });
+      logger.debug({ id, found: !!item }, "korwilRepository.findById success");
+      return item;
+    } catch (error) {
+      logger.error({ err: error, id }, "korwilRepository.findById failed");
+      throw error;
+    }
   },
 
   async create(data: KorwilCreateData): Promise<Korwil> {
-    return prisma.korwil.create({
-      data: {
-        name: data.name,
-        picName: data.picName ?? null,
-        picPhone: data.picPhone ?? null,
-        picUserId: data.picUserId ?? null,
-      },
-      select: korwilSelect,
-    });
+    try {
+      const result = await prisma.korwil.create({
+        data: {
+          name: data.name,
+          picName: data.picName ?? null,
+          picPhone: data.picPhone ?? null,
+          picUserId: data.picUserId ?? null,
+        },
+        select: korwilSelect,
+      });
+      logger.info({ id: result.id, name: result.name }, "korwilRepository.create success");
+      return result;
+    } catch (error) {
+      logger.error({ err: error, data }, "korwilRepository.create failed");
+      throw error;
+    }
   },
 
   async update(id: string, data: KorwilUpdateData): Promise<Korwil> {
-    return prisma.korwil.update({
-      where: { id },
-      data: {
-        name: data.name,
-        picName: data.picName,
-        picPhone: data.picPhone,
-        picUserId: data.picUserId,
-      },
-      select: korwilSelect,
-    });
+    try {
+      const result = await prisma.korwil.update({
+        where: { id },
+        data: {
+          name: data.name,
+          picName: data.picName,
+          picPhone: data.picPhone,
+          picUserId: data.picUserId,
+        },
+        select: korwilSelect,
+      });
+      logger.info({ id: result.id }, "korwilRepository.update success");
+      return result;
+    } catch (error) {
+      logger.error({ err: error, id, data }, "korwilRepository.update failed");
+      throw error;
+    }
   },
 
   async delete(id: string): Promise<Korwil> {
-    return prisma.korwil.delete({
-      where: { id },
-      select: korwilSelect,
-    });
+    try {
+      const result = await prisma.korwil.delete({
+        where: { id },
+        select: korwilSelect,
+      });
+      logger.info({ id: result.id }, "korwilRepository.delete success");
+      return result;
+    } catch (error) {
+      logger.error({ err: error, id }, "korwilRepository.delete failed");
+      throw error;
+    }
   },
 };
