@@ -113,6 +113,8 @@ model Student {
     village     Village?  @relation(fields: [villageId], references: [id])
     villageId   Int?
 
+    registrations Registration[]
+
     @@index([status])
     @@index([name])
     @@index([regencyId])
@@ -209,6 +211,8 @@ model Event {
     createdAt DateTime    @default(now())
     updatedAt DateTime    @updatedAt
 
+    registrations Registration[]
+
     @@index([status])
     @@index([startDate])
 }
@@ -245,6 +249,9 @@ model Korda {
     regencies  Regency[]
     dropPoints DropPoint[]
 
+    outboundRegistrations Registration[] @relation("OutboundKorda")
+    returnRegistrations   Registration[] @relation("ReturnKorda")
+
     updatedAt DateTime @updatedAt
     createdAt DateTime @default(now())
 }
@@ -260,5 +267,59 @@ model DropPoint {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
+    outboundRegistrations Registration[] @relation("OutboundDropPoint")
+    returnRegistrations   Registration[] @relation("ReturnDropPoint")
+
     @@index([kordaId])
+}
+
+enum RegistrationStatus {
+    DRAFT
+    CONFIRMED
+    CANCELLED
+}
+
+model Registration {
+    id String @id @default(uuid())
+
+    // Event relation
+    eventId String
+    event   Event  @relation(fields: [eventId], references: [id])
+
+    // Student relation
+    studentId String
+    student   Student @relation(fields: [studentId], references: [id])
+
+    // Outbound Journey (Pulang ke rumah)
+    outboundKordaId     String
+    outboundKorda       Korda     @relation("OutboundKorda", fields: [outboundKordaId], references: [id])
+    outboundDropPointId String
+    outboundDropPoint   DropPoint @relation("OutboundDropPoint", fields: [outboundDropPointId], references: [id])
+    outboundPaid        Boolean   @default(false)
+
+    // Return Journey (Kembali ke pondok)
+    returnKordaId     String
+    returnKorda       Korda     @relation("ReturnKorda", fields: [returnKordaId], references: [id])
+    returnDropPointId String
+    returnDropPoint   DropPoint @relation("ReturnDropPoint", fields: [returnDropPointId], references: [id])
+    returnPaid        Boolean   @default(false)
+
+    // Status
+    status RegistrationStatus @default(DRAFT)
+
+    // Flags
+    kordaChanged         Boolean @default(false) // True if different from student's original Korda
+    kordaChangeConfirmed Boolean @default(false) // Confirmation for Korda change
+
+    notes String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([eventId, studentId]) // One registration per student per event
+    @@index([eventId])
+    @@index([studentId])
+    @@index([status])
+    @@index([outboundKordaId])
+    @@index([returnKordaId])
 }
