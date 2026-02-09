@@ -29,7 +29,7 @@ import {
 import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
 import { SantriPageSizeSelect } from "@/features/santri/components/SantriPageSizeSelect.client";
 
-type PaymentStatus = "Lunas" | "Kurang" | "Belum";
+type StudentStatus = "Aktif" | "Non Aktif";
 
 function initials(name: string) {
   return name
@@ -40,15 +40,15 @@ function initials(name: string) {
     .join("");
 }
 
-function statusBadgeVariant(status: PaymentStatus) {
-  if (status === "Lunas") return "secondary";
-  if (status === "Belum") return "destructive";
+function statusBadgeVariant(status: StudentStatus) {
+  if (status === "Aktif") return "secondary";
+  if (status === "Non Aktif") return "destructive";
   return "outline";
 }
 
 // Contoh mapping demo saja (kamu bebas ubah)
-function mapStudentStatusToPaymentStatus(status: boolean): PaymentStatus {
-  return status ? "Lunas" : "Belum";
+function mapStudentStatusToPaymentStatus(status: boolean): StudentStatus {
+  return status ? "Aktif" : "Non Aktif";
 }
 
 export async function SantriTableCard({
@@ -57,18 +57,25 @@ export async function SantriTableCard({
   basePath = "/santri",
   query = "",
   status = "all",
+  korwilId = "all",
+  kordaId = "all",
 }: {
   page?: number;
   pageSize?: number;
   basePath?: string;
   query?: string;
   status?: string; // "all" | "active" | "inactive"
+  korwilId?: string;
+  kordaId?: string;
 }) {
+  const effectiveKordaId = korwilId === "all" ? "all" : (kordaId ?? "all");
   const { total, students } = await getStudentsPage(
     page,
     pageSize,
     query,
     status,
+    korwilId,
+    effectiveKordaId,
   );
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -103,6 +110,10 @@ export async function SantriTableCard({
     params.set("perPage", String(pageSize));
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
+    if (korwilId && korwilId !== "all") params.set("korwilId", korwilId);
+    if (effectiveKordaId && effectiveKordaId !== "all") {
+      params.set("kordaId", effectiveKordaId);
+    }
     return `${basePath}?${params.toString()}`;
   };
 
@@ -116,12 +127,12 @@ export async function SantriTableCard({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[320px]">Santri</TableHead>
+                <TableHead className="w-[320px]">P/L</TableHead>
                 <TableHead className="w-[160px]">Kamar</TableHead>
+                <TableHead className="w-[220px]">Korwil</TableHead>
                 <TableHead className="w-[220px]">Korda</TableHead>
-                <TableHead className="w-[220px]">Titik Turun</TableHead>
-                <TableHead className="w-[190px] text-right">
-                  Pembayaran
-                </TableHead>
+                <TableHead className="w-[220px]">Kota</TableHead>
+
                 <TableHead className="w-[140px]">Status</TableHead>
                 <TableHead className="w-[56px]" />
               </TableRow>
@@ -147,7 +158,14 @@ export async function SantriTableCard({
                       </div>
                     </TableCell>
 
+                    <TableCell className="opacity-80">
+                      {s.gender.toLowerCase() === "laki-laki" ? "L" : "P"}
+                    </TableCell>
                     <TableCell className="opacity-80">{s.dormitory}</TableCell>
+
+                    <TableCell className="opacity-70">
+                      {s.regency?.korda?.korwil?.name ?? "-"}
+                    </TableCell>
 
                     <TableCell className="opacity-70">
                       {s.regency?.korda?.name ?? "-"}
@@ -155,7 +173,6 @@ export async function SantriTableCard({
                     <TableCell className="opacity-70">
                       {s.regency?.name ?? "-"}
                     </TableCell>
-                    <TableCell className="text-right opacity-70">-</TableCell>
 
                     <TableCell>
                       <Badge variant={statusBadgeVariant(paymentStatus)}>

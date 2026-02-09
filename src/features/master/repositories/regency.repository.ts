@@ -4,22 +4,29 @@ import type { RegencyOption } from "../types";
 export const regencyRepository = {
   async search(params?: {
     q?: string;
+    provinceId?: number;
     limit?: number;
   }): Promise<RegencyOption[]> {
     const q = params?.q?.trim();
+    const provinceId = params?.provinceId;
     const take = params?.limit ?? 50;
 
-    console.log("regencyRepository.search called", { q, take });
+    console.log("regencyRepository.search called", { q, provinceId, take });
 
-    const items = await prisma.regency.findMany({
-      where: q
+    const where = {
+      ...(provinceId ? { provinceId } : {}),
+      ...(q
         ? {
             OR: [
               { name: { contains: q, mode: "insensitive" } },
               { label: { contains: q, mode: "insensitive" } },
             ],
           }
-        : undefined,
+        : {}),
+    };
+
+    const items = await prisma.regency.findMany({
+      where: Object.keys(where).length > 0 ? where : undefined,
       take,
       orderBy: { name: "asc" },
       select: {
@@ -33,7 +40,12 @@ export const regencyRepository = {
       },
     });
 
-    console.log("regencyRepository.search", { q, take, found: items.length });
+    console.log("regencyRepository.search", {
+      q,
+      provinceId,
+      take,
+      found: items.length,
+    });
     return items.map((item) => ({
       value: item.id,
       name: item.name,

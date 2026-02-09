@@ -31,8 +31,15 @@ export type BulkImportResult = {
   processed: number;
   inserted: number;
   updated: number;
+  skipped: number;
   failed: number;
   errors: Array<{
+    index: number;
+    idApi?: string;
+    nis?: string;
+    message: string;
+  }>;
+  skippedRows: Array<{
     index: number;
     idApi?: string;
     nis?: string;
@@ -69,16 +76,26 @@ function isAktifFromApi(row: StudentDTO): boolean {
 }
 
 function validateStudent(s: StudentNormalized) {
-  if (!s.idApi) return "idApi wajib";
-  if (!s.nis) return "nis wajib";
-  if (!s.name) return "name wajib";
-  if (!s.gender) return "gender wajib";
+  const missing: string[] = [];
+  if (!s.idApi) missing.push("idApi");
+  if (!s.nis) missing.push("nis");
+  if (!s.name) missing.push("name");
+  if (!s.gender) missing.push("gender");
   // status tidak perlu wajib: default false valid
-  if (!s.ttl) return "ttl wajib";
-  if (!s.dormitory) return "dormitory wajib";
-  //   if (!s.village) return "village wajib";
-  if (!s.fullAddress) return "fullAddress wajib";
-  return null;
+  if (!s.ttl) missing.push("ttl");
+  if (!s.dormitory) missing.push("dormitory");
+  //   if (!s.village) missing.push("village");
+  if (!s.fullAddress) missing.push("fullAddress");
+
+  if (missing.length === 0) return null;
+
+  const shouldSkip =
+    missing.includes("nis") || missing.includes("dormitory");
+
+  return {
+    level: shouldSkip ? "skip" : "error",
+    message: `${missing.join(", ")} wajib`,
+  };
 }
 
 function prismaErrorMessage(e: unknown) {
@@ -102,8 +119,10 @@ export async function bulkUpsertStudents(
     processed: 0,
     inserted: 0,
     updated: 0,
+    skipped: 0,
     failed: 0,
     errors: [],
+    skippedRows: [],
   };
 
   if (!Array.isArray(rawRows) || rawRows.length === 0) return result;
@@ -113,15 +132,26 @@ export async function bulkUpsertStudents(
   const rows: { index: number; data: StudentNormalized }[] = [];
   for (let i = 0; i < rawRows.length; i++) {
     // console.log(JSON.stringify(normalized, null, 2));
-    const err = validateStudent(rawRows[i]);
+    const validation = validateStudent(rawRows[i]);
 
-    if (err) {
+    if (validation) {
+      if (validation.level === "skip") {
+        result.skipped++;
+        result.skippedRows.push({
+          index: i,
+          idApi: rawRows[i].idApi,
+          nis: rawRows[i].nis,
+          message: validation.message,
+        });
+        continue;
+      }
+
       result.failed++;
       result.errors.push({
         index: i,
         idApi: rawRows[i].idApi,
         nis: rawRows[i].nis,
-        message: err,
+        message: validation.message,
       });
       continue;
     }
@@ -220,6 +250,7 @@ export async function bulkUpsertStudents(
         processed: result.processed,
         inserted: result.inserted,
         updated: result.updated,
+        skipped: result.skipped,
         failed: result.failed,
       },
     },
@@ -231,6 +262,7 @@ export async function bulkUpsertStudents(
         processed: result.processed,
         inserted: result.inserted,
         updated: result.updated,
+        skipped: result.skipped,
         failed: result.failed,
       },
     },

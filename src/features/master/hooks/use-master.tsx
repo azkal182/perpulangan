@@ -267,33 +267,43 @@ export function useMaster() {
     [getKota],
   );
 
-  async function addKota(regencyId: number): Promise<boolean> {
+  async function addKota(regencyIds: number[]): Promise<boolean> {
     const kordaId = state.selectedKordaId;
     if (!kordaId) return false;
-    if (!regencyId) return false;
+    const ids = Array.from(new Set(regencyIds)).filter((id) => !!id);
+    if (ids.length === 0) return false;
 
     try {
-      const res = await createKota({ kordaId, regencyId });
-      if (!res.success) {
-        alert(res.error ?? "Gagal menambahkan kota.");
-        return false;
+      const errors: string[] = [];
+
+      for (const regencyId of ids) {
+        const res = await createKota({ kordaId, regencyId });
+        if (!res.success) {
+          errors.push(res.error ?? `Gagal menambahkan kota (${regencyId}).`);
+          continue;
+        }
+
+        const created = res.data;
+        setState((s) => ({
+          ...s,
+          kotasByKorda: {
+            ...s.kotasByKorda,
+            [kordaId]: (() => {
+              const current = s.kotasByKorda[kordaId] ?? [];
+              if (current.some((x) => x.id === created.id)) return current;
+              return [...current, created].sort((a, b) =>
+                a.name.localeCompare(b.name, "id-ID"),
+              );
+            })(),
+          },
+        }));
       }
 
-      const created = res.data;
-      setState((s) => ({
-        ...s,
-        kotasByKorda: {
-          ...s.kotasByKorda,
-          [kordaId]: (() => {
-            const current = s.kotasByKorda[kordaId] ?? [];
-            if (current.some((x) => x.id === created.id)) return current;
-            return [...current, created].sort((a, b) =>
-              a.name.localeCompare(b.name, "id-ID"),
-            );
-          })(),
-        },
-      }));
       setQKota("");
+      if (errors.length > 0) {
+        alert(errors[0]);
+        return false;
+      }
       return true;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {

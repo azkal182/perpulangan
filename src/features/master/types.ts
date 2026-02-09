@@ -41,6 +41,13 @@ export type RegencyOption = {
   kordaName?: string | null;
 };
 
+export type ProvinceOption = {
+  value: number;
+  name: string;
+  label: string;
+  code?: string;
+};
+
 export type State = {
   selectedKorwilId: Id | null;
   selectedKordaId: Id | null;

@@ -6,8 +6,14 @@ export async function getStudentsPage(
   pageSize: number,
   q?: string,
   status?: string,
+  korwilId?: string,
+  kordaId?: string,
 ) {
   const query = (q ?? "").trim();
+  const korwilRaw = (korwilId ?? "").trim();
+  const kordaRaw = (kordaId ?? "").trim();
+  const korwil = korwilRaw && korwilRaw !== "all" ? korwilRaw : "";
+  const korda = kordaRaw && kordaRaw !== "all" ? kordaRaw : "";
 
   const safePage = Math.max(1, page);
   const safeSize = Math.min(Math.max(1, pageSize), 50);
@@ -26,9 +32,14 @@ export async function getStudentsPage(
     where.status = status === "active" ? true : false;
   }
 
-  //   where.dormitory = {
-  //     not: "Pengurus (PA)",
-  //   };
+  if (korwil || korda) {
+    const regencyWhere: Record<string, unknown> = {};
+    if (korda) regencyWhere.kordaId = korda;
+    if (korwil) regencyWhere.korda = { korwilId: korwil };
+    where.regency = regencyWhere as StudentWhereInput["regency"];
+  }
+
+  //   where.provinceId = 11;
 
   const [total, students] = await prisma.$transaction([
     prisma.student.count({ where }),
@@ -43,12 +54,20 @@ export async function getStudentsPage(
         nis: true,
         dormitory: true,
         status: true,
+        gender: true,
         regency: {
           select: {
             name: true,
             korda: {
               select: {
+                id: true,
                 name: true,
+                korwil: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },

@@ -9,6 +9,8 @@ export default async function SantriPage({
     page?: string;
     q?: string;
     status?: string;
+    korwilId?: string;
+    kordaId?: string;
     perPage?: string;
     pageSize?: string;
   }>;
@@ -20,6 +22,9 @@ export default async function SantriPage({
 
   // URL: all | active | inactive
   const status = (params?.status ?? "all").trim();
+  const korwilId = (params?.korwilId ?? "all").trim() || "all";
+  const kordaId = (params?.kordaId ?? "all").trim() || "all";
+  const effectiveKordaId = korwilId === "all" ? "all" : kordaId;
 
   const rawPageSize = Number(params?.perPage ?? params?.pageSize ?? "6");
   const pageSizeOptions = new Set([6, 10, 20, 50]);
@@ -34,6 +39,8 @@ export default async function SantriPage({
         lastStatus={sync.lastStatus}
         initialQuery={q}
         initialStatus={status}
+        initialKorwilId={korwilId}
+        initialKordaId={effectiveKordaId}
       />
 
       <SantriTableCard
@@ -42,6 +49,8 @@ export default async function SantriPage({
         basePath="/santri"
         query={q}
         status={status}
+        korwilId={korwilId}
+        kordaId={effectiveKordaId}
       />
     </div>
   );
