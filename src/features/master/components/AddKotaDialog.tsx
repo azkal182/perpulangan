@@ -96,7 +96,7 @@ export function AddKotaDialog({
         setLoadingProvince(false);
       }
     },
-    [searchProvince],
+    [], // Removed searchProvince dependency
   );
 
   const loadRegencyOptions = React.useCallback(
@@ -120,7 +120,7 @@ export function AddKotaDialog({
         setLoading(false);
       }
     },
-    [searchRegency],
+    [], // Removed searchRegency dependency
   );
 
   React.useEffect(() => {
@@ -267,7 +267,7 @@ export function AddKotaDialog({
               <div ref={regencyAnchor}>
                 <ComboboxChips>
                   {selected.map((opt) => (
-                    <ComboboxChip key={opt.value} value={opt}>
+                    <ComboboxChip key={opt.value}>
                       {opt.label}
                     </ComboboxChip>
                   ))}

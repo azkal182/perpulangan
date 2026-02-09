@@ -20,6 +20,10 @@ export type RegistrationFormData = {
   outboundDropPointId: Id;
   returnKordaId: Id;
   returnDropPointId: Id;
+  registrarName?: string;
+  registrarPhone?: string;
+  outboundDate?: string;
+  returnDate?: string;
   notes?: string;
 };
 

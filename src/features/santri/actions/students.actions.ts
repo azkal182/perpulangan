@@ -53,6 +53,7 @@ function chunk<T>(arr: T[], size: number) {
   return out;
 }
 
+/*
 function toIntOrNull(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
@@ -62,7 +63,9 @@ function toIntOrNull(v: unknown): number | null {
   }
   return null;
 }
+*/
 
+/*
 function isAktifFromApi(row: StudentDTO): boolean {
   const byStatusAnggota =
     row.status_anggota?.nama?.trim().toLowerCase() === "aktif";

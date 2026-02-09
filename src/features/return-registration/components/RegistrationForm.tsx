@@ -3,12 +3,10 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea"; // pastikan ada, jika belum: ganti <textarea className=...>
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 
 import { TripSelectors } from "./TripSelectors";
-import { GroupMembersEditor } from "./GroupMembersEditor";
 import { SummaryCard } from "./SummaryCard";
 import type { DropPoint, Korda, Korwil, Kota, RegistrationDraft } from "../types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,6 +34,7 @@ type Props = {
   onNotes: (v: string) => void;
 
   onAddMember: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onUpdateMember: (id: string, patch: any) => void;
   onRemoveMember: (id: string) => void;
 
@@ -61,12 +60,12 @@ export function RegistrationForm(props: Props) {
     onKota,
     onDropPoint,
     onDepartDate,
-    onBookerName,
-    onBookerPhone,
+    // onBookerName, - unused
+    // onBookerPhone, - unused
     onNotes,
-    onAddMember,
-    onUpdateMember,
-    onRemoveMember,
+    // onAddMember, - unused
+    // onUpdateMember, - unused
+    // onRemoveMember, - unused
     memberCount,
     pricePerPerson,
     total,
@@ -78,7 +77,8 @@ export function RegistrationForm(props: Props) {
   const [toast, setToast] = React.useState<string | null>(null);
 
   // State untuk menyimpan data
-const [bookers, setBookers] = React.useState<any[]>([
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [bookers] = React.useState<any[]>([
   {
     id: "1",
     name: "Budi Santoso",
@@ -105,6 +105,7 @@ const [bookers, setBookers] = React.useState<any[]>([
     address: "Jl. Ahmad Yani No. 654, Semarang"
   }
 ]); // Array pemesan
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const [selectedBooker, setSelectedBooker] = React.useState<any>(null);
 
 // Handler untuk select

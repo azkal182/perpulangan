@@ -114,8 +114,8 @@ export function RegistrationForm({
 
   const canSubmit =
     formData.studentId &&
-    formData.registrarName.trim() &&
-    formData.registrarPhone.trim() &&
+    formData.registrarName?.trim() &&
+    formData.registrarPhone?.trim() &&
     formData.outboundKordaId &&
     formData.outboundDropPointId &&
     formData.outboundDate &&
@@ -162,7 +162,7 @@ export function RegistrationForm({
               <Label htmlFor="registrarName">Nama Pendaftar *</Label>
               <Input
                 id="registrarName"
-                value={formData.registrarName}
+                value={formData.registrarName || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, registrarName: e.target.value })
                 }
@@ -173,7 +173,7 @@ export function RegistrationForm({
               <Input
                 id="registrarPhone"
                 type="tel"
-                value={formData.registrarPhone}
+                value={formData.registrarPhone || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, registrarPhone: e.target.value })
                 }
@@ -232,7 +232,7 @@ export function RegistrationForm({
                 <Input
                   id="outboundDate"
                   type="date"
-                  value={formData.outboundDate}
+                  value={formData.outboundDate || ""}
                   onChange={(e) =>
                     setFormData({ ...formData, outboundDate: e.target.value })
                   }
@@ -292,7 +292,7 @@ export function RegistrationForm({
                 <Input
                   id="returnDate"
                   type="date"
-                  value={formData.returnDate}
+                  value={formData.returnDate || ""}
                   onChange={(e) =>
                     setFormData({ ...formData, returnDate: e.target.value })
                   }

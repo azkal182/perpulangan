@@ -7,7 +7,7 @@ export type StudentBasic = {
   id: string;
   name: string;
   nis: string;
-  regencyId: string | null;
+  regencyId: number | null;
 };
 
 /**

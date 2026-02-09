@@ -72,12 +72,12 @@ export function generateStudentsPDF(data: KorwilGroupPDF[]) {
           startY: currentY,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           head: [["No", "Nama", "NIS", "Kabupaten/Kota"]] as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           body: korda.putra.map((s, idx) => [
             idx + 1,
             s.name,
             s.nis,
             s.regencyName,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ]) as any,
           theme: "grid",
           headStyles: {
@@ -117,12 +117,12 @@ export function generateStudentsPDF(data: KorwilGroupPDF[]) {
           startY: currentY,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           head: [["No", "Nama", "NIS", "Kabupaten/Kota"]] as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           body: korda.putri.map((s, idx) => [
             idx + 1,
             s.name,
             s.nis,
             s.regencyName,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ]) as any,
           theme: "grid",
           headStyles: {

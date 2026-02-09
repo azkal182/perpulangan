@@ -484,7 +484,7 @@ export function Autocomplete<
     const nextValue = valueSingle === key ? null : key;
 
     onValueChange?.(nextValue as any);
-    onSelectRaw?.(nextValue === null ? null : item);
+    onSelectRaw?.(nextValue === null ? null : (item as any));
 
     setOpen(false);
     setQuery("");

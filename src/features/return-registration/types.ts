@@ -25,6 +25,7 @@ export type RegistrationDraft = {
   dropPointId: Id | null;
 
   departDate: string; // ISO date yyyy-mm-dd
+  bookerId?: Id;
 
   bookerName: string;
   bookerPhone: string;

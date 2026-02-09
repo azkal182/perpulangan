@@ -75,7 +75,7 @@ export default function DropPointsPageView() {
               <div className="space-y-2">
                 {dp.dropPoints.map((item) => {
                   const korda = dp.getKordaById(item.kordaId);
-                  const korwil = korda ? dp.getKorwilById(korda.korwilId) : undefined;
+                  const korwil = korda ? dp.getKorwilById(korda.korwilId ?? "") : undefined;
 
                   return (
                     <DropPointRow
