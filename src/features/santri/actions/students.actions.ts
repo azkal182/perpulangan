@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { logger } from "@/server/logger";
 
 import { StudentDTO } from "../api/students.dto";
 import { Student } from "@/features/santri/domain/student.model";
@@ -53,7 +54,6 @@ function chunk<T>(arr: T[], size: number) {
   return out;
 }
 
-
 /* Unused helper functions - commented out
 function toIntOrNull(v: unknown): number | null {
   if (v === null || v === undefined) return null;
@@ -87,8 +87,7 @@ function validateStudent(s: StudentNormalized) {
 
   if (missing.length === 0) return null;
 
-  const shouldSkip =
-    missing.includes("nis") || missing.includes("dormitory");
+  const shouldSkip = missing.includes("nis") || missing.includes("dormitory");
 
   return {
     level: shouldSkip ? "skip" : "error",
@@ -229,7 +228,10 @@ export async function bulkUpsertStudents(
               message: prismaErrorMessage(e),
             });
 
-            console.log(e);
+            logger.error(
+              { err: e, index: row.index, idApi: s.idApi, nis: s.nis },
+              "santri.bulkUpsert.studentFailed",
+            );
           }
         }
       },

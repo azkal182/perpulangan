@@ -24,6 +24,7 @@ import {
 
 import { createEvent, updateEvent } from "@/features/event/actions/events.actions";
 import type { EventStatus } from "@/features/event/types";
+import { logError } from "@/lib/logger-client";
 
 type EventFormValues = {
   id?: string;
@@ -141,7 +142,7 @@ export function EventFormDialog({
       toast.success("Event tersimpan.");
       setDialogOpen(false);
     } catch (err) {
-      console.error(err);
+      logError(err, { component: "EventFormDialog", action: "createEvent" });
       toast.error("Gagal menyimpan event.");
     } finally {
       setIsSubmitting(false);

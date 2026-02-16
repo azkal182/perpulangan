@@ -14,18 +14,29 @@ type Props = {
 
 export function ListRow({ active, title, meta, onSelect, disabled, right }: Props) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex w-full items-center gap-2 min-w-0 w-[100%]">
       <Button
         variant={active ? "default" : "outline"}
-        className="flex-1 justify-between"
         onClick={onSelect}
         disabled={disabled}
+        className="min-w-0 flex-1 basis-0 w-auto justify-start text-left"
       >
-        <span className="truncate">{title}</span>
-        {meta ? <span className="text-xs opacity-80">{meta}</span> : null}
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+  <span className="truncate">{title}</span>
+  {meta ? (
+    <span className="whitespace-nowrap text-xs opacity-80">
+      {meta}
+    </span>
+  ) : null}
+</div>
+
       </Button>
 
-      <div className="shrink-0">{right}</div>
+      {right ? (
+        <div className="shrink-0 flex items-center justify-end">
+          {right}
+        </div>
+      ) : null}
     </div>
   );
 }

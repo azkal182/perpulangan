@@ -1,9 +1,11 @@
 /**
  * Debug helper - log students data to console
+ * Only logs when debug mode is enabled via localStorage
  */
 "use client";
 
 import { useEffect } from "react";
+import { logger } from "@/lib/logger-client";
 
 type Props = {
   students: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -15,21 +17,27 @@ export function StudentDebugger({ students, selectedKordaId, filteredCount }: Pr
   useEffect(() => {
     if (!students || students.length === 0) return;
 
-    console.log("=== Student Debug Info ===");
-    console.log("Total students:", students.length);
-    console.log("Selected Korda ID:", selectedKordaId || "none");
-    console.log("Filtered count:", filteredCount ?? "N/A");
-    console.log("\n--- First student sample ---");
-    console.log(JSON.stringify(students[0], null, 2));
-    console.log("\n--- Check regency data ---");
-    students.slice(0, 5).forEach((s, idx) => {
-      console.log(`Student ${idx + 1}:`, {
-        id: s.id,
-        name: s.name,
-        hasRegency: !!s.regency,
-        kordaId: s.regency?.kordaId || "no kordaId",
-      });
-    });
+    // Only log if debug mode is enabled
+    if (typeof window !== "undefined" && localStorage.getItem("debug") !== "true") {
+      return;
+    }
+
+    logger.debug(
+      {
+        totalStudents: students.length,
+        selectedKordaId: selectedKordaId || "none",
+        filteredCount: filteredCount ?? "N/A",
+        firstStudent: students[0],
+        sampleRegencyData: students.slice(0, 5).map((s, idx) => ({
+          index: idx + 1,
+          id: s.id,
+          name: s.name,
+          hasRegency: !!s.regency,
+          kordaId: s.regency?.kordaId || "no kordaId",
+        })),
+      },
+      "registration.debug.studentData"
+    );
   }, [students, selectedKordaId, filteredCount]);
 
   return null;

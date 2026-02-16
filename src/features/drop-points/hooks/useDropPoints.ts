@@ -2,15 +2,15 @@
 
 import * as React from "react";
 import type { DropPoint, Id, Korwil, Korda } from "../types";
-import { 
-  getDropPoints, 
-  createDropPoint, 
-  updateDropPoint, 
-  deleteDropPoint 
+import {
+  getDropPoints,
+  createDropPoint,
+  updateDropPoint,
+  deleteDropPoint,
 } from "../actions/drop-point.action";
 import { getKorwil } from "@/features/master/actions/korwil.action";
 import { getKorda } from "@/features/master/actions/korda.action";
-// import { toast } from "sonner"; // Assuming sonner is used, or alert backup
+import { logError } from "@/lib/logger-client";
 
 type FilterId = Id | "all";
 
@@ -18,7 +18,7 @@ export function useDropPoints() {
   const [korwils, setKorwils] = React.useState<Korwil[]>([]);
   const [kordas, setKordas] = React.useState<Korda[]>([]);
   const [dropPoints, setDropPoints] = React.useState<DropPoint[]>([]);
-  
+
   const [loading, setLoading] = React.useState(true);
 
   const [korwilId, setKorwilId] = React.useState<FilterId>("all");
@@ -35,20 +35,24 @@ export function useDropPoints() {
     async function loadMasters() {
       try {
         const [resKorwil, resKorda] = await Promise.all([
-            getKorwil({ limit: 100 }),
-            getKorda({ limit: 100 }) // Fetch all kordas for mapping
+          getKorwil({ limit: 100 }),
+          getKorda({ limit: 100 }), // Fetch all kordas for mapping
         ]);
-        
+
         if (resKorwil.success && resKorwil.data) {
-             const items = Array.isArray(resKorwil.data) ? resKorwil.data : resKorwil.data.items;
-             setKorwils(items);
+          const items = Array.isArray(resKorwil.data)
+            ? resKorwil.data
+            : resKorwil.data.items;
+          setKorwils(items);
         }
         if (resKorda.success && resKorda.data) {
-             const items = Array.isArray(resKorda.data) ? resKorda.data : resKorda.data.items;
-             setKordas(items);
+          const items = Array.isArray(resKorda.data)
+            ? resKorda.data
+            : resKorda.data.items;
+          setKordas(items);
         }
       } catch (err) {
-        console.error("Failed to load master data", err);
+        logError(err, { hook: "useDropPoints", action: "loadMasters" });
       }
     }
     loadMasters();
@@ -64,7 +68,7 @@ export function useDropPoints() {
           setDropPoints(res.data as DropPoint[]);
         }
       } catch (err) {
-        console.error("Failed to load drop points", err);
+        logError(err, { hook: "useDropPoints", action: "loadDropPoints" });
       } finally {
         setLoading(false);
       }
@@ -73,12 +77,11 @@ export function useDropPoints() {
   }, []); // Reload triggers handled manually or via revalidatePath
 
   async function refresh() {
-      const res = await getDropPoints();
-      if (res.success && res.data) {
-        setDropPoints(res.data as DropPoint[]);
-      }
+    const res = await getDropPoints();
+    if (res.success && res.data) {
+      setDropPoints(res.data as DropPoint[]);
+    }
   }
-
 
   // dependent filter: kalau korwil berubah, korda yang valid menyesuaikan
   const kordasFilteredByKorwil = React.useMemo(() => {
@@ -115,11 +118,11 @@ export function useDropPoints() {
   async function create(payload: { kordaId: Id; name: string; price: number }) {
     const res = await createDropPoint(payload);
     if (res.success && res.data) {
-        setOpenCreate(false);
-        refresh();
-        // toast.success("Titik turun berhasil dibuat");
+      setOpenCreate(false);
+      refresh();
+      // toast.success("Titik turun berhasil dibuat");
     } else {
-        alert("Gagal membuat titik turun");
+      alert("Gagal membuat titik turun");
     }
   }
 
@@ -132,22 +135,22 @@ export function useDropPoints() {
     if (!editing) return;
     const res = await updateDropPoint(editing.id, payload);
     if (res.success) {
-        setOpenEdit(false);
-        setEditing(null);
-        refresh();
-        // toast.success("Titik turun berhasil diupdate");
+      setOpenEdit(false);
+      setEditing(null);
+      refresh();
+      // toast.success("Titik turun berhasil diupdate");
     } else {
-        alert("Gagal update titik turun");
+      alert("Gagal update titik turun");
     }
   }
 
   async function remove(id: Id) {
-    if(!confirm("Yakin hapus?")) return;
+    if (!confirm("Yakin hapus?")) return;
     const res = await deleteDropPoint(id);
-    if(res.success) {
-        refresh();
+    if (res.success) {
+      refresh();
     } else {
-        alert("Gagal hapus");
+      alert("Gagal hapus");
     }
   }
 
@@ -182,6 +185,6 @@ export function useDropPoints() {
     startEdit,
     update,
     remove,
-    loading
+    loading,
   };
 }

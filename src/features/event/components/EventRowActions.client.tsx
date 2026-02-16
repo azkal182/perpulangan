@@ -25,6 +25,7 @@ import {
 import { deleteEvent } from "@/features/event/actions/events.actions";
 import { EventFormDialog } from "./EventFormDialog.client";
 import type { EventStatus } from "@/features/event/types";
+import { logError } from "@/lib/logger-client";
 
 export function EventRowActions({
   event,
@@ -52,7 +53,7 @@ export function EventRowActions({
       toast.success("Event dihapus.");
       setDeleteOpen(false);
     } catch (err) {
-      console.error(err);
+      logError(err, { component: "EventRowActions", action: "deleteEvent", eventId: event.id });
       toast.error("Gagal menghapus event.");
     } finally {
       setIsDeleting(false);

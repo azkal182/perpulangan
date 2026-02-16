@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -57,8 +56,8 @@ export default function MasterPageView() {
             <>
               <Input value={h.qKorwil} onChange={(e) => h.setQKorwil(e.target.value)} placeholder="Search korwil…" />
 
-              <ScrollArea className="h-[360px] pr-2">
-                <div className="mt-3 space-y-2">
+              <ScrollArea className="h-[360px] pr-4">
+                <div className="mt-3 space-y-2 min-w-0">
                   {h.loadingKorwil ? (
                     <div className="text-sm text-muted-foreground">Memuat korwil...</div>
                   ) : (
@@ -139,7 +138,7 @@ export default function MasterPageView() {
               <>
                 <Input value={h.qKorda} onChange={(e) => h.setQKorda(e.target.value)} placeholder="Search korda…" />
 
-                <ScrollArea className="h-[360px] pr-2">
+                <ScrollArea className="h-[360px] pr-4">
                   <div className="mt-3 space-y-2">
                     {h.loadingKorda ? (
                       <div className="text-sm text-muted-foreground">Memuat korda...</div>
@@ -223,7 +222,7 @@ export default function MasterPageView() {
               <>
                 <Input value={h.qKota} onChange={(e) => h.setQKota(e.target.value)} placeholder="Search kota…" />
 
-                <ScrollArea className="h-[360px] pr-2">
+                <ScrollArea className="h-[360px] pr-4">
                   <div className="mt-3 space-y-2">
                     {h.loadingKota ? (
                       <div className="text-sm text-muted-foreground">Memuat kota...</div>

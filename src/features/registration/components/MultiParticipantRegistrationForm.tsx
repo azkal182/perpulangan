@@ -25,6 +25,7 @@ import type { Korda } from "../types";
 import type { DropPoint } from "@/features/drop-points/types";
 import { createRegistration } from "../actions/registration.action";
 import { getStudentsByKorda, type StudentBasic } from "@/features/santri/actions/students.action";
+import { logError } from "@/lib/logger-client";
 
 type Props = {
   eventId: string;
@@ -51,7 +52,7 @@ export function MultiParticipantRegistrationForm({
   const [selectedPaymentStatus, setSelectedPaymentStatus] = React.useState<string>("");
   const [participants, setParticipants] = React.useState<ParticipantDraft[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
-  
+
   const [students, setStudents] = React.useState<StudentBasic[]>([]);
   const [loadingStudents, setLoadingStudents] = React.useState(false);
 
@@ -69,11 +70,19 @@ export function MultiParticipantRegistrationForm({
           setStudents(result.students);
         } else {
           setStudents([]);
-          console.error("Failed to fetch students:", result.error);
+          logError(result.error || "Unknown error", {
+            component: "MultiParticipantRegistrationForm",
+            action: "fetchStudents",
+            kordaId: selectedKordaId
+          });
         }
       })
       .catch((error) => {
-        console.error("Error fetching students:", error);
+        logError(error, {
+          component: "MultiParticipantRegistrationForm",
+          action: "fetchStudents",
+          kordaId: selectedKordaId
+        });
         setStudents([]);
       })
       .finally(() => {
@@ -152,7 +161,7 @@ export function MultiParticipantRegistrationForm({
         participants.map((p) => {
           const outboundPaid = p.paymentStatus === "outbound_only" || p.paymentStatus === "paid_both";
           const returnPaid = p.paymentStatus === "paid_both";
-          
+
           return createRegistration({
             eventId,
             studentId: p.student.id,
@@ -314,11 +323,11 @@ export function MultiParticipantRegistrationForm({
                 </TableHeader>
                 <TableBody>
                   {participants.map((p) => {
-                    const paymentLabel = 
+                    const paymentLabel =
                       p.paymentStatus === "paid_both" ? "Lunas PP" :
                       p.paymentStatus === "outbound_only" ? "Pulang Saja" :
                       "Belum Bayar";
-                    
+
                     return (
                       <TableRow key={p.student.id}>
                         <TableCell className="font-medium">{p.student.name}</TableCell>

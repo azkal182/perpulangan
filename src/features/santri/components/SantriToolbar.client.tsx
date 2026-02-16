@@ -25,6 +25,7 @@ import { getStudents } from "@/features/santri/services/students.repository";
 import { getKorwil } from "@/features/master/actions/korwil.action";
 import { getKorda } from "@/features/master/actions/korda.action";
 import type { Korwil, Korda } from "@/features/master/types";
+import { logger, logError } from "@/lib/logger-client";
 
 import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -350,12 +351,14 @@ export function SantriToolbarClient({
     try {
       const result = await getStudentsForPDFExport();
       if (result.success && result.data) {
+        logger.info({ count: result.data.length }, "santri.export.pdf success");
         generateStudentsPDF(result.data);
       } else {
+        logger.warn({ error: result.error }, "santri.export.pdf failed");
         alert(result.error || "Gagal mengambil data siswa");
       }
     } catch (error) {
-      console.error("PDF export error:", error);
+      logError(error, { component: "SantriToolbar", action: "exportPDF" });
       alert("Terjadi kesalahan saat membuat PDF");
     } finally {
       setExportingPDF(false);
@@ -366,11 +369,12 @@ export function SantriToolbarClient({
     try {
       setLoadingPreview(true);
       const apiStudents = await getStudents();
-      console.log(apiStudents);
+      logger.debug({ count: apiStudents.length }, "santri.import.preview loaded");
 
       setPreviewRows(apiStudents);
       setOpenConfirm(true);
-    } catch {
+    } catch (error) {
+      logError(error, { component: "SantriToolbar", action: "previewImport" });
       alert("Gagal mengambil data dari API.");
     } finally {
       setLoadingPreview(false);

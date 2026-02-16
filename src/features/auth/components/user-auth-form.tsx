@@ -10,7 +10,8 @@ import { useRouter } from 'next/navigation'
 import { Loader2, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 
-import {  cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { logError } from '@/lib/logger-client'
 import { signIn } from '@/client/auth'
 import { Button } from '@/components/ui/button'
 import {
@@ -72,7 +73,7 @@ export function UserAuthForm({
       router.refresh()
     } catch (err) {
       toast.error('Gagal masuk. Coba lagi.')
-      console.error(err)
+      logError(err, { component: "UserAuthForm", action: "signIn" })
     } finally {
       setIsLoading(false)
     }

@@ -11,6 +11,7 @@ import type {
   RegistrationDraft,
 } from "../types";
 import { uid } from "../lib/uid";
+import { logger } from "@/lib/logger-client";
 
 const seedKorwils: Korwil[] = [
   { id: "kw-1", name: "Jawa Barat" },
@@ -193,7 +194,15 @@ export function useRegistration() {
       createdAt: new Date().toISOString(),
     };
 
-    console.log("SUBMIT REGISTRATION", payload);
+    logger.info(
+      {
+        memberCount: payload.members.length,
+        total,
+        kordaId: payload.kordaId,
+        dropPointId: payload.dropPointId,
+      },
+      "return-registration.submit",
+    );
 
     return {
       ok: true as const,
