@@ -16,14 +16,17 @@ export type Student = {
 export type RegistrationFormData = {
   eventId: Id;
   studentId: Id;
-  outboundKordaId: Id;
-  outboundDropPointId: Id;
-  returnKordaId: Id;
-  returnDropPointId: Id;
-  registrarName?: string;
-  registrarPhone?: string;
-  outboundDate?: string;
-  returnDate?: string;
+  // Optional outbound journey (for return-only registration)
+  outboundKordaId?: Id | null;
+  outboundDropPointId?: Id | null;
+  outboundDate?: string | null;
+  // Optional return journey (can be cancelled)
+  returnKordaId?: Id | null;
+  returnDropPointId?: Id | null;
+  returnDate?: string | null;
+  // Required registrar info
+  registrarName: string;
+  registrarPhone: string;
   notes?: string;
 };
 
@@ -33,23 +36,36 @@ export type Registration = {
   studentId: Id;
   student: Student;
   
-  outboundKordaId: Id;
-  outboundKorda: { id: Id; name: string };
-  outboundDropPointId: Id;
-  outboundDropPoint: { id: Id; name: string; price: number };
+  // Optional outbound journey
+  outboundKordaId: Id | null;
+  outboundKorda: { id: Id; name: string } | null;
+  outboundDropPointId: Id | null;
+  outboundDropPoint: { id: Id; name: string; price: number } | null;
+  outboundDate: Date | null;
   outboundPaid: boolean;
   
-  returnKordaId: Id;
-  returnKorda: { id: Id; name: string };
-  returnDropPointId: Id;
-  returnDropPoint: { id: Id; name: string; price: number };
+  // Optional return journey
+  returnKordaId: Id | null;
+  returnKorda: { id: Id; name: string } | null;
+  returnDropPointId: Id | null;
+  returnDropPoint: { id: Id; name: string; price: number } | null;
+  returnDate: Date | null;
   returnPaid: boolean;
   
-  status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+  status: "DRAFT" | "CONFIRMED" | "CANCELLED" | "PARTIAL_CANCEL";
   kordaChanged: boolean;
   kordaChangeConfirmed: boolean;
   
+  // Cancellation tracking
+  cancelledAt: Date | null;
+  cancelReason: string | null;
+  refundAmount: number | null;
+  
+  // Registrar info
+  registrarName: string;
+  registrarPhone: string;
   notes?: string | null;
+  
   createdAt: Date;
   updatedAt: Date;
 };

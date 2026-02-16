@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle, Trash2, Ban } from "lucide-react";
 import type { Registration } from "../types";
+import { CancelRegistrationDialog } from "./CancelRegistrationDialog";
 
 type Props = {
   registrations: Registration[];
@@ -27,17 +28,8 @@ export function RegistrationList({
   onConfirmKordaChange,
   loading = false,
 }: Props) {
-  const getPaymentStatus = (reg: Registration) => {
-    if (reg.outboundPaid && reg.returnPaid) return "Lunas";
-    if (reg.outboundPaid || reg.returnPaid) return "Sebagian";
-    return "Belum Bayar";
-  };
-
-  const getPaymentVariant = (reg: Registration) => {
-    if (reg.outboundPaid && reg.returnPaid) return "default";
-    if (reg.outboundPaid || reg.returnPaid) return "secondary";
-    return "outline";
-  };
+  const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
+  const [selectedRegistration, setSelectedRegistration] = React.useState<Registration | null>(null);
 
   const getStatusVariant = (status: Registration["status"]) => {
     switch (status) {
@@ -46,6 +38,7 @@ export function RegistrationList({
       case "DRAFT":
         return "secondary";
       case "CANCELLED":
+      case "PARTIAL_CANCEL":
         return "destructive";
       default:
         return "outline";
@@ -77,7 +70,9 @@ export function RegistrationList({
           {registrations.map((reg) => {
             const kordaChanged = reg.kordaChanged;
             const kordaChangeNeedsConfirmation = kordaChanged && !reg.kordaChangeConfirmed;
-            const totalPrice = reg.outboundDropPoint.price + reg.returnDropPoint.price;
+            const outboundPrice = reg.outboundDropPoint?.price || 0;
+            const returnPrice = reg.returnDropPoint?.price || 0;
+            const totalPrice = outboundPrice + returnPrice;
 
             return (
               <TableRow key={reg.id}>
@@ -94,13 +89,19 @@ export function RegistrationList({
                       {kordaChanged && (
                         <AlertCircle className="h-4 w-4 text-orange-500" />
                       )}
-                      <span className="font-medium">{reg.outboundKorda.name}</span>
+                      <span className="font-medium">{reg.outboundKorda?.name || reg.returnKorda?.name || '-'}</span>
                     </div>
+                    {reg.outboundDropPoint ? (
+                      <div className="text-sm text-muted-foreground">
+                        Pulang: {reg.outboundDropPoint.name}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Pulang: -
+                      </div>
+                    )}
                     <div className="text-sm text-muted-foreground">
-                      Pulang: {reg.outboundDropPoint.name}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Kembali: {reg.returnDropPoint.name}
+                      Kembali: {reg.returnDropPoint?.name || '-'}
                     </div>
                   </div>
                 </TableCell>
@@ -145,6 +146,18 @@ export function RegistrationList({
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => {
+                        setSelectedRegistration(reg);
+                        setCancelDialogOpen(true);
+                      }}
+                      disabled={loading || reg.status === 'CANCELLED' || reg.status === 'PARTIAL_CANCEL'}
+                    >
+                      <Ban className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       onClick={() => {
                         if (confirm("Yakin hapus pendaftaran ini?")) {
                           onDelete(reg.id);
@@ -161,6 +174,17 @@ export function RegistrationList({
           })}
         </TableBody>
       </Table>
+
+      {selectedRegistration && (
+        <CancelRegistrationDialog
+          registration={selectedRegistration}
+          open={cancelDialogOpen}
+          onOpenChange={(open) => {
+            setCancelDialogOpen(open);
+            if (!open) setSelectedRegistration(null);
+          }}
+        />
+      )}
     </div>
   );
 }

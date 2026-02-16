@@ -9,7 +9,7 @@ import {
   deleteRegistration,
   confirmKordaChange,
 } from "./actions/registration.action";
-import type { Registration, Student, Korda } from "./types";
+import type { Registration, Korda } from "./types";
 import type { DropPoint } from "@/features/drop-points/types";
 
 type Props = {
@@ -18,6 +18,9 @@ type Props = {
   initialKordas: Korda[];
   initialDropPoints: DropPoint[];
   initialRegistrations: Registration[];
+  pageTitle?: string;
+  defaultMode?: 'both' | 'return_only';
+  lockMode?: boolean;
 };
 
 export default function RegistrationPageView({
@@ -26,6 +29,9 @@ export default function RegistrationPageView({
   initialKordas,
   initialDropPoints,
   initialRegistrations,
+  pageTitle = "Pendaftaran Peserta Rombongan",
+  defaultMode = "both",
+  lockMode = false,
 }: Props) {
   const registrations = initialRegistrations;
 
@@ -51,7 +57,7 @@ export default function RegistrationPageView({
     <div className="min-h-screen bg-background">
       <div className="border-b">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="text-lg font-semibold">Pendaftaran Peserta Rombongan</div>
+          <div className="text-lg font-semibold">{pageTitle}</div>
           <div className="text-sm text-muted-foreground">{eventName}</div>
         </div>
       </div>
@@ -69,6 +75,8 @@ export default function RegistrationPageView({
               eventName={eventName}
               kordas={initialKordas}
               dropPoints={initialDropPoints}
+              defaultMode={defaultMode}
+              lockMode={lockMode}
             />
           </TabsContent>
 

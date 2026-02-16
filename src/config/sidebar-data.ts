@@ -1,7 +1,6 @@
 import {
   AudioWaveform,
   Banknote,
-  Bot,
   Bus,
   Calendar,
   ClipboardMinus,
@@ -64,6 +63,11 @@ export const managements = [
   {
     title: "registrasi Rombongan",
     url: "/registrasi",
+    icon: Bus,
+  },
+  {
+    title: "Registrasi Kembali Saja",
+    url: "/registrasi/kembali-saja",
     icon: Bus,
   },
   {

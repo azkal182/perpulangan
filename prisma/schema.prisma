@@ -277,6 +277,7 @@ enum RegistrationStatus {
     DRAFT
     CONFIRMED
     CANCELLED
+    PARTIAL_CANCEL // When only return journey is cancelled
 }
 
 model Registration {
@@ -290,28 +291,38 @@ model Registration {
     studentId String
     student   Student @relation(fields: [studentId], references: [id])
 
-    // Outbound Journey (Pulang ke rumah)
-    outboundKordaId     String
-    outboundKorda       Korda     @relation("OutboundKorda", fields: [outboundKordaId], references: [id])
-    outboundDropPointId String
-    outboundDropPoint   DropPoint @relation("OutboundDropPoint", fields: [outboundDropPointId], references: [id])
-    outboundPaid        Boolean   @default(false)
+    // Outbound Journey (Pulang ke rumah) - OPTIONAL for return-only registration
+    outboundKordaId     String?
+    outboundKorda       Korda?     @relation("OutboundKorda", fields: [outboundKordaId], references: [id])
+    outboundDropPointId String?
+    outboundDropPoint   DropPoint? @relation("OutboundDropPoint", fields: [outboundDropPointId], references: [id])
+    outboundDate        DateTime?
+    outboundPaid        Boolean    @default(false)
 
-    // Return Journey (Kembali ke pondok)
-    returnKordaId     String
-    returnKorda       Korda     @relation("ReturnKorda", fields: [returnKordaId], references: [id])
-    returnDropPointId String
-    returnDropPoint   DropPoint @relation("ReturnDropPoint", fields: [returnDropPointId], references: [id])
-    returnPaid        Boolean   @default(false)
+    // Return Journey (Kembali ke pondok) - OPTIONAL when cancelled
+    returnKordaId     String?
+    returnKorda       Korda?     @relation("ReturnKorda", fields: [returnKordaId], references: [id])
+    returnDropPointId String?
+    returnDropPoint   DropPoint? @relation("ReturnDropPoint", fields: [returnDropPointId], references: [id])
+    returnDate        DateTime?
+    returnPaid        Boolean    @default(false)
 
     // Status
-    status RegistrationStatus @default(DRAFT)
+    status RegistrationStatus @default(CONFIRMED)
 
     // Flags
     kordaChanged         Boolean @default(false) // True if different from student's original Korda
     kordaChangeConfirmed Boolean @default(false) // Confirmation for Korda change
 
-    notes String?
+    // Cancellation & Refund tracking
+    cancelledAt  DateTime?
+    cancelReason String?
+    refundAmount Int?      @default(0)
+
+    // Registration info
+    registrarName  String
+    registrarPhone String
+    notes          String?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

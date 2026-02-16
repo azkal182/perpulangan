@@ -5,14 +5,19 @@ import { Registration, RegistrationStatus } from "@/generated/prisma/client";
 export type RegistrationCreateData = {
   eventId: string;
   studentId: string;
-  outboundKordaId: string;
-  outboundDropPointId: string;
-  returnKordaId: string;
-  returnDropPointId: string;
+  // Optional outbound journey (for return-only registration)
+  outboundKordaId: string | null;
+  outboundDropPointId: string | null;
+  // Optional return journey (can be cancelled)
+  returnKordaId: string | null;
+  returnDropPointId: string | null;
   outboundPaid?: boolean;
   returnPaid?: boolean;
   kordaChanged?: boolean;
   kordaChangeConfirmed?: boolean;
+  // Required registrar info
+  registrarName: string;
+  registrarPhone: string;
   notes?: string;
 };
 
@@ -20,6 +25,9 @@ export type RegistrationUpdateData = Partial<RegistrationCreateData> & {
   outboundPaid?: boolean;
   returnPaid?: boolean;
   status?: RegistrationStatus;
+  cancelledAt?: Date;
+  cancelReason?: string;
+  refundAmount?: number;
 };
 
 const registrationSelect = {
@@ -54,6 +62,9 @@ const registrationSelect = {
   notes: true,
   createdAt: true,
   updatedAt: true,
+  cancelledAt: true,
+  cancelReason: true,
+  refundAmount: true,
 };
 
 export const registrationRepository = {
@@ -120,6 +131,8 @@ export const registrationRepository = {
           returnPaid: data.returnPaid ?? false,
           kordaChanged: data.kordaChanged ?? false,
           kordaChangeConfirmed: data.kordaChangeConfirmed ?? false,
+          registrarName: data.registrarName,
+          registrarPhone: data.registrarPhone,
           notes: data.notes,
         },
         select: registrationSelect,
@@ -153,6 +166,9 @@ export const registrationRepository = {
           kordaChanged: data.kordaChanged,
           kordaChangeConfirmed: data.kordaChangeConfirmed,
           notes: data.notes,
+          cancelledAt: data.cancelledAt,
+          cancelReason: data.cancelReason,
+          refundAmount: data.refundAmount,
         },
         select: registrationSelect,
       });

@@ -111,3 +111,58 @@ export async function confirmKordaChange(id: string) {
     return { success: false, error: "Failed to confirm Korda change" };
   }
 }
+
+export async function cancelRegistration(
+  id: string,
+  type: 'full' | 'partial',
+  reason: string,
+  refundAmount: number
+) {
+  try {
+    const registration = await registrationRepository.findById(id);
+    if (!registration) {
+      return { success: false, error: "Registration not found" };
+    }
+
+    if (registration.status === "CANCELLED") {
+      return { success: false, error: "Registration already cancelled" };
+    }
+
+    // Determine new status
+    let newStatus: RegistrationStatus = "CANCELLED";
+    
+    if (type === 'partial') {
+      // Logic: Partial cancel usually means cancelling one leg. 
+      // In this context, it mostly means cancelling the return leg while keeping outbound.
+      // If the user only has return leg (return-only), partial cancel effectively cancels the whole thing 
+      // or we can allow PARTIAL_CANCEL status to indicate 'Return Cancelled' state specifically.
+      // Let's stick to the business rule: "Cancellations and refunds are possible for the return journey."
+      
+      if (!registration.outboundDropPointId) {
+        // If return-only, partial cancel is effectively full cancel
+        newStatus = "CANCELLED";
+      } else {
+        newStatus = "PARTIAL_CANCEL";
+      }
+    }
+
+    const result = await registrationRepository.update(id, {
+      status: newStatus,
+      cancelledAt: new Date(),
+      cancelReason: reason,
+      refundAmount: refundAmount,
+    });
+
+    logger.info(
+      { id, type, newStatus },
+      "Registration cancelled"
+    );
+
+    revalidatePath("/registrasi");
+    revalidatePath(`/event/${result.eventId}/participants`);
+    return { success: true, data: result };
+  } catch (error) {
+    logger.error({ err: error, id }, "cancelRegistration action failed");
+    return { success: false, error: "Failed to cancel registration" };
+  }
+}
