@@ -32,7 +32,7 @@ export async function fetchStudents(
     query.per_page = params.perPage;
   }
 
-  const res = await api.get<StudentsResponseDTO>(`/api/anggota/${group}`, {
+  const res = await api.get<StudentsResponseDTO>(`/api/anggota/${group}?limit=100`, {
     params: Object.keys(query).length > 0 ? query : undefined,
   });
   return res.data;
