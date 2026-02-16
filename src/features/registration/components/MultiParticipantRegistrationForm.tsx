@@ -35,43 +35,88 @@ type Props = {
 
 type ParticipantDraft = {
   student: StudentBasic;
-  dropPoint: DropPoint;
+  outboundDropPoint: DropPoint;
+  returnDropPoint: DropPoint;
   paymentStatus: "unpaid" | "outbound_only" | "paid_both";
 };
 
 export function MultiParticipantRegistrationForm({
   eventId,
-  eventName,
   kordas,
   dropPoints,
 }: Props) {
   const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = React.useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = React.useState<StudentBasic | null>(null);
-  const [selectedDropPointId, setSelectedDropPointId] = React.useState<string | null>(null);
+  
+  // Separate korda for outbound and return
+  const [selectedOutboundKordaId, setSelectedOutboundKordaId] = React.useState<string | null>(null);
+  const [selectedReturnKordaId, setSelectedReturnKordaId] = React.useState<string | null>(null);
+  
+  const [selectedOutboundDropPointId, setSelectedOutboundDropPointId] = React.useState<string | null>(null);
+  const [selectedReturnDropPointId, setSelectedReturnDropPointId] = React.useState<string | null>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = React.useState<string>("");
   const [participants, setParticipants] = React.useState<ParticipantDraft[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Filter drop points by selected Korda (if any)
-  const filteredDropPoints = React.useMemo(() => {
-    if (!selectedKordaId) return dropPoints; // Show all if no Korda selected
-    return dropPoints.filter((dp) => dp.kordaId === selectedKordaId);
-  }, [dropPoints, selectedKordaId]);
+  // When student is selected, auto-populate korda and drop points from their default korda
+  React.useEffect(() => {
+    if (selectedStudent?.regency?.kordaId) {
+      const studentKordaId = selectedStudent.regency.kordaId;
+      
+      // Set both korda selectors to student's default korda
+      setSelectedOutboundKordaId(studentKordaId);
+      setSelectedReturnKordaId(studentKordaId);
+      
+      // Find the first drop point from student's korda for both outbound and return
+      const studentDropPoints = dropPoints.filter(dp => dp.kordaId === studentKordaId);
+      if (studentDropPoints.length > 0) {
+        setSelectedOutboundDropPointId(studentDropPoints[0].id);
+        setSelectedReturnDropPointId(studentDropPoints[0].id);
+      }
+    }
+  }, [selectedStudent, dropPoints]);
 
   // Reset student selection when Korda changes
   React.useEffect(() => {
     setSelectedStudentId(null);
     setSelectedStudent(null);
   }, [selectedKordaId]);
+  
+  // Reset outbound drop point when outbound korda changes
+  React.useEffect(() => {
+    setSelectedOutboundDropPointId(null);
+  }, [selectedOutboundKordaId]);
+  
+  // Reset return drop point when return korda changes
+  React.useEffect(() => {
+    setSelectedReturnDropPointId(null);
+  }, [selectedReturnKordaId]);
 
-  const selectedDropPoint = React.useMemo(
-    () => filteredDropPoints.find((dp) => dp.id === selectedDropPointId) || null,
-    [filteredDropPoints, selectedDropPointId]
+  // Filter drop points for outbound journey
+  const outboundDropPoints = React.useMemo(() => {
+    if (!selectedOutboundKordaId) return dropPoints;
+    return dropPoints.filter((dp) => dp.kordaId === selectedOutboundKordaId);
+  }, [dropPoints, selectedOutboundKordaId]);
+
+  // Filter drop points for return journey
+  const returnDropPoints = React.useMemo(() => {
+    if (!selectedReturnKordaId) return dropPoints;
+    return dropPoints.filter((dp) => dp.kordaId === selectedReturnKordaId);
+  }, [dropPoints, selectedReturnKordaId]);
+
+  const selectedOutboundDropPoint = React.useMemo(
+    () => dropPoints.find((dp) => dp.id === selectedOutboundDropPointId) || null,
+    [dropPoints, selectedOutboundDropPointId]
+  );
+
+  const selectedReturnDropPoint = React.useMemo(
+    () => dropPoints.find((dp) => dp.id === selectedReturnDropPointId) || null,
+    [dropPoints, selectedReturnDropPointId]
   );
 
   const handleAddParticipant = () => {
-    if (!selectedStudent || !selectedDropPoint) return;
+    if (!selectedStudent || !selectedOutboundDropPoint || !selectedReturnDropPoint) return;
 
     // Validate payment status is selected
     if (!selectedPaymentStatus) {
@@ -89,7 +134,8 @@ export function MultiParticipantRegistrationForm({
       ...participants,
       {
         student: selectedStudent,
-        dropPoint: selectedDropPoint,
+        outboundDropPoint: selectedOutboundDropPoint,
+        returnDropPoint: selectedReturnDropPoint,
         paymentStatus: selectedPaymentStatus as "unpaid" | "outbound_only" | "paid_both",
       },
     ]);
@@ -97,7 +143,10 @@ export function MultiParticipantRegistrationForm({
     // Reset selections
     setSelectedStudentId(null);
     setSelectedStudent(null);
-    setSelectedDropPointId(null);
+    setSelectedOutboundKordaId(null);
+    setSelectedReturnKordaId(null);
+    setSelectedOutboundDropPointId(null);
+    setSelectedReturnDropPointId(null);
     setSelectedPaymentStatus("");
   };
 
@@ -106,8 +155,8 @@ export function MultiParticipantRegistrationForm({
   };
 
   const totalPrice = React.useMemo(() => {
-    // Round trip = 2x drop point price
-    return participants.reduce((sum, p) => sum + p.dropPoint.price * 2, 0);
+    // Sum of both outbound and return drop point prices
+    return participants.reduce((sum, p) => sum + p.outboundDropPoint.price + p.returnDropPoint.price, 0);
   }, [participants]);
 
   const handleSubmit = async () => {
@@ -124,16 +173,17 @@ export function MultiParticipantRegistrationForm({
           const outboundPaid = p.paymentStatus === "outbound_only" || p.paymentStatus === "paid_both";
           const returnPaid = p.paymentStatus === "paid_both";
 
-          // Use drop point's kordaId for registration
-          const kordaId = p.dropPoint.kordaId;
+          // Use each drop point's kordaId for registration
+          const outboundKordaId = p.outboundDropPoint.kordaId;
+          const returnKordaId = p.returnDropPoint.kordaId;
 
           return createRegistration({
             eventId,
             studentId: p.student.id,
-            outboundKordaId: kordaId,
-            outboundDropPointId: p.dropPoint.id,
-            returnKordaId: kordaId,
-            returnDropPointId: p.dropPoint.id,
+            outboundKordaId,
+            outboundDropPointId: p.outboundDropPoint.id,
+            returnKordaId,
+            returnDropPointId: p.returnDropPoint.id,
             kordaChanged: false,
             kordaChangeConfirmed: true,
             outboundPaid,
@@ -155,7 +205,7 @@ export function MultiParticipantRegistrationForm({
     }
   };
 
-  const canAddParticipant = selectedStudent && selectedDropPoint && selectedPaymentStatus;
+  const canAddParticipant = selectedStudent && selectedOutboundDropPoint && selectedReturnDropPoint && selectedPaymentStatus;
 
   return (
     <div className="space-y-6">
@@ -169,7 +219,7 @@ export function MultiParticipantRegistrationForm({
         <CardContent className="space-y-4">
           {/* Step 1: Select Korda (Optional) */}
           <div>
-            <Label>1. Pilih Korda (Opsional)</Label>
+            <Label className="mb-1">1. Pilih Korda (Opsional)</Label>
             <Autocomplete
               items={kordas}
               value={selectedKordaId}
@@ -187,7 +237,7 @@ export function MultiParticipantRegistrationForm({
 
           {/* Step 2: Search Student (Async) */}
           <div>
-            <Label>2. Cari & Pilih Siswa *</Label>
+            <Label className="mb-1">2. Cari & Pilih Siswa *</Label>
             <Autocomplete
               key={selectedKordaId || 'all'} // Reset cache when Korda changes
               async={{
@@ -215,42 +265,116 @@ export function MultiParticipantRegistrationForm({
             )}
           </div>
 
-          {/* Step 3: Select Drop Point */}
+          {/* Step 3: Perjalanan Pulang (Outbound) */}
+          <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+            <h3 className="font-semibold text-sm">3. Perjalanan Pulang (Outbound)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label>3. Pilih Titik Turun *</Label>
-                <Select value={selectedDropPointId || ""} onValueChange={setSelectedDropPointId}>
+                <Label className="mb-1">Pilih Korda *</Label>
+                <Select value={selectedOutboundKordaId || ""} onValueChange={setSelectedOutboundKordaId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih titik turun" />
+                    <SelectValue placeholder="Pilih korda pulang" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredDropPoints.map((dp) => (
+                    {kordas.map((korda) => (
+                      <SelectItem key={korda.id} value={korda.id}>
+                        {korda.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1">Pilih Titik Turun *</Label>
+                <Select 
+                  value={selectedOutboundDropPointId || ""} 
+                  onValueChange={setSelectedOutboundDropPointId}
+                  disabled={!selectedOutboundKordaId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedOutboundKordaId ? "Pilih titik turun" : "Pilih korda terlebih dahulu"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {outboundDropPoints.map((dp) => (
                       <SelectItem key={dp.id} value={dp.id}>
                         {dp.name} - Rp {dp.price.toLocaleString("id-ID")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedDropPoint && (
+                {selectedOutboundDropPoint && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Harga pulang-pergi: Rp {(selectedDropPoint.price * 2).toLocaleString("id-ID")}
+                    Harga: Rp {selectedOutboundDropPoint.price.toLocaleString("id-ID")}
                   </p>
                 )}
               </div>
+            </div>
+          </div>
 
-              {/* Step 4: Payment Status */}
+          {/* Step 4: Perjalanan Kembali (Return) */}
+          <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+            <h3 className="font-semibold text-sm">4. Perjalanan Kembali (Return)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label>4. Status Pembayaran *</Label>
-                <Select value={selectedPaymentStatus} onValueChange={setSelectedPaymentStatus}>
-                  <SelectTrigger className={!selectedPaymentStatus ? "text-muted-foreground" : ""}>
-                    <SelectValue placeholder="Pilih status pembayaran" />
+                <Label className="mb-1">Pilih Korda *</Label>
+                <Select value={selectedReturnKordaId || ""} onValueChange={setSelectedReturnKordaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih korda kembali" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unpaid">Belum Bayar</SelectItem>
-                    <SelectItem value="outbound_only">Sudah Bayar Pulang Saja</SelectItem>
-                    <SelectItem value="paid_both">Sudah Bayar Pulang-Pergi</SelectItem>
+                    {kordas.map((korda) => (
+                      <SelectItem key={korda.id} value={korda.id}>
+                        {korda.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              <div>
+                <Label className="mb-1">Pilih Titik Turun *</Label>
+                <Select 
+                  value={selectedReturnDropPointId || ""} 
+                  onValueChange={setSelectedReturnDropPointId}
+                  disabled={!selectedReturnKordaId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedReturnKordaId ? "Pilih titik turun" : "Pilih korda terlebih dahulu"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {returnDropPoints.map((dp) => (
+                      <SelectItem key={dp.id} value={dp.id}>
+                        {dp.name} - Rp {dp.price.toLocaleString("id-ID")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedReturnDropPoint && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Harga: Rp {selectedReturnDropPoint.price.toLocaleString("id-ID")}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Step 5: Payment Status */}
+          <div>
+            <Label className="mb-1">5. Status Pembayaran *</Label>
+            <Select value={selectedPaymentStatus} onValueChange={setSelectedPaymentStatus}>
+              <SelectTrigger className={!selectedPaymentStatus ? "text-muted-foreground" : ""}>
+                <SelectValue placeholder="Pilih status pembayaran" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unpaid">Belum Bayar</SelectItem>
+                <SelectItem value="outbound_only">Sudah Bayar Pulang Saja</SelectItem>
+                <SelectItem value="paid_both">Sudah Bayar Pulang-Pergi</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
               {/* Add Button */}
               <Button
@@ -279,9 +403,10 @@ export function MultiParticipantRegistrationForm({
                   <TableRow>
                     <TableHead>Nama</TableHead>
                     <TableHead>NIS</TableHead>
-                    <TableHead>Titik Turun</TableHead>
+                    <TableHead>Titik Pulang</TableHead>
+                    <TableHead>Titik Kembali</TableHead>
                     <TableHead>Status Bayar</TableHead>
-                    <TableHead className="text-right">Harga (PP)</TableHead>
+                    <TableHead className="text-right">Harga Total</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -291,17 +416,34 @@ export function MultiParticipantRegistrationForm({
                       p.paymentStatus === "paid_both" ? "Lunas PP" :
                       p.paymentStatus === "outbound_only" ? "Pulang Saja" :
                       "Belum Bayar";
+                    
+                    const totalPrice = p.outboundDropPoint.price + p.returnDropPoint.price;
 
                     return (
                       <TableRow key={p.student.id}>
                         <TableCell className="font-medium">{p.student.name}</TableCell>
                         <TableCell>{p.student.nis}</TableCell>
-                        <TableCell>{p.dropPoint.name}</TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {p.outboundDropPoint.name}
+                            <div className="text-xs text-muted-foreground">
+                              Rp {p.outboundDropPoint.price.toLocaleString("id-ID")}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {p.returnDropPoint.name}
+                            <div className="text-xs text-muted-foreground">
+                              Rp {p.returnDropPoint.price.toLocaleString("id-ID")}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <span className="text-sm">{paymentLabel}</span>
                         </TableCell>
                         <TableCell className="text-right">
-                          Rp {(p.dropPoint.price * 2).toLocaleString("id-ID")}
+                          Rp {totalPrice.toLocaleString("id-ID")}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -317,7 +459,7 @@ export function MultiParticipantRegistrationForm({
                     );
                   })}
                   <TableRow>
-                    <TableCell colSpan={3} className="font-semibold">
+                    <TableCell colSpan={5} className="font-semibold">
                       Total
                     </TableCell>
                     <TableCell className="text-right font-semibold">

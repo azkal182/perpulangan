@@ -8,6 +8,9 @@ export type StudentBasic = {
   name: string;
   nis: string;
   regencyId: number | null;
+  regency?: {
+    kordaId: string | null;
+  } | null;
 };
 
 /**
@@ -119,6 +122,11 @@ export async function searchStudents(
         name: true,
         nis: true,
         regencyId: true,
+        regency: {
+          select: {
+            kordaId: true,
+          },
+        },
       },
       orderBy: {
         name: "asc",
