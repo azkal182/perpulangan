@@ -41,7 +41,7 @@ export async function getStudentsByKorda(kordaId: string): Promise<{
 
     logger.debug(
       { kordaId, count: students.length },
-      "Successfully fetched students by kordaId"
+      "Successfully fetched students by kordaId",
     );
 
     return {
@@ -49,10 +49,91 @@ export async function getStudentsByKorda(kordaId: string): Promise<{
       students,
     };
   } catch (error) {
-    logger.error({ err: error, kordaId }, "Failed to fetch students by kordaId");
+    logger.error(
+      { err: error, kordaId },
+      "Failed to fetch students by kordaId",
+    );
     return {
       success: false,
       error: "Gagal memuat data siswa",
     };
+  }
+}
+
+/**
+ * Search students by name or NIS (async autocomplete)
+ * Used for registration form with optional Korda selection
+ * @param query - Search query (name or NIS)
+ * @param kordaId - Optional Korda ID to filter students
+ */
+export async function searchStudents(
+  query: string,
+  kordaId?: string,
+): Promise<StudentBasic[]> {
+  try {
+    const trimmedQuery = query.trim();
+
+    logger.debug({ query: trimmedQuery, kordaId }, "Searching students");
+
+    // If query is empty, return empty array
+    if (!trimmedQuery) {
+      return [];
+    }
+
+    const students = await prisma.student.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              {
+                name: {
+                  contains: trimmedQuery,
+                  mode: "insensitive",
+                },
+              },
+              {
+                nis: {
+                  contains: trimmedQuery,
+                  mode: "insensitive",
+                },
+              },
+            ],
+          },
+          {
+            status: true, // Only active students
+          },
+          // Filter by Korda if provided
+          ...(kordaId
+            ? [
+                {
+                  regency: {
+                    kordaId: kordaId,
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        nis: true,
+        regencyId: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+      take: 50, // Limit for performance
+    });
+
+    logger.debug(
+      { query: trimmedQuery, kordaId, count: students.length },
+      "Successfully searched students",
+    );
+
+    return students;
+  } catch (error) {
+    logger.error({ err: error, query, kordaId }, "Failed to search students");
+    return [];
   }
 }

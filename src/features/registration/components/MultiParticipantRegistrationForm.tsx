@@ -20,12 +20,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Autocomplete } from "@/components/AutoComplete";
-import { Trash2, UserPlus, Loader2 } from "lucide-react";
+import { Trash2, UserPlus } from "lucide-react";
 import type { Korda } from "../types";
 import type { DropPoint } from "@/features/drop-points/types";
 import { createRegistration } from "../actions/registration.action";
-import { getStudentsByKorda, type StudentBasic } from "@/features/santri/actions/students.action";
-import { logError } from "@/lib/logger-client";
+import { searchStudents, type StudentBasic } from "@/features/santri/actions/students.action";
 
 type Props = {
   eventId: string;
@@ -46,60 +45,25 @@ export function MultiParticipantRegistrationForm({
   kordas,
   dropPoints,
 }: Props) {
-  const [selectedKordaId, setSelectedKordaId] = React.useState<string>("");
+  const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = React.useState<string | null>(null);
+  const [selectedStudent, setSelectedStudent] = React.useState<StudentBasic | null>(null);
   const [selectedDropPointId, setSelectedDropPointId] = React.useState<string | null>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = React.useState<string>("");
   const [participants, setParticipants] = React.useState<ParticipantDraft[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
 
-  const [students, setStudents] = React.useState<StudentBasic[]>([]);
-  const [loadingStudents, setLoadingStudents] = React.useState(false);
-
-  // Fetch students when Korda is selected
-  React.useEffect(() => {
-    if (!selectedKordaId) {
-      setStudents([]);
-      return;
-    }
-
-    setLoadingStudents(true);
-    getStudentsByKorda(selectedKordaId)
-      .then((result) => {
-        if (result.success && result.students) {
-          setStudents(result.students);
-        } else {
-          setStudents([]);
-          logError(result.error || "Unknown error", {
-            component: "MultiParticipantRegistrationForm",
-            action: "fetchStudents",
-            kordaId: selectedKordaId
-          });
-        }
-      })
-      .catch((error) => {
-        logError(error, {
-          component: "MultiParticipantRegistrationForm",
-          action: "fetchStudents",
-          kordaId: selectedKordaId
-        });
-        setStudents([]);
-      })
-      .finally(() => {
-        setLoadingStudents(false);
-      });
-  }, [selectedKordaId]);
-
-  // Filter drop points by selected Korda
+  // Filter drop points by selected Korda (if any)
   const filteredDropPoints = React.useMemo(() => {
-    if (!selectedKordaId) return [];
+    if (!selectedKordaId) return dropPoints; // Show all if no Korda selected
     return dropPoints.filter((dp) => dp.kordaId === selectedKordaId);
   }, [dropPoints, selectedKordaId]);
 
-  const selectedStudent = React.useMemo(
-    () => students.find((s) => s.id === selectedStudentId) || null,
-    [students, selectedStudentId]
-  );
+  // Reset student selection when Korda changes
+  React.useEffect(() => {
+    setSelectedStudentId(null);
+    setSelectedStudent(null);
+  }, [selectedKordaId]);
 
   const selectedDropPoint = React.useMemo(
     () => filteredDropPoints.find((dp) => dp.id === selectedDropPointId) || null,
@@ -132,6 +96,7 @@ export function MultiParticipantRegistrationForm({
 
     // Reset selections
     setSelectedStudentId(null);
+    setSelectedStudent(null);
     setSelectedDropPointId(null);
     setSelectedPaymentStatus("");
   };
@@ -153,21 +118,21 @@ export function MultiParticipantRegistrationForm({
 
     setSubmitting(true);
     try {
-      const selectedKorda = kordas.find((k) => k.id === selectedKordaId);
-      if (!selectedKorda) return;
-
       // Submit each participant
       const results = await Promise.all(
         participants.map((p) => {
           const outboundPaid = p.paymentStatus === "outbound_only" || p.paymentStatus === "paid_both";
           const returnPaid = p.paymentStatus === "paid_both";
 
+          // Use drop point's kordaId for registration
+          const kordaId = p.dropPoint.kordaId;
+
           return createRegistration({
             eventId,
             studentId: p.student.id,
-            outboundKordaId: selectedKordaId,
+            outboundKordaId: kordaId,
             outboundDropPointId: p.dropPoint.id,
-            returnKordaId: selectedKordaId,
+            returnKordaId: kordaId,
             returnDropPointId: p.dropPoint.id,
             kordaChanged: false,
             kordaChangeConfirmed: true,
@@ -179,7 +144,7 @@ export function MultiParticipantRegistrationForm({
 
       const failed = results.filter((r) => !r.success);
       if (failed.length > 0) {
-        alert(`Gagal  mendaftarkan ${failed.length} peserta:\n${failed.map((r) => r.error).join("\n")}`);
+        alert(`Gagal mendaftarkan ${failed.length} peserta:\n${failed.map((r) => r.error).join("\n")}`);
       } else {
         alert(`Berhasil mendaftarkan ${participants.length} peserta!`);
         setParticipants([]);
@@ -202,54 +167,55 @@ export function MultiParticipantRegistrationForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Step 1: Select Korda */}
+          {/* Step 1: Select Korda (Optional) */}
           <div>
-            <Label>1. Pilih Korda *</Label>
-            <Select value={selectedKordaId} onValueChange={setSelectedKordaId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih Korda" />
-              </SelectTrigger>
-              <SelectContent>
-                {kordas.map((korda) => (
-                  <SelectItem key={korda.id} value={korda.id}>
-                    {korda.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>1. Pilih Korda (Opsional)</Label>
+            <Autocomplete
+              items={kordas}
+              value={selectedKordaId}
+              onValueChange={setSelectedKordaId}
+              keyField="id"
+              getLabel={(korda) => korda.name}
+              placeholder="Pilih Korda (opsional)"
+              searchPlaceholder="Cari korda..."
+              emptyText="Tidak ada korda"
+            />
+            <p className="text-sm text-muted-foreground mt-1">
+              Pilih Korda untuk filter titik turun, atau kosongkan untuk lihat semua
+            </p>
           </div>
 
-          {selectedKordaId && (
-            <>
-              {/* Step 2: Search Student */}
-              <div>
-                <Label>2. Cari & Pilih Siswa *</Label>
-                {loadingStudents ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    Memuat data siswa...
-                  </div>
-                ) : (
-                  <>
-                    <Autocomplete
-                      items={students}
-                      value={selectedStudentId}
-                      onValueChange={setSelectedStudentId}
-                      keyField="id"
-                      getLabel={(student) => `${student.name} (${student.nis})`}
-                      placeholder="Cari siswa..."
-                      searchPlaceholder="Ketik nama atau NIS..."
-                      emptyText="Tidak ada siswa di Korda ini"
-                      virtualized={{ enabled: true }}
-                    />
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {students.length} siswa tersedia
-                    </p>
-                  </>
-                )}
-              </div>
+          {/* Step 2: Search Student (Async) */}
+          <div>
+            <Label>2. Cari & Pilih Siswa *</Label>
+            <Autocomplete
+              key={selectedKordaId || 'all'} // Reset cache when Korda changes
+              async={{
+                loadOptions: (query) => searchStudents(query, selectedKordaId || undefined),
+                debounceMs: 300,
+                cache: {
+                  enabled: true,
+                  staleTimeMs: 60_000,
+                },
+              }}
+              value={selectedStudentId}
+              onValueChange={setSelectedStudentId}
+              onSelectRaw={(student) => setSelectedStudent(student)}
+              keyField="id"
+              getLabel={(student) => `${student.name} (${student.nis})`}
+              placeholder="Cari siswa..."
+              searchPlaceholder="Ketik nama atau NIS..."
+              emptyText="Tidak ada hasil"
+              virtualized={{ enabled: true }}
+            />
+            {selectedKordaId && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Hanya menampilkan siswa dari Korda terpilih
+              </p>
+            )}
+          </div>
 
-              {/* Step 3: Select Drop Point */}
+          {/* Step 3: Select Drop Point */}
               <div>
                 <Label>3. Pilih Titik Turun *</Label>
                 <Select value={selectedDropPointId || ""} onValueChange={setSelectedDropPointId}>
@@ -296,8 +262,6 @@ export function MultiParticipantRegistrationForm({
                 <UserPlus className="mr-2 h-4 w-4" />
                 Tambah ke Daftar
               </Button>
-            </>
-          )}
         </CardContent>
       </Card>
 
