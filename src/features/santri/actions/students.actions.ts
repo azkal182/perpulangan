@@ -204,11 +204,11 @@ export async function bulkUpsertStudents(
                 photoUrl: s.photoUrl,
                 parrentPhone: s.parrentPhone,
                 dormitory: s.dormitory,
-                // provinceId: s.provinceId,
-                // regencyId: s.regencyId,
-                // districtId: s.districtId,
-                // villageId: s.villageId,
-                // fullAddress: s.fullAddress,
+                provinceId: s.provinceId,
+                regencyId: s.regencyId,
+                districtId: s.districtId,
+                villageId: s.villageId,
+                fullAddress: s.fullAddress,
               },
             });
 

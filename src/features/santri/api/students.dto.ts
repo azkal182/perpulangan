@@ -25,6 +25,7 @@ export type StudentDTO = {
   tgl_lahir_formatted: string;
   ttl: string;
   alamat_new: Address;
+  alamat: OldAddress;
   kontak: Kontak;
   status_anggota: Asrama;
   kelas: Asrama;
@@ -63,6 +64,17 @@ interface Address {
   kabupaten: RegionDetail;
   kecamatan: RegionDetail;
   desa: RegionDetail;
+  rt: number;
+  rw: number;
+  kodepos: string;
+  alamat_lengkap: string;
+}
+
+interface OldAddress {
+  provinsi: RegionDetail;
+  kabupaten: RegionDetail;
+  kecamatan: RegionDetail;
+  desa: string;
   rt: number;
   rw: number;
   kodepos: string;

@@ -58,11 +58,35 @@ export async function getStudents(): Promise<Student[]> {
       fetchAllStudentsByGroup("putri"),
     ]);
 
-    const result = [...putra, ...putri].map(mapStudent);
+    const result = [...putra, ...putri].map((dto) => mapStudent(dto));
     logger.debug({ count: result.length }, "students.repository.getStudents success");
     return result;
   } catch (error) {
     logger.error({ err: error }, "students.repository.getStudents failed");
+    throw error;
+  }
+}
+
+/**
+ * Returns both raw DTOs and mapped Students.
+ * Raw DTOs are needed for regional validation (to access `alamat` field).
+ */
+export async function getStudentDTOs(): Promise<{
+  students: Student[];
+  dtos: import("../api/students.dto").StudentDTO[];
+}> {
+  try {
+    const [putra, putri] = await Promise.all([
+      fetchAllStudentsByGroup("putra"),
+      fetchAllStudentsByGroup("putri"),
+    ]);
+
+    const allDTOs = [...putra, ...putri];
+    const students = allDTOs.map((dto) => mapStudent(dto));
+    logger.debug({ count: students.length }, "students.repository.getStudentDTOs success");
+    return { students, dtos: allDTOs };
+  } catch (error) {
+    logger.error({ err: error }, "students.repository.getStudentDTOs failed");
     throw error;
   }
 }

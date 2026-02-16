@@ -28,7 +28,28 @@ function normalizeName(name: string): string {
         .trim();
 }
 
-export function mapStudent(dto: StudentDTO): Student {
+export function mapStudent(
+  dto: StudentDTO,
+  validationMap?: Map<string, { provinceId: number | null; regencyId: number | null }>,
+): Student {
+  const hasNewAddress = !!dto.alamat_new?.provinsi?.id;
+
+  let provinceId: number | undefined = dto.alamat_new?.provinsi?.id
+    ? Number(dto.alamat_new.provinsi.id)
+    : undefined;
+  let regencyId: number | undefined = dto.alamat_new?.kabupaten?.id
+    ? Number(dto.alamat_new.kabupaten.id)
+    : undefined;
+
+  // Fallback to validation map for students without alamat_new
+  if (!hasNewAddress && validationMap) {
+    const validated = validationMap.get(dto.id_anggota);
+    if (validated) {
+      provinceId = validated.provinceId ?? undefined;
+      regencyId = validated.regencyId ?? undefined;
+    }
+  }
+
   return {
     id: String(dto.id_anggota),
     idApi: dto.id_anggota,
@@ -43,18 +64,14 @@ export function mapStudent(dto: StudentDTO): Student {
     photoUrl: dto.foto.url,
     parrentPhone: dto.kontak.hp_ortu,
     dormitory: dto.asrama.nama || "",
-    provinceId: dto.alamat_new.provinsi.id
-      ? Number(dto.alamat_new.provinsi.id)
-      : undefined,
-    regencyId: dto.alamat_new.kabupaten.id
-      ? Number(dto.alamat_new.kabupaten.id)
-      : undefined,
-    districtId: dto.alamat_new.kecamatan.id
+    provinceId,
+    regencyId,
+    districtId: dto.alamat_new?.kecamatan?.id
       ? Number(dto.alamat_new.kecamatan.id)
       : undefined,
-    villageId: dto.alamat_new.desa.id
+    villageId: dto.alamat_new?.desa?.id
       ? Number(dto.alamat_new.desa.id)
       : undefined,
-    fullAddress: dto.alamat_new.alamat_lengkap,
+    fullAddress: dto.alamat_new?.alamat_lengkap || dto.alamat?.alamat_lengkap || "",
   };
 }

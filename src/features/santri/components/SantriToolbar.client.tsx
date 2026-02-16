@@ -20,14 +20,16 @@ import {
 } from "@/components/ui/dialog";
 
 import { bulkUpsertStudents } from "@/features/santri/actions/students.actions";
+import { validateRegionalData } from "@/features/santri/actions/validate-regional.action";
 import { Student } from "@/features/santri/domain/student.model";
-import { getStudents } from "@/features/santri/services/students.repository";
+import { getStudentDTOs } from "@/features/santri/services/students.repository";
 import { getKorwil } from "@/features/master/actions/korwil.action";
 import { getKorda } from "@/features/master/actions/korda.action";
 import type { Korwil, Korda } from "@/features/master/types";
 import { logger, logError } from "@/lib/logger-client";
+import type { StudentDTO } from "@/features/santri/api/students.dto";
 
-import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown } from "lucide-react";
+import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown, MapPin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getStudentsForPDFExport } from "../actions/export-pdf.action";
@@ -148,9 +150,19 @@ export function SantriToolbarClient({
   const [openConfirm, setOpenConfirm] = useState(false);
 
   const [previewRows, setPreviewRows] = useState<Student[] | null>(null);
+  const [previewDTOs, setPreviewDTOs] = useState<StudentDTO[] | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+
+  // Regional validation state
+  const [validatingRegional, setValidatingRegional] = useState(false);
+  const [regionalValidationStats, setRegionalValidationStats] = useState<{
+    total: number;
+    successCount: number;
+    failedCount: number;
+    errors: string[];
+  } | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -368,16 +380,92 @@ export function SantriToolbarClient({
   const onPreviewImport = async () => {
     try {
       setLoadingPreview(true);
-      const apiStudents = await getStudents();
-      logger.debug({ count: apiStudents.length }, "santri.import.preview loaded");
+      // Reset regional validation state
+      setRegionalValidationStats(null);
 
-      setPreviewRows(apiStudents);
+      const { students, dtos } = await getStudentDTOs();
+      logger.debug({ count: students.length }, "santri.import.preview loaded");
+
+      setPreviewRows(students);
+      setPreviewDTOs(dtos);
       setOpenConfirm(true);
     } catch (error) {
       logError(error, { component: "SantriToolbar", action: "previewImport" });
       alert("Gagal mengambil data dari API.");
     } finally {
       setLoadingPreview(false);
+    }
+  };
+
+  const handleValidateRegional = async () => {
+    if (!previewDTOs) return;
+
+    setValidatingRegional(true);
+    try {
+      // Collect DTOs that don't have alamat_new but have alamat
+      const needsValidation = previewDTOs.filter(
+        (dto) => !dto.alamat_new?.provinsi?.id && dto.alamat?.provinsi?.nama,
+      );
+
+      if (needsValidation.length === 0) {
+        setRegionalValidationStats({
+          total: 0,
+          successCount: 0,
+          failedCount: 0,
+          errors: ["Semua data sudah memiliki alamat_new, tidak perlu validasi."],
+        });
+        setValidatingRegional(false);
+        return;
+      }
+
+      const inputs = needsValidation.map((dto) => ({
+        idApi: dto.id_anggota,
+        provinceName: dto.alamat?.provinsi?.nama ?? null,
+        regencyName: dto.alamat?.kabupaten?.nama ?? null,
+      }));
+
+      const result = await validateRegionalData(inputs);
+
+      if (result.success) {
+        const validationMap = new Map(result.validationEntries);
+        setRegionalValidationStats({
+          total: result.total,
+          successCount: result.successCount,
+          failedCount: result.failedCount,
+          errors: result.errors,
+        });
+
+        // Re-map preview rows with validated data
+        if (previewRows) {
+          const updatedRows = previewRows.map((s) => {
+            const validated = validationMap.get(s.idApi);
+            if (!validated || (!validated.provinceId && !validated.regencyId)) return s;
+            return {
+              ...s,
+              provinceId: validated.provinceId ?? s.provinceId,
+              regencyId: validated.regencyId ?? s.regencyId,
+            };
+          });
+          setPreviewRows(updatedRows);
+        }
+
+        logger.info(
+          { total: result.total, success: result.successCount, failed: result.failedCount },
+          "santri.validateRegional completed",
+        );
+      } else {
+        setRegionalValidationStats({
+          total: result.total,
+          successCount: 0,
+          failedCount: result.total,
+          errors: result.errors,
+        });
+      }
+    } catch (error) {
+      logError(error, { component: "SantriToolbar", action: "validateRegional" });
+      alert("Validasi regional gagal.");
+    } finally {
+      setValidatingRegional(false);
     }
   };
 
@@ -744,6 +832,41 @@ export function SantriToolbarClient({
                     </table>
                   </div>
                 </div>
+
+                {/* Regional Validation Results */}
+                {regionalValidationStats && (
+                  <div className="rounded-md border p-3 bg-blue-50 dark:bg-blue-950/30">
+                    <div className="mb-2 text-sm font-semibold flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Hasil Validasi Regional
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                      <div>
+                        <div className="text-muted-foreground">Total</div>
+                        <div className="font-semibold">{regionalValidationStats.total}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Berhasil</div>
+                        <div className="font-semibold text-emerald-600">
+                          {regionalValidationStats.successCount}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Gagal</div>
+                        <div className="font-semibold text-red-600">
+                          {regionalValidationStats.failedCount}
+                        </div>
+                      </div>
+                    </div>
+                    {regionalValidationStats.errors.length > 0 && (
+                      <div className="max-h-24 overflow-auto text-xs text-muted-foreground">
+                        {regionalValidationStats.errors.map((e, i) => (
+                          <div key={i} className="py-0.5">{e}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -752,9 +875,17 @@ export function SantriToolbarClient({
             <Button
               variant="outline"
               onClick={() => setOpenConfirm(false)}
-              disabled={importing}
+              disabled={importing || validatingRegional}
             >
               Batal
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleValidateRegional}
+              disabled={validatingRegional || importing || !previewRows}
+            >
+              <MapPin className="mr-2 h-4 w-4" />
+              {validatingRegional ? "Memvalidasi..." : "Validasi Regional"}
             </Button>
             <Button
               onClick={onConfirmImport}
