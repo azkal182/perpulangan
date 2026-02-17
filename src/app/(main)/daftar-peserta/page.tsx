@@ -10,6 +10,7 @@ import { RegistrationNavigation } from "@/features/registrations-management/comp
 import { RegistrationStatsCards } from "@/features/registrations-management/components/RegistrationStatsCards";
 import { RegistrationFilters } from "@/features/registrations-management/components/RegistrationFilters";
 import { RegistrationsTable } from "@/features/registrations-management/components/RegistrationsTable";
+import { PrintButton } from "@/features/registrations-management/components/PrintButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PageProps {
@@ -92,8 +93,17 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
         {/* Header */}
         <div className="border-b">
           <div className="mx-auto max-w-7xl px-4 py-4">
-            <div className="text-lg font-semibold">Daftar Peserta Terdaftar</div>
-            <div className="text-sm text-muted-foreground">{activeEvent.name}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-lg font-semibold">Daftar Peserta Terdaftar</div>
+                <div className="text-sm text-muted-foreground">{activeEvent.name}</div>
+              </div>
+              <PrintButton
+                eventId={activeEvent.id}
+                kordas={kordas}
+                dropPoints={dropPoints}
+              />
+            </div>
           </div>
         </div>
 

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronDown,
-  Plus,
   User2,
   Bot,
   Settings,
@@ -40,7 +39,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { teams, navMain, managements, others } from "@/config/sidebar-data";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [activeTeam, setActiveTeam] = React.useState(teams[0]);
   const pathname = usePathname();
 
   // Helper to check if a url is active

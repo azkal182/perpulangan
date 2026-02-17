@@ -48,6 +48,7 @@ export default function TrackingPage() {
       setBuses([]);
       setSelectedBusIds(new Set());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId, selectedKordaId]);
 
   // Auto-refresh GPS positions every 30 seconds
@@ -58,6 +59,7 @@ export default function TrackingPage() {
     const interval = setInterval(fetchGPSData, 30000); // 30s
     
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId]);
 
   async function loadInitialData() {
@@ -151,7 +153,9 @@ export default function TrackingPage() {
         gps,
       };
     })
-    .filter(bus => bus.gps && bus.gps.lat !== null && bus.gps.lon !== null);
+    .filter((bus): bus is Bus & { gps: MonitoringData } => 
+      bus.gps !== undefined && bus.gps.lat !== null && bus.gps.lon !== null
+    );
 
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] gap-4">
