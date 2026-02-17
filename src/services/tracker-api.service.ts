@@ -32,6 +32,22 @@ interface TrackerData {
   created_at: string;
 }
 
+export interface MonitoringData {
+  id: string;
+  event_id: string;
+  label: string;
+  kind: string;
+  is_active: boolean;
+  last_seen_at: string | null;
+  lat: number | null;
+  lon: number | null;
+  speed: number | null;
+  heading: number | null;
+  accuracy: number | null;
+  ts: string | null;
+  created_at: string;
+}
+
 class TrackerApiService {
   private baseUrl: string;
   private apiKey: string;
@@ -80,10 +96,7 @@ class TrackerApiService {
 
       return result.data!.id;
     } catch (error) {
-      logger.error(
-        { error, name: params.name },
-        "tracker.event.create.failed",
-      );
+      logger.error({ error, name: params.name }, "tracker.event.create.failed");
       throw error;
     }
   }
@@ -138,16 +151,13 @@ class TrackerApiService {
     isActive: boolean,
   ): Promise<void> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/v1/trackers/${trackerId}`,
-        {
-          method: "PATCH",
-          headers: this.headers,
-          body: JSON.stringify({
-            is_active: isActive,
-          }),
-        },
-      );
+      const response = await fetch(`${this.baseUrl}/v1/trackers/${trackerId}`, {
+        method: "PATCH",
+        headers: this.headers,
+        body: JSON.stringify({
+          is_active: isActive,
+        }),
+      });
 
       const result: TrackerApiResponse<null> = await response.json();
 
@@ -155,15 +165,44 @@ class TrackerApiService {
         throw new Error(result.message || "Failed to update tracker status");
       }
 
-      logger.info(
-        { trackerId, isActive },
-        "tracker.tracker.status.updated",
-      );
+      logger.info({ trackerId, isActive }, "tracker.tracker.status.updated");
     } catch (error) {
       logger.error(
         { error, trackerId, isActive },
         "tracker.tracker.status.update.failed",
       );
+      throw error;
+    }
+  }
+
+  /**
+   * Get monitoring data (latest GPS positions for all trackers in event)
+   */
+  async getMonitoring(eventId: string): Promise<MonitoringData[]> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/v1/events/${eventId}/monitoring`,
+        {
+          method: "GET",
+          headers: this.headers,
+        },
+      );
+
+      const result: TrackerApiResponse<{ items: MonitoringData[] }> =
+        await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to get monitoring data");
+      }
+
+      logger.debug(
+        { eventId, count: result.data?.items.length || 0 },
+        "tracker.monitoring.fetched",
+      );
+
+      return result.data?.items || [];
+    } catch (error) {
+      logger.error({ error, eventId }, "tracker.monitoring.fetch.failed");
       throw error;
     }
   }

@@ -8,6 +8,7 @@ import {
   GalleryVerticalEnd,
   Home,
   MapPin,
+  Navigation,
   Settings,
   User2,
 } from "lucide-react";
@@ -48,6 +49,11 @@ export const navMain = [
     title: "Santri",
     url: "/santri",
     icon: User2,
+  },
+  {
+    title: "Tracking",
+    url: "/tracking",
+    icon: Navigation,
   },
 ];
 
