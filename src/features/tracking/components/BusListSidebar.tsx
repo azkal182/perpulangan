@@ -64,7 +64,7 @@ export function BusListSidebar({
   isRefreshing,
 }: BusListSidebarProps) {
   return (
-    <div className="w-80 border rounded-lg p-4 flex flex-col gap-4">
+    <div className="w-full lg:w-80 border rounded-lg p-4 flex flex-col gap-4">
       <div>
         <h2 className="text-lg font-semibold mb-4">GPS Tracking</h2>
         

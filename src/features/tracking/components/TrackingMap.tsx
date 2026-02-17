@@ -6,7 +6,10 @@ import L from "leaflet";
 import type { MonitoringData } from "@/services/tracker-api.service";
 
 // Fix Leaflet default icon issue in Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+const DefaultIcon = L.Icon.Default.prototype as L.Icon & {
+  _getIconUrl?: () => string;
+};
+delete DefaultIcon._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
@@ -25,6 +28,69 @@ interface Bus {
 
 interface TrackingMapProps {
   buses: Array<Bus & { gps: MonitoringData }>;
+}
+
+// Create custom bus icon with label and speed
+function createBusIcon(bus: Bus & { gps: MonitoringData }) {
+  // Convert m/s to km/h (1 m/s = 3.6 km/h)
+  const speedMps = bus.gps.speed !== null ? bus.gps.speed : 0;
+  const speedKmh = Math.round(speedMps * 3.6);
+  const heading = bus.gps.heading || 0;
+  
+  // Determine color based on speed
+  let speedColor = "#22c55e"; // green for normal
+  if (speedKmh > 80) speedColor = "#ef4444"; // red for fast
+  else if (speedKmh > 60) speedColor = "#f59e0b"; // orange for moderate
+  
+  const html = `
+    <div style="
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translateY(-50%);
+    ">
+      <div style="
+        background: white;
+        border: 2px solid ${speedColor};
+        border-radius: 8px;
+        padding: 2px 6px;
+        font-size: 11px;
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        margin-bottom: 2px;
+      ">
+        ${bus.label}
+      </div>
+      <div style="
+        font-size: 32px;
+        line-height: 1;
+        transform: rotate(${heading + 90}deg);
+        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
+      ">
+        🚌
+      </div>
+      <div style="
+        background: ${speedColor};
+        color: white;
+        border-radius: 4px;
+        padding: 1px 4px;
+        font-size: 10px;
+        font-weight: bold;
+        margin-top: 2px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      ">
+        ${speedKmh} km/h
+      </div>
+    </div>
+  `;
+
+  return L.divIcon({
+    html,
+    className: "bus-marker",
+    iconSize: [60, 80],
+    iconAnchor: [30, 40],
+  });
 }
 
 // Component to auto-fit map bounds
@@ -63,6 +129,13 @@ export function TrackingMap({ buses }: TrackingMapProps) {
 
   return (
     <div className="w-full h-full relative">
+      <style jsx global>{`
+        .bus-marker {
+          background: none !important;
+          border: none !important;
+        }
+      `}</style>
+      
       {buses.length === 0 ? (
         <div className="flex items-center justify-center h-full bg-muted">
           <div className="text-center text-muted-foreground">
@@ -93,6 +166,7 @@ export function TrackingMap({ buses }: TrackingMapProps) {
               <Marker
                 key={bus.id}
                 position={[bus.gps.lat, bus.gps.lon]}
+                icon={createBusIcon(bus)}
               >
                 <Popup>
                   <div className="min-w-[200px]">
@@ -108,7 +182,7 @@ export function TrackingMap({ buses }: TrackingMapProps) {
                       
                       {bus.gps.speed !== null && (
                         <div>
-                          <span className="font-medium">Speed:</span> {bus.gps.speed.toFixed(1)} km/h
+                          <span className="font-medium">Speed:</span> {(bus.gps.speed * 3.6).toFixed(1)} km/h
                         </div>
                       )}
                       
@@ -145,3 +219,4 @@ export function TrackingMap({ buses }: TrackingMapProps) {
     </div>
   );
 }
+

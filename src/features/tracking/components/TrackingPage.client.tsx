@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   getTrackingEvents,
   getBusesForTracking,
@@ -30,6 +31,9 @@ export default function TrackingPage() {
   
   const [loading, setLoading] = useState(true);
   const [fetchingGPS, setFetchingGPS] = useState(false);
+  
+  // Mobile sidebar collapse state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -150,26 +154,63 @@ export default function TrackingPage() {
     .filter(bus => bus.gps && bus.gps.lat !== null && bus.gps.lon !== null);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      <BusListSidebar
-        events={events}
-        buses={buses}
-        kordas={kordas}
-        selectedEventId={selectedEventId}
-        selectedKordaId={selectedKordaId}
-        selectedBusIds={selectedBusIds}
-        onEventChange={setSelectedEventId}
-        onKordaChange={setSelectedKordaId}
-        onBusToggle={toggleBusSelection}
-        onSelectAll={selectAllBuses}
-        onDeselectAll={deselectAllBuses}
-        lastUpdate={lastUpdate}
-        isRefreshing={fetchingGPS}
-      />
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] gap-4">
+      {/* Mobile: Collapsible sidebar */}
+      <div className="lg:hidden w-full">
+        <Button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          variant="outline"
+          className="w-full mb-2 flex items-center justify-between"
+        >
+          <span>Filters & Bus Selection ({selectedBusIds.size} selected)</span>
+          {isSidebarCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </Button>
+        
+        {!isSidebarCollapsed && (
+          <div className="max-h-[50vh] overflow-hidden">
+            <BusListSidebar
+              events={events}
+              buses={buses}
+              kordas={kordas}
+              selectedEventId={selectedEventId}
+              selectedKordaId={selectedKordaId}
+              selectedBusIds={selectedBusIds}
+              onEventChange={setSelectedEventId}
+              onKordaChange={setSelectedKordaId}
+              onBusToggle={toggleBusSelection}
+              onSelectAll={selectAllBuses}
+              onDeselectAll={deselectAllBuses}
+              lastUpdate={lastUpdate}
+              isRefreshing={fetchingGPS}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Always visible sidebar */}
+      <div className="hidden lg:block">
+        <BusListSidebar
+          events={events}
+          buses={buses}
+          kordas={kordas}
+          selectedEventId={selectedEventId}
+          selectedKordaId={selectedKordaId}
+          selectedBusIds={selectedBusIds}
+          onEventChange={setSelectedEventId}
+          onKordaChange={setSelectedKordaId}
+          onBusToggle={toggleBusSelection}
+          onSelectAll={selectAllBuses}
+          onDeselectAll={deselectAllBuses}
+          lastUpdate={lastUpdate}
+          isRefreshing={fetchingGPS}
+        />
+      </div>
       
-      <div className="flex-1 rounded-lg border overflow-hidden">
+      {/* Map - Full width on mobile, 70% on desktop */}
+      <div className="flex-1 rounded-lg border overflow-hidden min-h-[400px] lg:min-h-0">
         <TrackingMap buses={busesWithGPS} />
       </div>
     </div>
   );
 }
+
