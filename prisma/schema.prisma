@@ -212,6 +212,11 @@ model Event {
     updatedAt DateTime    @updatedAt
 
     registrations Registration[]
+    buses         Bus[]
+
+    // Tracker API sync status
+    trackerEventId String?   @unique // Event ID from tracker API
+    trackerSyncAt  DateTime? // Last sync timestamp
 
     @@index([status])
     @@index([startDate])
@@ -229,6 +234,7 @@ model Korwil {
     picUser   User?   @relation("KorwilPIC", fields: [picUserId], references: [id], onDelete: SetNull)
 
     kordas Korda[]
+    buses  Bus[]
 
     updatedAt DateTime @updatedAt
     createdAt DateTime @default(now())
@@ -251,9 +257,53 @@ model Korda {
 
     outboundRegistrations Registration[] @relation("OutboundKorda")
     returnRegistrations   Registration[] @relation("ReturnKorda")
+    busKordas             BusKorda[]
 
     updatedAt DateTime @updatedAt
     createdAt DateTime @default(now())
+}
+
+model Bus {
+    id    String @id @default(uuid())
+    label String // e.g., "Bus 01 - Agra Mas + Kumaci"
+
+    // Tracker integration
+    trackerId String? @unique // ID from tracker API
+
+    // Many-to-many: 1 bus bisa untuk banyak korda
+    kordas BusKorda[]
+
+    // Optional: grouping by Korwil
+    korwilId String?
+    korwil   Korwil? @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+
+    eventId String
+    event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+    isActive Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([eventId])
+    @@index([korwilId])
+    @@index([trackerId])
+}
+
+model BusKorda {
+    id String @id @default(uuid())
+
+    busId String
+    bus   Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+
+    kordaId String
+    korda   Korda  @relation(fields: [kordaId], references: [id], onDelete: Cascade)
+
+    createdAt DateTime @default(now())
+
+    @@unique([busId, kordaId])
+    @@index([busId])
+    @@index([kordaId])
 }
 
 model DropPoint {

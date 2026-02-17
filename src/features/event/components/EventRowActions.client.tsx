@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Cloud, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { deleteEvent } from "@/features/event/actions/events.actions";
+import { syncEventToTracker } from "@/features/event/actions/event-sync.actions";
 import { EventFormDialog } from "./EventFormDialog.client";
 import type { EventStatus } from "@/features/event/types";
 import { logError } from "@/lib/logger-client";
@@ -36,11 +37,14 @@ export function EventRowActions({
     startDate: string;
     endDate: string;
     status: EventStatus;
+    trackerEventId: string | null | undefined;
   };
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [synced, setSynced] = useState(!!event.trackerEventId);
 
   const onDelete = async () => {
     setIsDeleting(true);
@@ -60,6 +64,24 @@ export function EventRowActions({
     }
   };
 
+  const onSyncToTracker = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncEventToTracker(event.id);
+      if (!res.success) {
+        toast.error(res.message || "Gagal sync event ke tracker API.");
+        return;
+      }
+      toast.success("Event berhasil di-sync ke tracker API!");
+      setSynced(true);
+    } catch (err) {
+      logError(err, { component: "EventRowActions", action: "syncEvent", eventId: event.id });
+      toast.error("Gagal sync event.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -74,6 +96,25 @@ export function EventRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              onSyncToTracker();
+            }}
+            disabled={isSyncing || synced}
+          >
+            {synced ? (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Sudah di-sync
+              </>
+            ) : (
+              <>
+                <Cloud className="mr-2 h-4 w-4" />
+                {isSyncing ? "Syncing..." : "Sync ke Tracker"}
+              </>
+            )}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault();
