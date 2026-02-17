@@ -26,9 +26,9 @@ export default async function SantriPage({
   const kordaId = (params?.kordaId ?? "all").trim() || "all";
   const effectiveKordaId = korwilId === "all" ? "all" : kordaId;
 
-  const rawPageSize = Number(params?.perPage ?? params?.pageSize ?? "6");
-  const pageSizeOptions = new Set([6, 10, 20, 50]);
-  const pageSize = pageSizeOptions.has(rawPageSize) ? rawPageSize : 6;
+  const rawPageSize = Number(params?.perPage ?? params?.pageSize ?? "10");
+  const pageSizeOptions = new Set([10, 20, 50]);
+  const pageSize = pageSizeOptions.has(rawPageSize) ? rawPageSize : 10;
 
   const sync = await getStudentsLastSync();
 

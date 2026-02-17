@@ -416,8 +416,15 @@ export function MultiParticipantRegistrationForm({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unpaid">Belum Bayar</SelectItem>
-                <SelectItem value="outbound_only">Sudah Bayar Pulang Saja</SelectItem>
-                <SelectItem value="paid_both">Sudah Bayar Pulang-Pergi</SelectItem>
+                {registrationMode === 'both' && (
+                  <>
+                    <SelectItem value="outbound_only">Sudah Bayar Pulang Saja</SelectItem>
+                    <SelectItem value="paid_both">Sudah Bayar Pulang-Pergi</SelectItem>
+                  </>
+                )}
+                {registrationMode === 'return_only' && (
+                  <SelectItem value="paid_return">Sudah Bayar Kembali</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>

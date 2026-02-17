@@ -548,21 +548,23 @@ export function SantriToolbarClient({
         </AlertDescription>
       </Alert>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        {/* LEFT */}
-        <div className="flex w-full flex-col gap-3 md:flex-1 md:flex-row md:items-center md:gap-3">
-          <div className="relative w-full md:max-w-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
-            <Input
-              className="pl-9"
-              placeholder="Cari nama atau NIS..."
-              aria-label="Cari nama atau NIS"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
+      <div className="space-y-4">
+        {/* Search bar - Full width on all screens */}
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
+          <Input
+            className="pl-9"
+            placeholder="Cari nama atau NIS..."
+            aria-label="Cari nama atau NIS"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
 
-          <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
+        {/* Filters and Actions Row */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {/* LEFT: Filters */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {/* KORWIL FILTER */}
             <Select
               value={korwilId}
@@ -571,7 +573,7 @@ export function SantriToolbarClient({
                 setKordaId("all");
               }}
             >
-              <SelectTrigger className="w-full md:w-[190px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue
                   placeholder={loadingKorwil ? "Memuat korwil..." : "Semua Korwil"}
                 />
@@ -592,7 +594,7 @@ export function SantriToolbarClient({
               onValueChange={(v) => setKordaId(v)}
               disabled={korwilId === "all" || loadingKorda}
             >
-              <SelectTrigger className="w-full md:w-[190px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue
                   placeholder={
                     korwilId === "all"
@@ -613,12 +615,12 @@ export function SantriToolbarClient({
               </SelectContent>
             </Select>
 
-            {/* STATUS FILTER (controlled) */}
+            {/* STATUS FILTER */}
             <Select
               value={status}
               onValueChange={(v) => setStatus(normalizeStatusParam(v))}
             >
-              <SelectTrigger className="w-full md:w-[170px]">
+              <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="Semua Status" />
               </SelectTrigger>
               <SelectContent>
@@ -630,41 +632,41 @@ export function SantriToolbarClient({
 
             <Button
               variant="outline"
-              className="shrink-0"
+              className="shrink-0 w-full sm:w-auto"
               size="icon"
               aria-label="Filter"
             >
               <Filter className="h-4 w-4" />
             </Button>
           </div>
-        </div>
 
-        {/* RIGHT */}
-        <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-end md:w-auto">
-          <Button
-            onClick={handleExportPDF}
-            variant="outline"
-            className="w-full sm:w-auto"
-            disabled={exportingPDF}
-          >
-            <FileDown className="mr-2 h-4 w-4" />
-            {exportingPDF ? "Membuat PDF..." : "Export PDF"}
-          </Button>
+          {/* RIGHT: Action Buttons */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:flex-nowrap">
+            <Button
+              onClick={handleExportPDF}
+              variant="outline"
+              className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
+              disabled={exportingPDF}
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              {exportingPDF ? "Membuat PDF..." : "Export PDF"}
+            </Button>
 
-          <Button
-            onClick={onPreviewImport}
-            variant="outline"
-            className="w-full sm:w-auto"
-            disabled={loadingPreview || importing}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {loadingPreview ? "Mengambil data..." : "Import (Preview)"}
-          </Button>
+            <Button
+              onClick={onPreviewImport}
+              variant="outline"
+              className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
+              disabled={loadingPreview || importing}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {loadingPreview ? "Mengambil data..." : "Import (Preview)"}
+            </Button>
 
-          <Button className="w-full sm:w-auto">
-            <UserPlus className="mr-2 h-4 w-4" />
-            Tambah Siswa
-          </Button>
+            <Button className="w-full sm:flex-1 lg:w-auto lg:flex-initial">
+              <UserPlus className="mr-2 h-4 w-4" />
+              Tambah Siswa
+            </Button>
+          </div>
         </div>
       </div>
 

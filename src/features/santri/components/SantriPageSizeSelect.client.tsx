@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const PAGE_SIZES = [6, 10, 20, 50] as const;
+const PAGE_SIZES = [10, 20, 50] as const;
 
 export function SantriPageSizeSelect({ pageSize }: { pageSize: number }) {
   const router = useRouter();

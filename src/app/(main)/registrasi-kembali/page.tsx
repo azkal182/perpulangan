@@ -3,8 +3,14 @@ import { getKorda } from "@/features/master/actions/korda.action";
 import { getDropPoints } from "@/features/drop-points/actions/drop-point.action";
 import { MultiParticipantRegistrationForm } from "@/features/registration/components/MultiParticipantRegistrationForm";
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
+import type { Metadata } from "next";
 
-export default async function RegistrationPage() {
+export const metadata: Metadata = {
+  title: "Registrasi Kembali | Perpulangan Santri",
+  description: "Halaman khusus untuk pendaftaran kembali saja (return-only)",
+};
+
+export default async function ReturnOnlyRegistrationPage() {
   const activeEvent = await getActiveEvent();
 
   if (!activeEvent) {
@@ -46,7 +52,7 @@ export default async function RegistrationPage() {
         <div className="border-b">
           <div className="mx-auto max-w-7xl px-4 py-4">
             <div className="text-lg font-semibold">
-              Registrasi Pulang-Kembali
+              Registrasi Kembali (Return Only)
             </div>
             <div className="text-sm text-muted-foreground">{activeEvent.name}</div>
           </div>
@@ -58,7 +64,7 @@ export default async function RegistrationPage() {
             eventName={activeEvent.name}
             kordas={kordas}
             dropPoints={dropPoints}
-            defaultMode="both"
+            defaultMode="return_only"
             lockMode={true}
           />
         </div>

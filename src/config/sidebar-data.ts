@@ -3,14 +3,18 @@ import {
   Banknote,
   Bus,
   Calendar,
+  ClipboardCheck,
+  ClipboardCopy,
   ClipboardMinus,
   Command,
+  Database,
   GalleryVerticalEnd,
   Home,
   MapPin,
   Navigation,
   Settings,
   User2,
+  Users,
 } from "lucide-react";
 
 // Data untuk workspace/team selector
@@ -64,17 +68,22 @@ export const managements = [
   {
     title: "Master",
     url: "/master",
-    icon: Bus,
+    icon: Database,
   },
   {
-    title: "registrasi Rombongan",
+    title: "registrasi",
     url: "/registrasi",
-    icon: Bus,
+    icon: ClipboardCheck,
   },
   {
-    title: "Registrasi Kembali Saja",
-    url: "/registrasi/kembali-saja",
-    icon: Bus,
+    title: "Registrasi Kembali",
+    url: "/registrasi-kembali",
+    icon: ClipboardCopy,
+  },
+  {
+    title: "Daftar Peserta",
+    url: "/daftar-peserta",
+    icon: Users,
   },
   {
     title: "Rombongan",

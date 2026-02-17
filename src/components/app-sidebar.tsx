@@ -46,7 +46,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Helper to check if a url is active
   const isActive = (url: string) => {
     if (url === "/dashboard" && pathname === "/dashboard") return true;
-    if (url !== "/dashboard" && pathname.startsWith(url)) return true;
+    if (url !== "/dashboard" && pathname === url) return true;
     return false;
   };
 

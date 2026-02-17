@@ -53,7 +53,7 @@ function mapStudentStatusToPaymentStatus(status: boolean): StudentStatus {
 
 export async function SantriTableCard({
   page = 1,
-  pageSize = 6,
+  pageSize = 10,
   basePath = "/santri",
   query = "",
   status = "all",

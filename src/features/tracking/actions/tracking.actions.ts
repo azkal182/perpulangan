@@ -45,6 +45,7 @@ export async function getBusesForTracking(params: {
   kordaId?: string;
 }) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {
       eventId: params.eventId,
       trackerId: {
