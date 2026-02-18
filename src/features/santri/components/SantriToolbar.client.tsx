@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,27 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
-import { bulkUpsertStudents } from "@/features/santri/actions/students.actions";
-import { validateRegionalData } from "@/features/santri/actions/validate-regional.action";
-import { Student } from "@/features/santri/domain/student.model";
-import { getStudentDTOs } from "@/features/santri/services/students.repository";
 import { getKorwil } from "@/features/master/actions/korwil.action";
 import { getKorda } from "@/features/master/actions/korda.action";
 import type { Korwil, Korda } from "@/features/master/types";
 import { logger, logError } from "@/lib/logger-client";
-import type { StudentDTO } from "@/features/santri/api/students.dto";
 
-import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown, MapPin } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getStudentsForPDFExport } from "../actions/export-pdf.action";
 import { generateStudentsPDF } from "../utils/pdf-generator";
@@ -40,85 +29,6 @@ type StatusParam = "all" | "active" | "inactive";
 function normalizeStatusParam(v: string): StatusParam {
   if (v === "active" || v === "inactive" || v === "all") return v;
   return "all";
-}
-
-function summarize(students: Student[]) {
-  const total = students.length;
-
-  // status boolean -> bucket
-  const statusCount = students.reduce<Record<string, number>>((acc, s) => {
-    const key =
-      s.status === true
-        ? "active"
-        : s.status === false
-          ? "inactive"
-          : "unknown";
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const genderCount = students.reduce<Record<string, number>>((acc, s) => {
-    const key = (s.gender || "unknown").toLowerCase();
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const dup = <T,>(arr: T[]) => arr.filter((v, i) => arr.indexOf(v) !== i);
-
-  const idApis = students.map((s) => s.idApi?.trim()).filter(Boolean);
-  const niss = students.map((s) => s.nis?.trim()).filter(Boolean);
-
-  const dupIdApi = Array.from(new Set(dup(idApis)));
-  const dupNis = Array.from(new Set(dup(niss)));
-
-  const invalid: Array<{
-    index: number;
-    idApi?: string;
-    nis?: string;
-    missing: string[];
-  }> = [];
-  const skipped: Array<{
-    index: number;
-    idApi?: string;
-    nis?: string;
-    missing: string[];
-  }> = [];
-
-  students
-    .map((s, i) => {
-      const missing: string[] = [];
-      if (!s.idApi) missing.push("idApi");
-      if (!s.nis) missing.push("nis");
-      if (!s.name) missing.push("name");
-      if (!s.gender) missing.push("gender");
-
-      // status boolean: missing kalau null/undefined (bukan !s.status)
-      if (s.status === null || s.status === undefined) missing.push("status");
-
-      if (!s.ttl) missing.push("ttl");
-      if (!s.dormitory) missing.push("dormitory");
-      if (!s.fullAddress) missing.push("fullAddress");
-      if (!missing.length) return null;
-
-      const shouldSkip =
-        missing.includes("nis") || missing.includes("dormitory");
-
-      const payload = { index: i, idApi: s.idApi, nis: s.nis, missing };
-      if (shouldSkip) skipped.push(payload);
-      else invalid.push(payload);
-      return payload;
-    })
-    .filter(Boolean);
-
-  return {
-    total,
-    statusCount,
-    genderCount,
-    dupIdApi,
-    dupNis,
-    invalid,
-    skipped,
-  };
 }
 
 function useDebouncedValue<T>(value: T, delay = 400) {
@@ -151,22 +61,8 @@ export function SantriToolbarClient({
   incompleteCount?: number;
   initialIncompleteRegional?: boolean;
 }) {
-  const [openConfirm, setOpenConfirm] = useState(false);
-
-  const [previewRows, setPreviewRows] = useState<Student[] | null>(null);
-  const [previewDTOs, setPreviewDTOs] = useState<StudentDTO[] | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
 
-  // Regional validation state
-  const [validatingRegional, setValidatingRegional] = useState(false);
-  const [regionalValidationStats, setRegionalValidationStats] = useState<{
-    total: number;
-    successCount: number;
-    failedCount: number;
-    errors: string[];
-  } | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -370,11 +266,6 @@ export function SantriToolbarClient({
         ? "Ada error"
         : null;
 
-  const previewInfo = useMemo(() => {
-    if (!previewRows) return null;
-    return summarize(previewRows);
-  }, [previewRows]);
-
   const handleExportPDF = async () => {
     setExportingPDF(true);
     try {
@@ -394,155 +285,6 @@ export function SantriToolbarClient({
     }
   };
 
-  const onPreviewImport = async () => {
-    try {
-      setLoadingPreview(true);
-      // Reset regional validation state
-      setRegionalValidationStats(null);
-
-      const { students, dtos } = await getStudentDTOs();
-      logger.debug({ count: students.length }, "santri.import.preview loaded");
-
-      setPreviewRows(students);
-      setPreviewDTOs(dtos);
-      setOpenConfirm(true);
-    } catch (error) {
-      logError(error, { component: "SantriToolbar", action: "previewImport" });
-      alert("Gagal mengambil data dari API.");
-    } finally {
-      setLoadingPreview(false);
-    }
-  };
-
-  const handleValidateRegional = async () => {
-    if (!previewDTOs) return;
-
-    setValidatingRegional(true);
-    try {
-      // Collect DTOs that don't have alamat_new but have alamat
-      const needsValidation = previewDTOs.filter(
-        (dto) => !dto.alamat_new?.provinsi?.id && dto.alamat?.provinsi?.nama,
-      );
-
-      if (needsValidation.length === 0) {
-        setRegionalValidationStats({
-          total: 0,
-          successCount: 0,
-          failedCount: 0,
-          errors: ["Semua data sudah memiliki alamat_new, tidak perlu validasi."],
-        });
-        setValidatingRegional(false);
-        return;
-      }
-
-      const inputs = needsValidation.map((dto) => ({
-        idApi: dto.id_anggota,
-        provinceName: dto.alamat?.provinsi?.nama ?? null,
-        regencyName: dto.alamat?.kabupaten?.nama ?? null,
-      }));
-
-      const result = await validateRegionalData(inputs);
-
-      if (result.success) {
-        const validationMap = new Map(result.validationEntries);
-        setRegionalValidationStats({
-          total: result.total,
-          successCount: result.successCount,
-          failedCount: result.failedCount,
-          errors: result.errors,
-        });
-
-        // Re-map preview rows with validated data
-        if (previewRows) {
-          const updatedRows = previewRows.map((s) => {
-            const validated = validationMap.get(s.idApi);
-            if (!validated || (!validated.provinceId && !validated.regencyId)) return s;
-            return {
-              ...s,
-              provinceId: validated.provinceId ?? s.provinceId,
-              regencyId: validated.regencyId ?? s.regencyId,
-            };
-          });
-          setPreviewRows(updatedRows);
-        }
-
-        logger.info(
-          { total: result.total, success: result.successCount, failed: result.failedCount },
-          "santri.validateRegional completed",
-        );
-      } else {
-        setRegionalValidationStats({
-          total: result.total,
-          successCount: 0,
-          failedCount: result.total,
-          errors: result.errors,
-        });
-      }
-    } catch (error) {
-      logError(error, { component: "SantriToolbar", action: "validateRegional" });
-      alert("Validasi regional gagal.");
-    } finally {
-      setValidatingRegional(false);
-    }
-  };
-
-  const onConfirmImport = async () => {
-    if (!previewRows) return;
-
-    if (previewInfo?.invalid?.length) {
-      alert(
-        `Ada ${previewInfo.invalid.length} data invalid (field wajib kosong). ` +
-          `Perbaiki sumber data dulu sebelum import.`,
-      );
-      return;
-    }
-
-    if (
-      (previewInfo?.dupIdApi?.length ?? 0) > 0 ||
-      (previewInfo?.dupNis?.length ?? 0) > 0
-    ) {
-      const ok = window.confirm(
-        `Ditemukan duplikat di payload:\n` +
-          `- dup idApi: ${previewInfo?.dupIdApi?.length ?? 0}\n` +
-          `- dup nis: ${previewInfo?.dupNis?.length ?? 0}\n\n` +
-          `Lanjutkan tetap?`,
-      );
-      if (!ok) return;
-    }
-
-    try {
-      setImporting(true);
-      const res = await bulkUpsertStudents(previewRows);
-
-      setOpenConfirm(false);
-      setPreviewRows(null);
-
-      alert(
-        `Import selesai.\n` +
-          `Total: ${res.total}\n` +
-          `Processed: ${res.processed}\n` +
-          `Inserted: ${res.inserted}\n` +
-          `Updated: ${res.updated}\n` +
-          `Skipped: ${res.skipped}\n` +
-          `Failed: ${res.failed}\n` +
-          (res.skippedRows.length
-            ? `\nContoh skip:\n- ${res.skippedRows[0].message} (index ${res.skippedRows[0].index})`
-            : "") +
-          (res.errors.length
-            ? `\nContoh error:\n- ${res.errors[0].message}`
-            : ""),
-      );
-    } catch {
-      alert("Import gagal.");
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const sample = useMemo(
-    () => (previewRows ? previewRows.slice(0, 8) : []),
-    [previewRows],
-  );
 
   return (
     <>
@@ -689,13 +431,14 @@ export function SantriToolbarClient({
             </Button>
 
             <Button
-              onClick={onPreviewImport}
+              asChild
               variant="outline"
               className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
-              disabled={loadingPreview || importing}
             >
-              <Download className="mr-2 h-4 w-4" />
-              {loadingPreview ? "Mengambil data..." : "Import (Preview)"}
+              <Link href="/santri/import">
+                <Download className="mr-2 h-4 w-4" />
+                Import (Preview)
+              </Link>
             </Button>
 
             <Button className="w-full sm:flex-1 lg:w-auto lg:flex-initial">
@@ -706,238 +449,6 @@ export function SantriToolbarClient({
         </div>
       </div>
 
-      {/* CONFIRM DIALOG */}
-      <Dialog open={openConfirm} onOpenChange={setOpenConfirm}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Konfirmasi Import Data Santri</DialogTitle>
-            <DialogDescription>
-              Sistem akan memasukkan data dari API ke database menggunakan{" "}
-              <b>upsert</b> (berdasarkan <code>idApi</code>). Pastikan ringkasan
-              berikut sesuai sebelum lanjut.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto pr-1">
-            {!previewInfo ? (
-              <div className="text-sm text-muted-foreground">
-                Tidak ada data untuk dipreview.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground">Total baris</div>
-                    <div className="text-lg font-semibold">
-                      {previewInfo.total}
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground">
-                      Validasi (blokir)
-                    </div>
-                    <div className="text-lg font-semibold">
-                      {previewInfo.invalid.length === 0
-                        ? "OK"
-                        : `${previewInfo.invalid.length} invalid`}
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground">Skipped</div>
-                    <div className="text-lg font-semibold">
-                      {previewInfo.skipped.length}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      NIS/Dormitory kosong akan dilewati
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground">Duplikat payload</div>
-                    <div className="space-y-1">
-                      <div>
-                        dup idApi: <b>{previewInfo.dupIdApi.length}</b>
-                      </div>
-                      <div>
-                        dup nis: <b>{previewInfo.dupNis.length}</b>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground">Distribusi cepat</div>
-                    <div className="space-y-1">
-                      <div>
-                        status:{" "}
-                        {Object.entries(previewInfo.statusCount)
-                          .slice(0, 4)
-                          .map(([k, v]) => `${k}:${v}`)
-                          .join(", ")}
-                        {Object.keys(previewInfo.statusCount).length > 4
-                          ? "…"
-                          : ""}
-                      </div>
-                      <div>
-                        gender:{" "}
-                        {Object.entries(previewInfo.genderCount)
-                          .slice(0, 4)
-                          .map(([k, v]) => `${k}:${v}`)
-                          .join(", ")}
-                        {Object.keys(previewInfo.genderCount).length > 4
-                          ? "…"
-                          : ""}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {previewInfo.invalid.length > 0 && (
-                  <div className="rounded-md border p-3">
-                    <div className="mb-2 text-sm font-semibold text-destructive">
-                      Data invalid — import diblokir sampai valid
-                    </div>
-                    <div className="max-h-40 overflow-auto text-xs">
-                      {previewInfo.invalid.slice(0, 20).map((x) => (
-                        <div key={`${x.index}-${x.idApi ?? ""}`} className="py-1">
-                          #{x.index} idApi={x.idApi ?? "-"} nis={x.nis ?? "-"}{" "}
-                          missing: {x.missing.join(", ")}
-                        </div>
-                      ))}
-                      {previewInfo.invalid.length > 20 && (
-                        <div className="pt-2 text-muted-foreground">
-                          …dan {previewInfo.invalid.length - 20} lainnya
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {previewInfo.skipped.length > 0 && (
-                  <div className="rounded-md border p-3">
-                    <div className="mb-2 text-sm font-semibold">
-                      Data skipped (nis/dormitory kosong)
-                    </div>
-                    <div className="max-h-40 overflow-auto text-xs">
-                      {previewInfo.skipped.slice(0, 20).map((x) => (
-                        <div key={`${x.index}-${x.idApi ?? ""}`} className="py-1">
-                          #{x.index} idApi={x.idApi ?? "-"} nis={x.nis ?? "-"}{" "}
-                          missing: {x.missing.join(", ")}
-                        </div>
-                      ))}
-                      {previewInfo.skipped.length > 20 && (
-                        <div className="pt-2 text-muted-foreground">
-                          …dan {previewInfo.skipped.length - 20} lainnya
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="rounded-md border p-3">
-                  <div className="mb-2 text-sm font-semibold">
-                    Contoh 8 data pertama
-                  </div>
-                  <div className="max-h-64 overflow-auto">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-background">
-                        <tr className="text-left">
-                          <th className="py-2 pr-2">NIS</th>
-                          <th className="py-2 pr-2">Nama</th>
-                          <th className="py-2 pr-2">Status</th>
-                          <th className="py-2 pr-2">Dormitory</th>
-                          <th className="py-2 pr-2">RegencyId</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sample.map((s) => (
-                          <tr key={s.idApi} className="border-t">
-                            <td className="py-2 pr-2">{s.nis}</td>
-                            <td className="py-2 pr-2">{s.name}</td>
-                            <td className="py-2 pr-2">
-                              {s.status === true
-                                ? "active"
-                                : s.status === false
-                                  ? "inactive"
-                                  : "-"}
-                            </td>
-                            <td className="py-2 pr-2">{s.dormitory}</td>
-                            <td className="py-2 pr-2">{s.regencyId ?? "-"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Regional Validation Results */}
-                {regionalValidationStats && (
-                  <div className="rounded-md border p-3 bg-blue-50 dark:bg-blue-950/30">
-                    <div className="mb-2 text-sm font-semibold flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Hasil Validasi Regional
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs mb-2">
-                      <div>
-                        <div className="text-muted-foreground">Total</div>
-                        <div className="font-semibold">{regionalValidationStats.total}</div>
-                      </div>
-                      <div>
-                        <div className="text-muted-foreground">Berhasil</div>
-                        <div className="font-semibold text-emerald-600">
-                          {regionalValidationStats.successCount}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-muted-foreground">Gagal</div>
-                        <div className="font-semibold text-red-600">
-                          {regionalValidationStats.failedCount}
-                        </div>
-                      </div>
-                    </div>
-                    {regionalValidationStats.errors.length > 0 && (
-                      <div className="max-h-24 overflow-auto text-xs text-muted-foreground">
-                        {regionalValidationStats.errors.map((e, i) => (
-                          <div key={i} className="py-0.5">{e}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setOpenConfirm(false)}
-              disabled={importing || validatingRegional}
-            >
-              Batal
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleValidateRegional}
-              disabled={validatingRegional || importing || !previewRows}
-            >
-              <MapPin className="mr-2 h-4 w-4" />
-              {validatingRegional ? "Memvalidasi..." : "Validasi Regional"}
-            </Button>
-            <Button
-              onClick={onConfirmImport}
-              disabled={
-                importing ||
-                !previewRows ||
-                (previewInfo?.invalid.length ?? 0) > 0
-              }
-            >
-              {importing ? "Mengimpor..." : "Ya, Import ke Database"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
