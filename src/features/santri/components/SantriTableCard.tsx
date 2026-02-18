@@ -2,6 +2,8 @@ import * as React from "react";
 import Link from "next/link";
 
 import { getStudentsPage } from "@/features/santri/services/students.db";
+import { getProvinces, getRegencies } from "@/features/santri/services/regional.db";
+import { UpdateRegionalAction } from "@/features/santri/components/UpdateRegionalAction.client";
 
 import {
   Card,
@@ -59,6 +61,7 @@ export async function SantriTableCard({
   status = "all",
   korwilId = "all",
   kordaId = "all",
+  incompleteRegional = false,
 }: {
   page?: number;
   pageSize?: number;
@@ -67,16 +70,23 @@ export async function SantriTableCard({
   status?: string; // "all" | "active" | "inactive"
   korwilId?: string;
   kordaId?: string;
+  incompleteRegional?: boolean;
 }) {
   const effectiveKordaId = korwilId === "all" ? "all" : (kordaId ?? "all");
-  const { total, students } = await getStudentsPage(
-    page,
-    pageSize,
-    query,
-    status,
-    korwilId,
-    effectiveKordaId,
-  );
+  
+  const [{ total, students }, provinces, regencies] = await Promise.all([
+    getStudentsPage(
+      page,
+      pageSize,
+      query,
+      status,
+      korwilId,
+      effectiveKordaId,
+      incompleteRegional,
+    ),
+    getProvinces(),
+    getRegencies(),
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const clampedPage = Math.min(Math.max(page, 1), totalPages);
@@ -195,6 +205,15 @@ export async function SantriTableCard({
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem>Detail</DropdownMenuItem>
                           <DropdownMenuItem>Edit</DropdownMenuItem>
+                          <UpdateRegionalAction
+                            studentId={s.id}
+                            studentName={s.name}
+                            studentNis={s.nis}
+                            currentProvinceId={s.provinceId}
+                            currentRegencyId={s.regencyId}
+                            provinces={provinces}
+                            regencies={regencies}
+                          />
                           <DropdownMenuItem className="text-destructive">
                             Hapus
                           </DropdownMenuItem>

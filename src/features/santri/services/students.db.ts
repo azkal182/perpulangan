@@ -2,6 +2,26 @@ import { StudentWhereInput } from "@/generated/prisma/models";
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
 
+/**
+ * Get count of students without provinceId or regencyId
+ */
+export async function getIncompleteRegionalCount() {
+  try {
+    const count = await prisma.student.count({
+      where: {
+        OR: [{ provinceId: null }, { regencyId: null }],
+      },
+    });
+    return count;
+  } catch (error) {
+    logger.error(
+      { err: error },
+      "students.db.getIncompleteRegionalCount failed",
+    );
+    return 0;
+  }
+}
+
 export async function getStudentsPage(
   page: number,
   pageSize: number,
@@ -9,6 +29,7 @@ export async function getStudentsPage(
   status?: string,
   korwilId?: string,
   kordaId?: string,
+  incompleteRegional?: boolean,
 ) {
   const query = (q ?? "").trim();
   const korwilRaw = (korwilId ?? "").trim();
@@ -40,6 +61,11 @@ export async function getStudentsPage(
     where.regency = regencyWhere as StudentWhereInput["regency"];
   }
 
+  // Filter for incomplete regional data
+  if (incompleteRegional) {
+    where.OR = [...(where.OR || []), { provinceId: null }, { regencyId: null }];
+  }
+
   //   where.provinceId = 11;
 
   try {
@@ -57,6 +83,8 @@ export async function getStudentsPage(
           dormitory: true,
           status: true,
           gender: true,
+          provinceId: true,
+          regencyId: true,
           regency: {
             select: {
               name: true,
@@ -80,11 +108,16 @@ export async function getStudentsPage(
       }),
     ]);
 
-
-    logger.debug({ count: students.length, total, page, pageSize }, "students.db.getStudentsPage success");
+    logger.debug(
+      { count: students.length, total, page, pageSize },
+      "students.db.getStudentsPage success",
+    );
     return { total, students, page: safePage, pageSize: safeSize };
   } catch (error) {
-    logger.error({ err: error, page, pageSize, q, status, korwilId }, "students.db.getStudentsPage failed");
+    logger.error(
+      { err: error, page, pageSize, q, status, korwilId },
+      "students.db.getStudentsPage failed",
+    );
     throw error;
   }
 }

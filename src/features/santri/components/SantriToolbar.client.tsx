@@ -139,6 +139,8 @@ export function SantriToolbarClient({
   initialStatus,
   initialKorwilId,
   initialKordaId,
+  incompleteCount = 0,
+  initialIncompleteRegional = false,
 }: {
   lastSyncAt: string | null; // ISO
   lastStatus: string | null;
@@ -146,6 +148,8 @@ export function SantriToolbarClient({
   initialStatus: string; // dari URL
   initialKorwilId: string;
   initialKordaId: string;
+  incompleteCount?: number;
+  initialIncompleteRegional?: boolean;
 }) {
   const [openConfirm, setOpenConfirm] = useState(false);
 
@@ -173,6 +177,7 @@ export function SantriToolbarClient({
   const urlStatus = normalizeStatusParam((sp.get("status") ?? "all").trim());
   const urlKorwilId = (sp.get("korwilId") ?? "all").trim() || "all";
   const urlKordaId = (sp.get("kordaId") ?? "all").trim() || "all";
+  const urlIncompleteRegional = sp.get("incompleteRegional") === "true";
 
   // UI state
   const [q, setQ] = useState(initialQuery);
@@ -185,6 +190,7 @@ export function SantriToolbarClient({
   const [kordaId, setKordaId] = useState(
     initialKordaId?.trim() ? initialKordaId.trim() : "all",
   );
+  const [incompleteRegional, setIncompleteRegional] = useState(initialIncompleteRegional);
   const kordaIdRef = useRef(kordaId);
 
   const [korwilOptions, setKorwilOptions] = useState<Korwil[]>([]);
@@ -215,6 +221,10 @@ export function SantriToolbarClient({
   useEffect(() => {
     kordaIdRef.current = kordaId;
   }, [kordaId]);
+
+  useEffect(() => {
+    setIncompleteRegional((prev) => (prev === urlIncompleteRegional ? prev : urlIncompleteRegional));
+  }, [urlIncompleteRegional]);
 
   useEffect(() => {
     if (korwilId !== "all") return;
@@ -292,13 +302,15 @@ export function SantriToolbarClient({
     const nextStatus = status;
     const nextKorwilId = korwilId;
     const nextKordaId = korwilId === "all" ? "all" : kordaId;
+    const nextIncompleteRegional = incompleteRegional;
 
     // jika sama persis, skip
     if (
       nextQ === urlQ &&
       nextStatus === urlStatus &&
       nextKorwilId === urlKorwilId &&
-      nextKordaId === urlKordaId
+      nextKordaId === urlKordaId &&
+      nextIncompleteRegional === urlIncompleteRegional
     )
       return;
 
@@ -319,6 +331,9 @@ export function SantriToolbarClient({
     if (nextKordaId !== "all") params.set("kordaId", nextKordaId);
     else params.delete("kordaId");
 
+    if (nextIncompleteRegional) params.set("incompleteRegional", "true");
+    else params.delete("incompleteRegional");
+
     const qs = params.toString();
     const nextUrl = qs ? `${pathname}?${qs}` : pathname;
 
@@ -328,6 +343,7 @@ export function SantriToolbarClient({
     status,
     korwilId,
     kordaId,
+    incompleteRegional,
     pathname,
     router,
     sp,
@@ -335,6 +351,7 @@ export function SantriToolbarClient({
     urlStatus,
     urlKorwilId,
     urlKordaId,
+    urlIncompleteRegional,
   ]);
 
   const lastSyncLabel = (() => {
@@ -629,6 +646,25 @@ export function SantriToolbarClient({
                 <SelectItem value="inactive">Nonaktif</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* INCOMPLETE REGIONAL FILTER */}
+            {incompleteCount > 0 && (
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="incompleteRegional"
+                  checked={incompleteRegional}
+                  onChange={(e) => setIncompleteRegional(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="incompleteRegional"
+                  className="text-sm font-medium text-foreground cursor-pointer"
+                >
+                  Data Regional Tidak Lengkap ({incompleteCount})
+                </label>
+              </div>
+            )}
 
             <Button
               variant="outline"
