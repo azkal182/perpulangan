@@ -12,19 +12,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Autocomplete } from "@/components/AutoComplete";
 import { updateStudentRegional } from "@/features/santri/actions/update-regional.action";
 
 type RegionalData = {
   id: number;
   code: string;
   name: string;
+  label?: string | null;
+  provinceId?: number;
 };
 
 export function UpdateRegionalDialog({
@@ -48,45 +44,35 @@ export function UpdateRegionalDialog({
   provinces?: RegionalData[];
   regencies?: RegionalData[];
 }) {
-  const [provinceId, setProvinceId] = React.useState<string>(
-    currentProvinceId?.toString() ?? ""
-  );
-  const [regencyId, setRegencyId] = React.useState<string>(
-    currentRegencyId?.toString() ?? ""
-  );
+  const [selectedProvinceId, setSelectedProvinceId] = React.useState<
+    number | null
+  >(currentProvinceId ?? null);
+  const [selectedRegencyId, setSelectedRegencyId] = React.useState<
+    number | null
+  >(currentRegencyId ?? null);
   const [saving, setSaving] = React.useState(false);
 
-  // Filter regencies based on selected province
-  const filteredRegencies = React.useMemo(() => {
-    if (!provinceId) return [];
-    
-    const selectedProvince = provinces.find((p) => p.code.toString() === provinceId);
-    if (!selectedProvince) return [];
-
-    // Filter regencies that belong to the selected province
-    // Regency codes start with province code (e.g., province 11 -> regencies 1101, 1102, etc.)
-    return regencies.filter((r) => {
-      const regencyCodeStr = r.code.toString();
-      const provinceCodeStr = selectedProvince.code.toString();
-      return regencyCodeStr.startsWith(provinceCodeStr);
-    });
-  }, [provinceId, provinces, regencies]);
-
-  // Reset regency when province changes
-  React.useEffect(() => {
-    setRegencyId("");
-  }, [provinceId]);
-
-  // Reset form when dialog opens/closes
+  // Reset form when dialog opens
   React.useEffect(() => {
     if (open) {
-      setProvinceId(currentProvinceId?.toString() ?? "");
-      setRegencyId(currentRegencyId?.toString() ?? "");
+      setSelectedProvinceId(currentProvinceId ?? null);
+      setSelectedRegencyId(currentRegencyId ?? null);
     }
   }, [open, currentProvinceId, currentRegencyId]);
 
+  // Filter regencies by selected province using provinceId (accurate)
+  const filteredRegencies = React.useMemo(() => {
+    if (!selectedProvinceId) return [];
+    return regencies.filter((r) => r.provinceId === selectedProvinceId);
+  }, [selectedProvinceId, regencies]);
+
+  const handleProvinceChange = (id: number | null) => {
+    setSelectedProvinceId(id);
+    setSelectedRegencyId(null); // reset regency when province changes
+  };
+
   const handleSave = async () => {
-    if (!provinceId && !regencyId) {
+    if (!selectedProvinceId && !selectedRegencyId) {
       toast.error("Pilih setidaknya provinsi atau kabupaten/kota");
       return;
     }
@@ -95,8 +81,8 @@ export function UpdateRegionalDialog({
     try {
       const result = await updateStudentRegional({
         studentId,
-        provinceId: provinceId ? parseInt(provinceId, 10) : null,
-        regencyId: regencyId ? parseInt(regencyId, 10) : null,
+        provinceId: selectedProvinceId,
+        regencyId: selectedRegencyId,
       });
 
       if (result.success) {
@@ -119,47 +105,46 @@ export function UpdateRegionalDialog({
         <DialogHeader>
           <DialogTitle>Update Data Regional</DialogTitle>
           <DialogDescription>
-            Update provinsi dan kabupaten/kota untuk {studentName} (NIS: {studentNis})
+            Update provinsi dan kabupaten/kota untuk {studentName} (NIS:{" "}
+            {studentNis})
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {/* Province */}
           <div className="grid gap-2">
-            <Label htmlFor="province">Provinsi</Label>
-            <Select value={provinceId} onValueChange={setProvinceId}>
-              <SelectTrigger id="province">
-                <SelectValue placeholder="Pilih provinsi..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">-- Kosongkan --</SelectItem>
-                {provinces.map((prov) => (
-                  <SelectItem key={prov.id} value={prov.code.toString()}>
-                    {prov.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Provinsi</Label>
+            <Autocomplete
+              items={provinces}
+              keyField="id"
+              getLabel={(p) => p.name}
+              value={selectedProvinceId}
+              onValueChange={handleProvinceChange}
+              placeholder="Pilih provinsi..."
+              searchPlaceholder="Cari provinsi..."
+              emptyText="Provinsi tidak ditemukan"
+            />
           </div>
 
+          {/* Regency */}
           <div className="grid gap-2">
-            <Label htmlFor="regency">Kabupaten/Kota</Label>
-            <Select
-              value={regencyId}
-              onValueChange={setRegencyId}
-              disabled={!provinceId}
-            >
-              <SelectTrigger id="regency">
-                <SelectValue placeholder="Pilih kabupaten/kota..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">-- Kosongkan --</SelectItem>
-                {filteredRegencies.map((reg) => (
-                  <SelectItem key={reg.id} value={reg.code.toString()}>
-                    {reg.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Kabupaten/Kota</Label>
+            <Autocomplete
+              items={filteredRegencies}
+              keyField="id"
+              getLabel={(r) => r.label ?? r.name}
+              getSearchText={(r) => `${r.label ?? ""} ${r.name}`}
+              value={selectedRegencyId}
+              onValueChange={setSelectedRegencyId}
+              placeholder={
+                selectedProvinceId
+                  ? "Pilih kabupaten/kota..."
+                  : "Pilih provinsi terlebih dahulu"
+              }
+              searchPlaceholder="Cari kabupaten/kota..."
+              emptyText="Kabupaten/kota tidak ditemukan"
+              disabled={!selectedProvinceId}
+            />
           </div>
         </div>
 

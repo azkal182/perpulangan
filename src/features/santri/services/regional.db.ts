@@ -19,6 +19,8 @@ export async function getRegencies() {
       id: true,
       code: true,
       name: true,
+      label: true,
+      provinceId: true,
     },
     orderBy: { name: "asc" },
   });

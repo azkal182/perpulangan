@@ -20,13 +20,13 @@ export function UpdateRegionalAction({
   currentProvinceId?: number | null;
   currentRegencyId?: number | null;
   provinces?: Array<{ id: number; code: string; name: string }>;
-  regencies?: Array<{ id: number; code: string; name: string }>;
+  regencies?: Array<{ id: number; code: string; name: string; label?: string | null; provinceId: number }>;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <DropdownMenuItem onClick={() => setOpen(true)}>
+      <DropdownMenuItem onClick={() => setOpen(true)} onSelect={(e) => e.preventDefault()}>
         <MapPin className="mr-2 h-4 w-4" />
         Update Regional
       </DropdownMenuItem>
