@@ -279,12 +279,23 @@ function drawDetailPages(doc: jsPDF, data: KorwilGroupPDF[]) {
         autoTable(doc, {
           startY: y,
 
-          head: [["No", "Nama", "NIS", "Kabupaten/Kota"]] as any,
+          head: [
+            [
+              "No",
+              "Nama",
+              "Kab/Kota",
+              "Titik Pulang",
+              "Paid P/PP",
+              "Keterangan",
+            ],
+          ] as any,
           body: korda.putra.map((s, idx) => [
             idx + 1,
             s.name,
-            s.nis,
             s.regencyName,
+            "",
+            "",
+            "",
           ]) as any,
           theme: "grid",
           headStyles: {
@@ -313,12 +324,23 @@ function drawDetailPages(doc: jsPDF, data: KorwilGroupPDF[]) {
         autoTable(doc, {
           startY: y,
 
-          head: [["No", "Nama", "NIS", "Kabupaten/Kota"]] as any,
+          head: [
+            [
+              "No",
+              "Nama",
+              "Kab/Kota",
+              "Titik Pulang",
+              "paid P/PP",
+              "Keterangan",
+            ],
+          ] as any,
           body: korda.putri.map((s, idx) => [
             idx + 1,
             s.name,
-            s.nis,
             s.regencyName,
+            "",
+            "",
+            "",
           ]) as any,
           theme: "grid",
           headStyles: {
