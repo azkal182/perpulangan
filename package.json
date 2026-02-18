@@ -7,7 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:admin": "tsx prisma/seed.ts"
+    "seed:admin": "tsx prisma/seed.ts",
+    "docker:up": "docker compose up",
+    "docker:build": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:generate": "docker compose exec app pnpm prisma generate",
+    "docker:migrate": "docker compose exec app pnpm prisma migrate deploy",
+    "docker:migrate:dev": "docker compose exec app pnpm prisma migrate dev",
+    "docker:studio": "docker compose exec app pnpm prisma studio",
+    "docker:import": "docker compose exec app pnpm tsx prisma/import.ts",
+    "docker:seed": "docker compose exec app pnpm tsx prisma/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",

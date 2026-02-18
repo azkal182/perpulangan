@@ -1,86 +1,149 @@
 # Perpulangan
 
+Sistem manajemen data kepulangan santri berbasis Next.js.
+
 ## Struktur Folder
 
-- `src/app` — routes dan UI entry point (App Router)
-- `src/client` — modul client-only (hooks/auth client)
-- `src/server` — modul server-only (auth, env, logger, db)
-- `src/features` — modul per fitur/domain
-- `src/services` — integrasi eksternal (email, payment, storage)
-- `src/validators` — schema validasi (Zod)
-- `src/types` — tipe bersama lintas layer
-- `src/lib` — utilitas umum yang bisa dipakai lintas layer
-- `prisma` — schema dan migrations
+| Path | Keterangan |
+|------|-----------|
+| `src/app` | Routes dan UI entry point (App Router) |
+| `src/client` | Modul client-only (hooks, auth client) |
+| `src/server` | Modul server-only (auth, env, logger, db) |
+| `src/features` | Modul per fitur/domain |
+| `src/services` | Integrasi eksternal |
+| `src/validators` | Schema validasi (Zod) |
+| `src/types` | Tipe bersama lintas layer |
+| `src/lib` | Utilitas umum |
+| `prisma` | Schema dan migrations |
+
+---
+
+## Development dengan Docker (Direkomendasikan)
+
+### Prasyarat
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) terinstall dan berjalan
+
+### Setup Pertama Kali
+
+```bash
+# 1. Copy template environment Docker
+cp .env.docker .env
+
+# 2. Edit .env — isi nilai yang wajib:
+#    - BETTER_AUTH_SECRET  (random string minimal 32 karakter)
+#    - NEXT_PUBLIC_API_BASE_URL, NEXT_PUBLIC_API_KEY
+#    - TRACK_API_URL, TRACK_ADMIN_API_KEY
+
+# 3. Build image dan jalankan semua service
+pnpm docker:build
+
+# 4. Jalankan migrasi database (hanya pertama kali / setelah ada migration baru)
+pnpm docker:migrate
+```
+
+Buka [http://localhost:3000](http://localhost:3000) di browser.
+
+### Scripts Docker
+
+| Script | Keterangan |
+|--------|-----------|
+| `pnpm docker:build` | Build image + jalankan semua service |
+| `pnpm docker:up` | Jalankan semua service (tanpa rebuild) |
+| `pnpm docker:down` | Stop dan hapus container |
+| `pnpm docker:migrate` | Jalankan `prisma migrate deploy` di container |
+| `pnpm docker:migrate:dev` | Jalankan `prisma migrate dev` (buat migration baru) |
+| `pnpm docker:studio` | Buka Prisma Studio di container |
+| `pnpm docker:seed` | Jalankan seed script |
+
+### Hot Reload
+
+Hot reload bekerja otomatis. Source code di host di-mount ke container via bind volume, sehingga perubahan file langsung terdeteksi tanpa restart container.
+
+### Services
+
+| Service | Port | Keterangan |
+|---------|------|-----------|
+| `app` | `3000` | Next.js dev server |
+| `db` | `5432` | PostgreSQL 16 |
+
+Database dapat diakses dari host di `localhost:5432` dengan:
+- User: `postgres`
+- Password: `postgres`
+- Database: `perpulangan`
+
+### Workflow Harian
+
+```bash
+# Mulai kerja
+pnpm docker:up
+
+# Setelah pull perubahan yang ada migration baru
+pnpm docker:migrate
+
+# Buat migration baru setelah ubah schema.prisma
+pnpm docker:migrate:dev
+
+# Selesai kerja
+pnpm docker:down
+```
+
+---
+
+## Development Lokal (Tanpa Docker)
+
+### Prasyarat
+
+- Node.js 20+
+- pnpm
+- PostgreSQL (lokal atau cloud)
+
+### Setup
+
+```bash
+# Install dependencies
+pnpm install
+
+# Copy dan isi environment
+cp .env.example .env
+
+# Generate Prisma client
+pnpm prisma generate
+
+# Jalankan migrasi
+pnpm prisma migrate deploy
+
+# Jalankan dev server
+pnpm dev
+```
+
+---
 
 ## Logging
 
-- Logger utama ada di `src/server/logger.ts` (Pino).
-- Konteks request ada di `src/server/request-context.ts` untuk requestId, method, path, ip.
-- Atur `LOG_LEVEL` dan `APP_NAME` di environment.
+Logger utama ada di `src/server/logger.ts` (Pino). Atur level via environment:
 
-Contoh penggunaan di route handler:
-
-```ts
-import { createRequestContext } from "@/server/request-context";
-
-export async function GET(req: Request) {
-  const { log } = createRequestContext(req);
-  log.info("fetching data");
-  return Response.json({ ok: true });
-}
+```env
+LOG_LEVEL=debug              # server-side
+NEXT_PUBLIC_LOG_LEVEL=info   # client-side
 ```
+
+---
 
 ## Seeder Admin
 
-Set environment berikut lalu jalankan seed:
+Tambahkan ke `.env` lalu jalankan:
 
-```
+```env
 ADMIN_SEED_EMAIL=admin@local.test
 ADMIN_SEED_NAME=Admin
 ADMIN_SEED_PASSWORD=your-strong-password
 ```
 
-Jalankan:
-
-```
-pnpm seed:admin
-```
-
-## Getting Started
-
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Lokal
+pnpm seed:admin
+
+# Docker
+pnpm docker:seed
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

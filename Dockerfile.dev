@@ -1,0 +1,33 @@
+FROM node:20-alpine
+
+# Install dependencies for native modules
+RUN apk add --no-cache libc6-compat openssl
+
+WORKDIR /app
+
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy package files first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy prisma schema for client generation
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
+# Generate Prisma client
+RUN pnpm prisma generate
+
+# Source code is mounted as a volume at runtime
+# so we don't COPY src here — hot reload works via bind mount
+
+EXPOSE 3000
+
+# WATCHPACK_POLLING=true is required for hot reload inside Docker on Windows/WSL
+ENV WATCHPACK_POLLING=true
+ENV NEXT_TELEMETRY_DISABLED=1
+
+CMD ["pnpm", "dev"]

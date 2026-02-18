@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: perpulangan
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d perpulangan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override DATABASE_URL to point to the db service
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/perpulangan
+    ports:
+      - "3000:3000"
+    volumes:
+      # Bind mount source code for hot reload
+      - .:/app
+      # Preserve node_modules from the image (don't override with host)
+      - /app/node_modules
+      # Preserve .next build cache
+      - /app/.next
+      # Preserve generated Prisma client (output = ../src/generated/prisma)
+      - /app/src/generated/prisma
+
+volumes:
+  postgres_data:
