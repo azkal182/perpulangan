@@ -58,6 +58,11 @@ export async function createEvent(
           });
 
     revalidatePath("/event");
+    revalidatePath("/registrasi");
+    revalidatePath("/registrasi/kembali-saja");
+    revalidatePath("/registrasi-kembali");
+    revalidatePath("/daftar-peserta");
+    revalidatePath("/dashboard");
     return success(created);
   } catch {
     return failure("Gagal membuat event.");
@@ -111,6 +116,11 @@ export async function updateEvent(
           });
 
     revalidatePath("/event");
+    revalidatePath("/registrasi");
+    revalidatePath("/registrasi/kembali-saja");
+    revalidatePath("/registrasi-kembali");
+    revalidatePath("/daftar-peserta");
+    revalidatePath("/dashboard");
     return success(updated);
   } catch {
     return failure("Gagal memperbarui event.");
@@ -129,6 +139,11 @@ export async function deleteEvent(
 
     const deleted = await eventRepository.delete(parsed.data.id);
     revalidatePath("/event");
+    revalidatePath("/registrasi");
+    revalidatePath("/registrasi/kembali-saja");
+    revalidatePath("/registrasi-kembali");
+    revalidatePath("/daftar-peserta");
+    revalidatePath("/dashboard");
     return success(deleted);
   } catch {
     return failure("Gagal menghapus event.");
