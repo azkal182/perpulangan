@@ -27,7 +27,7 @@ import type { StudentDTO } from "@/features/santri/api/students.dto";
 type RowIssue = {
   index: number;
   idApi?: string;
-  nis?: string;
+  nis?: string | null;
   name?: string;
   dormitory?: string;
   missing: string[];
@@ -156,7 +156,7 @@ function PreviewTable({ students, summary, tab, setTab }: {
       parts.push(`Akan dilewati: ${row?.missing.join(", ")} kosong`);
     }
     if (dupIdApiSet.has(s.idApi)) parts.push("idApi duplikat");
-    if (dupNisSet.has(s.nis)) parts.push("NIS duplikat");
+    if (dupNisSet.has(s.nis ?? "")) parts.push("NIS duplikat");
     return parts.join(" • ");
   };
 
@@ -164,7 +164,7 @@ function PreviewTable({ students, summary, tab, setTab }: {
     switch (tab) {
       case "invalid": return students.filter((_, i) => invalidSet.has(i));
       case "skipped": return students.filter((_, i) => skippedSet.has(i));
-      case "dup": return students.filter((s) => dupIdApiSet.has(s.idApi) || dupNisSet.has(s.nis));
+      case "dup": return students.filter((s) => dupIdApiSet.has(s.idApi) || dupNisSet.has(s.nis ?? ""));
       default: return students;
     }
   })();
@@ -437,7 +437,8 @@ export function ImportPreviewPage() {
     if (!students.length) return;
     setPhase("importing");
     try {
-      const result = await bulkUpsertStudents(students);
+      const toImport = students.filter((s): s is typeof s & { nis: string } => s.nis != null);
+      const result = await bulkUpsertStudents(toImport);
       setImportResult(result);
       setPhase("done");
     } catch (e) {

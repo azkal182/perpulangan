@@ -187,7 +187,7 @@ export function RegistrationForm({
               <div>
                 <Label>Korda *</Label>
                 <Select
-                  value={formData.outboundKordaId}
+                  value={formData.outboundKordaId ?? ""}
                   onValueChange={(val) =>
                     setFormData({ ...formData, outboundKordaId: val, outboundDropPointId: "" })
                   }
@@ -208,7 +208,7 @@ export function RegistrationForm({
               <div>
                 <Label>Titik Turun *</Label>
                 <Select
-                  value={formData.outboundDropPointId}
+                  value={formData.outboundDropPointId ?? ""}
                   onValueChange={(val) =>
                     setFormData({ ...formData, outboundDropPointId: val })
                   }
@@ -247,7 +247,7 @@ export function RegistrationForm({
               <div>
                 <Label>Korda *</Label>
                 <Select
-                  value={formData.returnKordaId}
+                  value={formData.returnKordaId ?? ""}
                   onValueChange={(val) =>
                     setFormData({ ...formData, returnKordaId: val, returnDropPointId: "" })
                   }
@@ -268,7 +268,7 @@ export function RegistrationForm({
               <div>
                 <Label>Titik Turun *</Label>
                 <Select
-                  value={formData.returnDropPointId}
+                  value={formData.returnDropPointId ?? ""}
                   onValueChange={(val) =>
                     setFormData({ ...formData, returnDropPointId: val })
                   }

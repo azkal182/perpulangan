@@ -41,6 +41,13 @@ export async function createEvent(
                 endDate,
                 status: "ACTIVE",
               },
+              include: {
+                _count: {
+                  select: {
+                    registrations: true,
+                  },
+                },
+              },
             });
           })
         : await eventRepository.create({
@@ -52,7 +59,7 @@ export async function createEvent(
 
     revalidatePath("/event");
     return success(created);
-  } catch (e) {
+  } catch {
     return failure("Gagal membuat event.");
   }
 }
@@ -87,6 +94,13 @@ export async function updateEvent(
                 endDate: new Date(`${data.endDate}T00:00:00`),
                 status: "ACTIVE",
               },
+              include: {
+                _count: {
+                  select: {
+                    registrations: true,
+                  },
+                },
+              },
             });
           })
         : await eventRepository.update(data.id, {
@@ -98,7 +112,7 @@ export async function updateEvent(
 
     revalidatePath("/event");
     return success(updated);
-  } catch (e) {
+  } catch {
     return failure("Gagal memperbarui event.");
   }
 }
@@ -116,7 +130,7 @@ export async function deleteEvent(
     const deleted = await eventRepository.delete(parsed.data.id);
     revalidatePath("/event");
     return success(deleted);
-  } catch (e) {
+  } catch {
     return failure("Gagal menghapus event.");
   }
 }

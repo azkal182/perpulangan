@@ -6,7 +6,7 @@ import { logger } from "@/server/logger";
 export type StudentBasic = {
   id: string;
   name: string;
-  nis: string;
+  nis: string | null;
   regencyId: number | null;
   regency?: {
     kordaId: string | null;

@@ -42,7 +42,7 @@ export function FiltersBar(props: Props) {
           <select
             className="h-9 w-full rounded-md border bg-background px-3 text-sm"
             value={selectedKorwilId}
-            onChange={(e) => onSelectKorwilId(e.target.value as any)}
+            onChange={(e) => onSelectKorwilId(e.target.value as Id | "all")}
           >
             <option value="all">Semua Korwil</option>
             {korwils.map((k) => (
@@ -58,7 +58,7 @@ export function FiltersBar(props: Props) {
           <select
             className="h-9 w-full rounded-md border bg-background px-3 text-sm"
             value={selectedKordaId}
-            onChange={(e) => onSelectKordaId(e.target.value as any)}
+            onChange={(e) => onSelectKordaId(e.target.value as Id | "all")}
           >
             <option value="all">Semua Korda</option>
             {kordas.map((k) => (

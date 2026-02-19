@@ -1,7 +1,7 @@
 export type Student = {
   id: string;
   idApi: string;
-  nis: string;
+  nis: string | null;
   name: string;
   gender: string;
   status: boolean;

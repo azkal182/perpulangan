@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { teams, navMain, managements, others } from "@/config/sidebar-data";
+import { navMain, managements, others } from "@/config/sidebar-data";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();

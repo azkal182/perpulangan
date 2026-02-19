@@ -4,9 +4,6 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
 
-import { StudentDTO } from "../api/students.dto";
-import { Student } from "@/features/santri/domain/student.model";
-
 export type StudentNormalized = {
   idApi: string;
   nis: string;
@@ -109,7 +106,7 @@ function prismaErrorMessage(e: unknown) {
 }
 
 export async function bulkUpsertStudents(
-  rawRows: Student[],
+  rawRows: StudentNormalized[],
 ): Promise<BulkImportResult> {
   const result: BulkImportResult = {
     total: rawRows?.length ?? 0,
@@ -137,7 +134,7 @@ export async function bulkUpsertStudents(
         result.skippedRows.push({
           index: i,
           idApi: rawRows[i].idApi,
-          nis: rawRows[i].nis,
+          nis: rawRows[i].nis ?? undefined,
           message: validation.message,
         });
         continue;

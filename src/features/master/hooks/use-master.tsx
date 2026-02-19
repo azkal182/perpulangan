@@ -71,7 +71,7 @@ export function useMaster() {
     } finally {
       setLoadingKorwil(false);
     }
-  }, [getKorwil]);
+  }, []);
 
   const loadKordas = React.useCallback(
     async (korwilId?: Id) => {
@@ -103,7 +103,7 @@ export function useMaster() {
         setLoadingKorda(false);
       }
     },
-    [getKorda],
+    [],
   );
 
   React.useEffect(() => {
@@ -264,7 +264,7 @@ export function useMaster() {
         setLoadingKota(false);
       }
     },
-    [getKota],
+    [],
   );
 
   async function addKota(regencyIds: number[]): Promise<boolean> {

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 interface Santri {
   id: string;
   nama: string;
-  nis: string;
+  nis: string | null;
   kamar: string;
   rombongan: string;
   statusPembayaran: "lunas" | "kurang" | "belum";

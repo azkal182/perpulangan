@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "@/client/auth";
+import { useSession } from "@/client/auth";
 import { useEffect } from "react";
 import { StatCard } from "@/features/dashboard/components/StatCard";
 import { RecentEvents } from "@/features/dashboard/components/RecentEvents";
@@ -24,8 +24,6 @@ export default function DashboardPage() {
     return <p className="text-center mt-8 text-white">Loading...</p>;
   if (!session?.user)
     return <p className="text-center mt-8 text-white">Redirecting...</p>;
-
-  const { user } = session;
 
   return (
     <div className="space-y-6 animate-fade-in">

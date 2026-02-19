@@ -5,7 +5,7 @@ import { logger } from "@/server/logger";
 
 export type StudentForPDF = {
   name: string;
-  nis: string;
+  nis: string | null;
   gender: string;
   regencyName: string;
 };
@@ -77,11 +77,14 @@ export async function getStudentsForPDFExport(): Promise<{
     // Debug: Log a sample of gender values
     if (students.length > 0) {
       // Count gender distribution
-      const genderCounts = students.reduce((acc, s) => {
-        const gender = s.gender || "null";
-        acc[gender] = (acc[gender] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      const genderCounts = students.reduce(
+        (acc, s) => {
+          const gender = s.gender || "null";
+          acc[gender] = (acc[gender] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
 
       logger.debug(
         {
@@ -93,7 +96,7 @@ export async function getStudentsForPDFExport(): Promise<{
             genderLower: s.gender?.toLowerCase(),
           })),
         },
-        "Gender distribution in database"
+        "Gender distribution in database",
       );
     }
 
@@ -147,7 +150,7 @@ export async function getStudentsForPDFExport(): Promise<{
       };
 
       const genderLower = student.gender?.toLowerCase() || "";
-      
+
       if (genderLower === "laki-laki") {
         korda.putra.push(studentData);
         korwil.putraCount++;
@@ -158,7 +161,7 @@ export async function getStudentsForPDFExport(): Promise<{
         // Log unexpected gender values
         logger.warn(
           { gender: student.gender, studentName: student.name },
-          "Unexpected gender value"
+          "Unexpected gender value",
         );
       }
 
@@ -175,12 +178,12 @@ export async function getStudentsForPDFExport(): Promise<{
         skippedByGender,
         korwilCount: result.length,
       },
-      "Student processing summary"
+      "Student processing summary",
     );
 
     logger.debug(
       { korwilCount: result.length, totalStudents: students.length },
-      "Successfully fetched students for PDF export"
+      "Successfully fetched students for PDF export",
     );
 
     return {

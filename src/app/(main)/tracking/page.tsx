@@ -1,6 +1,5 @@
 import { Metadata } from "next";
-import TrackingPage from "@/features/tracking/components/TrackingPage.client";
-import "leaflet/dist/leaflet.css";
+import TrackingPageLoader from "@/features/tracking/components/TrackingPageLoader.client";
 
 export const metadata: Metadata = {
   title: "GPS Tracking",
@@ -8,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <TrackingPage />;
+  return <TrackingPageLoader />;
 }

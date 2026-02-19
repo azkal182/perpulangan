@@ -24,7 +24,7 @@ export function calculateLayout(
   paperSize: PaperSize,
   printType: PrintType,
 ): LayoutConfig {
-  const paper = PAPER_SIZES[paperSize];
+  void PAPER_SIZES[paperSize]; // retained for potential future use
 
   if (printType === "luggage_card") {
     // Landscape card: ~90mm x 55mm
@@ -112,7 +112,7 @@ export function calculateLayout(
 export interface PrintDataItem {
   id: string;
   studentName: string;
-  studentNis: string;
+  studentNis: string | null;
   studentGender: string;
   kordaName: string;
   dropPointName: string;

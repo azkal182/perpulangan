@@ -18,7 +18,7 @@ export interface RegistrationWithDetails {
   student: {
     id: string;
     name: string;
-    nis: string;
+    nis: string | null;
     gender: string | null;
     ttl: string | null;
   };

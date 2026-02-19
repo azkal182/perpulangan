@@ -208,7 +208,7 @@ export async function SantriTableCard({
                           <UpdateRegionalAction
                             studentId={s.id}
                             studentName={s.name}
-                            studentNis={s.nis}
+                            studentNis={s.nis ?? ""}
                             currentProvinceId={s.provinceId}
                             currentRegencyId={s.regencyId}
                             provinces={provinces}

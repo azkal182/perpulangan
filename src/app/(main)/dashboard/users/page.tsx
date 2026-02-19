@@ -137,6 +137,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (session?.user && canList) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadUsers();
     }
   }, [session?.user, canList, loadUsers]);

@@ -1,6 +1,6 @@
 "use client";
 
-import type { PrintDataItem } from "../lib/print-utils";
+import type { PrintDataItem } from "../../lib/print-utils";
 
 interface TicketTemplateProps {
   data: PrintDataItem;
