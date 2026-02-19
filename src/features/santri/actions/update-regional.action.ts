@@ -8,6 +8,7 @@ export type UpdateRegionalInput = {
   studentId: string;
   provinceId: number | null;
   regencyId: number | null;
+  districtId: number | null;
 };
 
 export type UpdateRegionalResult = {
@@ -16,13 +17,13 @@ export type UpdateRegionalResult = {
 };
 
 /**
- * Update student's province and regency data
+ * Update student's province, regency, and district data
  */
 export async function updateStudentRegional(
   input: UpdateRegionalInput,
 ): Promise<UpdateRegionalResult> {
   try {
-    const { studentId, provinceId, regencyId } = input;
+    const { studentId, provinceId, regencyId, districtId } = input;
 
     // Validate input
     if (!studentId) {
@@ -45,8 +46,8 @@ export async function updateStudentRegional(
       data: {
         provinceId,
         regencyId,
-        // Reset district and village when updating province/regency
-        districtId: null,
+        districtId, // Updated optional district
+        // Reset village when updating province/regency/district
         villageId: null,
       },
     });

@@ -211,6 +211,7 @@ export async function SantriTableCard({
                             studentNis={s.nis ?? ""}
                             currentProvinceId={s.provinceId}
                             currentRegencyId={s.regencyId}
+                            currentDistrictId={s.districtId}
                             provinces={provinces}
                             regencies={regencies}
                           />

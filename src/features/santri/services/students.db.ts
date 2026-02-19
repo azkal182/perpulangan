@@ -85,6 +85,7 @@ export async function getStudentsPage(
           gender: true,
           provinceId: true,
           regencyId: true,
+          districtId: true,
           regency: {
             select: {
               name: true,

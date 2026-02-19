@@ -11,6 +11,7 @@ export function UpdateRegionalAction({
   studentNis,
   currentProvinceId,
   currentRegencyId,
+  currentDistrictId,
   provinces = [],
   regencies = [],
 }: {
@@ -19,6 +20,7 @@ export function UpdateRegionalAction({
   studentNis: string;
   currentProvinceId?: number | null;
   currentRegencyId?: number | null;
+  currentDistrictId?: number | null;
   provinces?: Array<{ id: number; code: string; name: string }>;
   regencies?: Array<{ id: number; code: string; name: string; label?: string | null; provinceId: number }>;
 }) {
@@ -38,6 +40,7 @@ export function UpdateRegionalAction({
         studentNis={studentNis}
         currentProvinceId={currentProvinceId}
         currentRegencyId={currentRegencyId}
+        currentDistrictId={currentDistrictId}
         provinces={provinces}
         regencies={regencies}
       />

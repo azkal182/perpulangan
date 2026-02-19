@@ -25,3 +25,16 @@ export async function getRegencies() {
     orderBy: { name: "asc" },
   });
 }
+
+export async function getDistricts(regencyId: number) {
+  return await prisma.district.findMany({
+    where: { regencyId },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      regencyId: true,
+    },
+    orderBy: { name: "asc" },
+  });
+}

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Autocomplete } from "@/components/AutoComplete";
 import { updateStudentRegional } from "@/features/santri/actions/update-regional.action";
+import { getDistricts } from "@/features/santri/services/regional.db";
 
 type RegionalData = {
   id: number;
@@ -21,6 +22,13 @@ type RegionalData = {
   name: string;
   label?: string | null;
   provinceId?: number;
+};
+
+type DistrictData = {
+  id: number;
+  code: string;
+  name: string;
+  regencyId: number;
 };
 
 export function UpdateRegionalDialog({
@@ -31,6 +39,7 @@ export function UpdateRegionalDialog({
   studentNis,
   currentProvinceId,
   currentRegencyId,
+  currentDistrictId,
   provinces = [],
   regencies = [],
 }: {
@@ -41,6 +50,7 @@ export function UpdateRegionalDialog({
   studentNis: string;
   currentProvinceId?: number | null;
   currentRegencyId?: number | null;
+  currentDistrictId?: number | null;
   provinces?: RegionalData[];
   regencies?: RegionalData[];
 }) {
@@ -50,15 +60,38 @@ export function UpdateRegionalDialog({
   const [selectedRegencyId, setSelectedRegencyId] = React.useState<
     number | null
   >(currentRegencyId ?? null);
+  const [selectedDistrictId, setSelectedDistrictId] = React.useState<
+    number | null
+  >(currentDistrictId ?? null);
+  const [districts, setDistricts] = React.useState<DistrictData[]>([]);
+  const [loadingDistricts, setLoadingDistricts] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+
+  // Fetch districts when regency changes
+  React.useEffect(() => {
+    if (!selectedRegencyId) {
+      setDistricts([]);
+      return;
+    }
+
+    setLoadingDistricts(true);
+    getDistricts(selectedRegencyId)
+      .then(setDistricts)
+      .catch((err) => {
+        console.error("Failed to fetch districts:", err);
+        toast.error("Gagal mengambil data kecamatan");
+      })
+      .finally(() => setLoadingDistricts(false));
+  }, [selectedRegencyId]);
 
   // Reset form when dialog opens
   React.useEffect(() => {
     if (open) {
       setSelectedProvinceId(currentProvinceId ?? null);
       setSelectedRegencyId(currentRegencyId ?? null);
+      setSelectedDistrictId(currentDistrictId ?? null);
     }
-  }, [open, currentProvinceId, currentRegencyId]);
+  }, [open, currentProvinceId, currentRegencyId, currentDistrictId]);
 
   // Filter regencies by selected province using provinceId (accurate)
   const filteredRegencies = React.useMemo(() => {
@@ -69,6 +102,13 @@ export function UpdateRegionalDialog({
   const handleProvinceChange = (id: number | null) => {
     setSelectedProvinceId(id);
     setSelectedRegencyId(null); // reset regency when province changes
+    setSelectedDistrictId(null); // reset district
+    setDistricts([]);
+  };
+
+  const handleRegencyChange = (id: number | null) => {
+    setSelectedRegencyId(id);
+    setSelectedDistrictId(null); // reset district when regency changes
   };
 
   const handleSave = async () => {
@@ -83,6 +123,7 @@ export function UpdateRegionalDialog({
         studentId,
         provinceId: selectedProvinceId,
         regencyId: selectedRegencyId,
+        districtId: selectedDistrictId,
       });
 
       if (result.success) {
@@ -135,7 +176,7 @@ export function UpdateRegionalDialog({
               getLabel={(r) => r.label ?? r.name}
               getSearchText={(r) => `${r.label ?? ""} ${r.name}`}
               value={selectedRegencyId}
-              onValueChange={setSelectedRegencyId}
+              onValueChange={handleRegencyChange}
               placeholder={
                 selectedProvinceId
                   ? "Pilih kabupaten/kota..."
@@ -144,6 +185,28 @@ export function UpdateRegionalDialog({
               searchPlaceholder="Cari kabupaten/kota..."
               emptyText="Kabupaten/kota tidak ditemukan"
               disabled={!selectedProvinceId}
+            />
+          </div>
+
+          {/* District */}
+          <div className="grid gap-2">
+            <Label>Kecamatan (Opsional)</Label>
+            <Autocomplete
+              items={districts}
+              keyField="id"
+              getLabel={(d) => d.name}
+              value={selectedDistrictId}
+              onValueChange={setSelectedDistrictId}
+              placeholder={
+                selectedRegencyId
+                  ? loadingDistricts
+                    ? "Memuat kecamatan..."
+                    : "Pilih kecamatan..."
+                  : "Pilih kabupaten/kota terlebih dahulu"
+              }
+              searchPlaceholder="Cari kecamatan..."
+              emptyText="Kecamatan tidak ditemukan"
+              disabled={!selectedRegencyId || loadingDistricts}
             />
           </div>
         </div>
