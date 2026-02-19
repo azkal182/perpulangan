@@ -8,6 +8,7 @@ import { trackerApi } from "@/services/tracker-api.service";
 export interface BusWithDetails {
   id: string;
   label: string;
+  capacity: number;
   trackerId: string | null;
   isActive: boolean;
   createdAt: Date;
@@ -28,6 +29,10 @@ export interface BusWithDetails {
       name: string;
     };
   }>;
+  _count: {
+    outboundRegistrations: number;
+    returnRegistrations: number;
+  };
 }
 
 /**
@@ -74,6 +79,12 @@ export async function getBuses(params?: {
             },
           },
         },
+        _count: {
+          select: {
+            outboundRegistrations: true,
+            returnRegistrations: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -95,6 +106,7 @@ export async function createBus(data: {
   korwilId?: string | null;
   kordaIds: string[];
   label: string;
+  capacity?: number;
 }): Promise<{ id: string; trackerId: string }> {
   try {
     // Get event details for tracker API
@@ -128,6 +140,7 @@ export async function createBus(data: {
     const bus = await prisma.bus.create({
       data: {
         label: data.label,
+        capacity: data.capacity ?? 0,
         trackerId,
         eventId: data.eventId,
         korwilId: data.korwilId || null,
@@ -158,6 +171,7 @@ export async function updateBus(
     label?: string;
     korwilId?: string | null;
     kordaIds?: string[];
+    capacity?: number;
   },
 ): Promise<void> {
   try {
@@ -168,6 +182,7 @@ export async function updateBus(
         data: {
           ...(data.label && { label: data.label }),
           ...(data.korwilId !== undefined && { korwilId: data.korwilId }),
+          ...(data.capacity !== undefined && { capacity: data.capacity }),
         },
       });
 

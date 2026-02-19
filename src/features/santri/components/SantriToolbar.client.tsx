@@ -23,6 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getStudentsForPDFExport } from "../actions/export-pdf.action";
 import { generateStudentsPDF } from "../utils/pdf-generator";
+import { AddManualStudentDialog } from "./AddManualStudentDialog";
 
 type StatusParam = "all" | "active" | "inactive";
 
@@ -62,6 +63,7 @@ export function SantriToolbarClient({
   initialIncompleteRegional?: boolean;
 }) {
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
 
 
   const router = useRouter();
@@ -441,7 +443,10 @@ export function SantriToolbarClient({
               </Link>
             </Button>
 
-            <Button className="w-full sm:flex-1 lg:w-auto lg:flex-initial">
+            <Button
+              className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
+              onClick={() => setAddStudentOpen(true)}
+            >
               <UserPlus className="mr-2 h-4 w-4" />
               Tambah Siswa
             </Button>
@@ -449,6 +454,10 @@ export function SantriToolbarClient({
         </div>
       </div>
 
+      <AddManualStudentDialog
+        open={addStudentOpen}
+        onOpenChange={setAddStudentOpen}
+      />
     </>
   );
 }

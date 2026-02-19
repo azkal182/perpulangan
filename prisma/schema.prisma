@@ -88,21 +88,24 @@ model Verification {
 }
 
 model Student {
-    id     String @id @default(uuid())
-    idApi  String @unique
-    nis    String @unique
+    id     String  @id @default(uuid())
+    idApi  String? @unique
+    nis    String? @unique
     name   String
     gender String
 
+    fromApi Boolean        @default(true)
+    source  StudentSource?
+
     status Boolean
-    ttl    String
+    ttl    String?
 
     photoUrl String?
 
     parrentPhone String?
-    dormitory    String
+    dormitory    String?
 
-    fullAddress String
+    fullAddress String?
     // village     String?
     province    Province? @relation(fields: [provinceId], references: [id])
     provinceId  Int?
@@ -119,6 +122,8 @@ model Student {
     @@index([name])
     @@index([regencyId])
     @@index([dormitory])
+    @@index([fromApi])
+    @@index([source])
 }
 
 model Province {
@@ -196,6 +201,11 @@ model SyncLog {
     @@index([key])
 }
 
+enum StudentSource {
+    DAFU
+    MUSA
+}
+
 enum EventStatus {
     DRAFT
     ACTIVE
@@ -264,8 +274,9 @@ model Korda {
 }
 
 model Bus {
-    id    String @id @default(uuid())
-    label String // e.g., "Bus 01 - Agra Mas + Kumaci"
+    id       String @id @default(uuid())
+    label    String // e.g., "Bus 01 - Agra Mas + Kumaci"
+    capacity Int    @default(0) // Kapasitas maksimal penumpang
 
     // Tracker integration
     trackerId String? @unique // ID from tracker API
@@ -281,6 +292,10 @@ model Bus {
     event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
     isActive Boolean @default(true)
+
+    // Passengers assigned to this bus
+    outboundRegistrations Registration[] @relation("OutboundBus")
+    returnRegistrations   Registration[] @relation("ReturnBus")
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -348,6 +363,8 @@ model Registration {
     outboundDropPoint   DropPoint? @relation("OutboundDropPoint", fields: [outboundDropPointId], references: [id])
     outboundDate        DateTime?
     outboundPaid        Boolean    @default(false)
+    outboundBusId       String? // Manual bus assignment for outbound
+    outboundBus         Bus?       @relation("OutboundBus", fields: [outboundBusId], references: [id], onDelete: SetNull)
 
     // Return Journey (Kembali ke pondok) - OPTIONAL when cancelled
     returnKordaId     String?
@@ -356,6 +373,8 @@ model Registration {
     returnDropPoint   DropPoint? @relation("ReturnDropPoint", fields: [returnDropPointId], references: [id])
     returnDate        DateTime?
     returnPaid        Boolean    @default(false)
+    returnBusId       String? // Manual bus assignment for return
+    returnBus         Bus?       @relation("ReturnBus", fields: [returnBusId], references: [id], onDelete: SetNull)
 
     // Status
     status RegistrationStatus @default(CONFIRMED)
@@ -383,4 +402,6 @@ model Registration {
     @@index([status])
     @@index([outboundKordaId])
     @@index([returnKordaId])
+    @@index([outboundBusId])
+    @@index([returnBusId])
 }

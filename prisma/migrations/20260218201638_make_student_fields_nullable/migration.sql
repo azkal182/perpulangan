@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Student" ALTER COLUMN "ttl" DROP NOT NULL,
+ALTER COLUMN "dormitory" DROP NOT NULL,
+ALTER COLUMN "fullAddress" DROP NOT NULL;

@@ -43,6 +43,7 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
   const [selectedKorwilId, setSelectedKorwilId] = useState("");
   const [selectedKordaIds, setSelectedKordaIds] = useState<string[]>([]);
   const [label, setLabel] = useState("");
+  const [capacity, setCapacity] = useState(0);
   
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -59,11 +60,13 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
       setSelectedKorwilId(initialData.korwil?.id || "");
       setSelectedKordaIds(initialData.kordas.map(bk => bk.kordaId));
       setLabel(initialData.label);
+      setCapacity(initialData.capacity);
     } else {
       setSelectedEventId(eventId || "");
       setSelectedKorwilId("");
       setSelectedKordaIds([]);
       setLabel("");
+      setCapacity(0);
     }
   }, [initialData, eventId, open]);
 
@@ -115,6 +118,7 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
           label: label.trim(),
           korwilId: selectedKorwilId || null,
           kordaIds: selectedKordaIds,
+          capacity,
         });
       } else {
         await createBus({
@@ -122,6 +126,7 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
           korwilId: selectedKorwilId || null,
           kordaIds: selectedKordaIds,
           label: label.trim(),
+          capacity,
         });
       }
       
@@ -255,6 +260,22 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
               />
               <p className="text-xs text-muted-foreground">
                 Nama bus yang akan muncul di tracker
+              </p>
+            </div>
+
+            {/* Kapasitas */}
+            <div className="space-y-2">
+              <Label htmlFor="capacity">Kapasitas</Label>
+              <Input
+                id="capacity"
+                type="number"
+                min={0}
+                placeholder="0 = tidak dibatasi"
+                value={capacity}
+                onChange={(e) => setCapacity(Number(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Jumlah maksimal penumpang. Isi 0 jika tidak dibatasi.
               </p>
             </div>
 

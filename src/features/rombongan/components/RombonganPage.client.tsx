@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { getBuses, deleteBus, toggleBusActive, type BusWithDetails } from "../actions/bus.actions";
 import { getAllEvents, getAllKordas, getAllKorwils } from "../actions/helpers.actions";
 import { BusFormDialog } from "./BusFormDialog";
+import { BusPassengersDialog } from "./BusPassengersDialog";
 
 export default function RombonganPage() {
   const [buses, setBuses] = useState<BusWithDetails[]>([]);
@@ -36,6 +37,7 @@ export default function RombonganPage() {
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBus, setEditingBus] = useState<BusWithDetails | null>(null);
+  const [managingBus, setManagingBus] = useState<BusWithDetails | null>(null);
 
   // Load initial data
   useEffect(() => {
@@ -190,6 +192,7 @@ export default function RombonganPage() {
               <TableHead>Label Bus</TableHead>
               <TableHead>Korwil</TableHead>
               <TableHead>Kordas</TableHead>
+              <TableHead>Kapasitas</TableHead>
               <TableHead>Tracker ID</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
@@ -203,61 +206,81 @@ export default function RombonganPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              buses.map((bus) => (
-                <TableRow key={bus.id}>
-                  <TableCell className="font-medium">{bus.label}</TableCell>
-                  <TableCell>{bus.korwil?.name || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {bus.kordas.map((bk) => (
-                        <Badge key={bk.id} variant="outline" className="text-xs">
-                          {bk.korda.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {bus.trackerId ? (
-                      <code className="rounded bg-muted px-2 py-1">{bus.trackerId}</code>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={bus.isActive ? "default" : "secondary"}>
-                      {bus.isActive ? "Aktif" : "Nonaktif"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleActive(bus.id)}
-                      >
-                        {bus.isActive ? "Nonaktifkan" : "Aktifkan"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingBus(bus);
-                          setIsFormOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDelete(bus.id)}
-                      >
-                        Hapus
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                buses.map((bus) => (
+                  <TableRow key={bus.id}>
+                    <TableCell className="font-medium">{bus.label}</TableCell>
+                    <TableCell>{bus.korwil?.name || "-"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {bus.kordas.map((bk) => (
+                          <Badge key={bk.id} variant="outline" className="text-xs">
+                            {bk.korda.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <span className="font-medium">
+                          {bus._count.outboundRegistrations + bus._count.returnRegistrations}
+                        </span>
+                        {bus.capacity > 0 && (
+                          <span className="text-muted-foreground"> / {bus.capacity}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        ↑{bus._count.outboundRegistrations} ↓{bus._count.returnRegistrations}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {bus.trackerId ? (
+                        <code className="rounded bg-muted px-2 py-1">{bus.trackerId}</code>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={bus.isActive ? "default" : "secondary"}>
+                        {bus.isActive ? "Aktif" : "Nonaktif"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setManagingBus(bus)}
+                        >
+                          Peserta
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleActive(bus.id)}
+                        >
+                          {bus.isActive ? "Nonaktifkan" : "Aktifkan"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingBus(bus);
+                            setIsFormOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(bus.id)}
+                        >
+                          Hapus
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
             )}
           </TableBody>
         </Table>
@@ -270,6 +293,15 @@ export default function RombonganPage() {
         eventId={selectedEventId}
         onSuccess={loadBuses}
       />
+
+      {managingBus && (
+        <BusPassengersDialog
+          open={!!managingBus}
+          onOpenChange={(open) => { if (!open) setManagingBus(null); }}
+          bus={managingBus}
+          onPassengerChange={loadBuses}
+        />
+      )}
     </div>
   );
 }
