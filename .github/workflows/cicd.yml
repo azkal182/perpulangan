@@ -1,0 +1,280 @@
+name: CI/CD perpulangan
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  start_notify:
+    runs-on: ubuntu-latest
+    outputs:
+      project_name: ${{ steps.get_project_info.outputs.project_name }}
+      project_version: ${{ steps.get_project_info.outputs.project_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get Project Info
+        id: get_project_info
+        run: |
+          if command -v jq &> /dev/null; then
+            echo "project_name=$(jq -r .name package.json)" >> $GITHUB_OUTPUT
+            echo "project_version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
+          else
+            echo "project_name=perpulangan" >> $GITHUB_OUTPUT
+            echo "project_version=v1.0.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set Timestamp
+        run: echo "TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_ENV
+
+      - name: Notify Start
+        run: |
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN_NOTIFICATION }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "text=🚀 CI/CD Started%0A📦 Project: ${{ steps.get_project_info.outputs.project_name }}%0A🔖 Version: ${{ steps.get_project_info.outputs.project_version }}%0A🕒 Time: ${{ env.TIMESTAMP }}%0AGithub Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  build:
+    needs: start_notify
+    runs-on: ubuntu-latest
+    outputs:
+      build_status: ${{ job.status }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Verify pnpm-lock.yaml exists
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "pnpm-lock.yaml found"
+          else
+            echo "Error: pnpm-lock.yaml not found. Please commit it."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "24.x"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.2
+
+      - name: Cache pnpm store
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@v3
+        with:
+          path: ./.next/cache
+          key: ${{ runner.os }}-nextjs-build-${{ hashFiles('**/pnpm-lock.yaml', '**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-build-
+
+      - name: Create .env file
+        run: |
+          rm -f .env
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+          echo "BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}" >> .env
+          echo "BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}" >> .env
+
+          echo "LOG_LEVEL=${{ secrets.LOG_LEVEL || 'warn' }}" >> .env
+          echo "NEXT_PUBLIC_LOG_LEVEL=${{ secrets.NEXT_PUBLIC_LOG_LEVEL || 'error' }}" >> .env
+
+          echo "NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" >> .env
+          echo "NEXT_PUBLIC_API_KEY=${{ secrets.NEXT_PUBLIC_API_KEY }}" >> .env
+
+          echo "TRACK_API_URL=${{ secrets.TRACK_API_URL }}" >> .env
+          echo "TRACK_ADMIN_API_KEY=${{ secrets.TRACK_ADMIN_API_KEY }}" >> .env
+
+          echo "HUSKY=0" >> .env
+          echo "NEXT_PUBLIC_APP_VERSION=${{ needs.start_notify.outputs.project_version || '1.0.0' }}" >> .env
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Next.js app
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm build
+
+      - name: Package artifacts
+        run: |
+          tar -czf build-files.tar.gz \
+            .next/ \
+            public/ \
+            package.json \
+            pnpm-lock.yaml \
+            next.config.* \
+            tailwind.config.* \
+            tsconfig.json \
+            prisma/ \
+            .env.example || true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perpulangan-build-tarball
+          path: build-files.tar.gz
+          retention-days: 1
+
+  deploy:
+    needs: [build, start_notify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: perpulangan-build-tarball
+          path: ./
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add known hosts entry
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts
+
+      - name: Clone or pull on VPS
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }} << EOF
+          set -e
+          APP_DIR="/home/${{ secrets.VPS_USER }}/project/perpulangan"
+
+          if [ ! -d "\$APP_DIR/.git" ]; then
+            echo "Directory not found or not a git repo, cloning..."
+            rm -rf "\$APP_DIR"
+            GIT_URL="https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
+            git clone "\$GIT_URL" "\$APP_DIR"
+            cd "\$APP_DIR"
+            git checkout main
+          else
+            echo "Directory exists, pulling latest code..."
+            cd "\$APP_DIR"
+            git pull origin main
+          fi
+          EOF
+
+      - name: Deploy to VPS
+        run: |
+          rsync -avz build-files.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }}:/home/${{ secrets.VPS_USER }}/project/perpulangan/
+
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }} << 'EOF'
+          set -e
+          APP_DIR="/home/${{ secrets.VPS_USER }}/project/perpulangan"
+          cd "$APP_DIR"
+
+          # cleanup old build files
+          rm -rf .next/ public/ package.json pnpm-lock.yaml next.config.* tailwind.config.* tsconfig.json prisma/ .env.example || true
+
+          # extract artifact
+          tar -xzf build-files.tar.gz
+          rm -f build-files.tar.gz
+
+          # recreate .env
+          rm -f .env
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+          echo "BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}" >> .env
+          echo "BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}" >> .env
+
+          echo "LOG_LEVEL=${{ secrets.LOG_LEVEL || 'warn' }}" >> .env
+          echo "NEXT_PUBLIC_LOG_LEVEL=${{ secrets.NEXT_PUBLIC_LOG_LEVEL || 'error' }}" >> .env
+
+          echo "NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" >> .env
+          echo "NEXT_PUBLIC_API_KEY=${{ secrets.NEXT_PUBLIC_API_KEY }}" >> .env
+
+          echo "TRACK_API_URL=${{ secrets.TRACK_API_URL }}" >> .env
+          echo "TRACK_ADMIN_API_KEY=${{ secrets.TRACK_ADMIN_API_KEY }}" >> .env
+
+          echo "HUSKY=0" >> .env
+          echo "NEXT_PUBLIC_APP_VERSION=${{ needs.start_notify.outputs.project_version || '1.0.0' }}" >> .env
+
+          # setup nvm
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+          nvm use 24
+          node -v
+          pnpm -v
+
+          # install prod deps
+          if command -v pnpm >/dev/null 2>&1; then
+            pnpm install --frozen-lockfile
+          else
+            npm i -g pnpm
+            pnpm install --frozen-lockfile
+          fi
+
+          # run prisma migrate deploy (safe for production)
+          pnpm prisma migrate deploy
+
+          # restart pm2
+          echo "🔄 Restarting PM2 process..."
+          if pm2 describe perpulangan > /dev/null 2>&1; then
+            pm2 stop perpulangan || true
+            pm2 delete perpulangan || true
+          fi
+
+          echo "Starting application on port ${{ secrets.APP_PORT || 3000 }}..."
+          pm2 start npm --name "perpulangan" -- start -- -p ${{ secrets.APP_PORT || 3000 }}
+
+          sleep 5
+          pm2 describe perpulangan > /dev/null
+          pm2 logs perpulangan --lines 10 --nostream || true
+          EOF
+
+  notify:
+    needs: [start_notify, build, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_NAME: ${{ needs.start_notify.outputs.project_name || 'perpulangan' }}
+      PROJECT_VERSION: ${{ needs.start_notify.outputs.project_version || 'Unknown Version' }}
+      GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Set Timestamp
+        run: echo "TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_ENV
+
+      - name: Send Telegram Notification
+        run: |
+          STATUS_ICON="✅"
+          STATUS_TEXT="CI/CD Success"
+          if [[ "${{ needs.build.result }}" != "success" || "${{ needs.deploy.result }}" != "success" ]]; then
+            STATUS_ICON="❌"
+            STATUS_TEXT="CI/CD Failed"
+          fi
+
+          MESSAGE="<b>$STATUS_ICON $STATUS_TEXT</b>%0A"
+          MESSAGE+="📦 Project: ${{ env.PROJECT_NAME }}%0A"
+          MESSAGE+="🔖 Version: ${{ env.PROJECT_VERSION }}%0A"
+          MESSAGE+="🕒 Time: ${{ env.TIMESTAMP }}%0A"
+          MESSAGE+="Github Run: ${{ env.GITHUB_RUN_URL }}%0A"
+          MESSAGE+="🌍 Port: ${{ secrets.APP_PORT || 3000 }}%0A"
+
+          if [[ "$STATUS_TEXT" == "CI/CD Failed" ]]; then
+            MESSAGE+="🚨 Please check logs!"
+          fi
+
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN_NOTIFICATION }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "parse_mode=HTML" \
+          -d "text=$MESSAGE"
