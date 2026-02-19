@@ -1,3 +1,10 @@
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign In - Mabarati",
+  description: "Masuk ke Sistem Perpulangan Mabarati",
+};
+
 export default function AuthLayout({
   children,
 }: {
