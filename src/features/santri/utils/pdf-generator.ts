@@ -289,14 +289,19 @@ function drawDetailPages(doc: jsPDF, data: KorwilGroupPDF[]) {
               "Keterangan",
             ],
           ] as any,
-          body: korda.putra.map((s, idx) => [
-            idx + 1,
-            s.name,
-            s.regencyName,
-            "",
-            "",
-            "",
-          ]) as any,
+          body: [
+            ...korda.putra.map((s, idx) => [
+              idx + 1,
+              s.name,
+              s.regencyName,
+              "",
+              "",
+              "",
+            ]),
+            ...Array(10)
+              .fill(0)
+              .map((_, i) => [korda.putra.length + i + 1, "", "", "", "", ""]),
+          ] as any,
           theme: "grid",
           headStyles: {
             fillColor: [37, 99, 180],
@@ -334,14 +339,19 @@ function drawDetailPages(doc: jsPDF, data: KorwilGroupPDF[]) {
               "Keterangan",
             ],
           ] as any,
-          body: korda.putri.map((s, idx) => [
-            idx + 1,
-            s.name,
-            s.regencyName,
-            "",
-            "",
-            "",
-          ]) as any,
+          body: [
+            ...korda.putri.map((s, idx) => [
+              idx + 1,
+              s.name,
+              s.regencyName,
+              "",
+              "",
+              "",
+            ]),
+            ...Array(10)
+              .fill(0)
+              .map((_, i) => [korda.putri.length + i + 1, "", "", "", "", ""]),
+          ] as any,
           theme: "grid",
           headStyles: {
             fillColor: [180, 60, 120],
