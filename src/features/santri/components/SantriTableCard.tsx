@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { getStudentsPage } from "@/features/santri/services/students.db";
 import { getProvinces, getRegencies } from "@/features/santri/services/regional.db";
-import { UpdateRegionalAction } from "@/features/santri/components/UpdateRegionalAction.client";
+import { SantriRowActions } from "@/features/santri/components/SantriRowActions.client";
 
 import {
   Card,
@@ -191,35 +191,11 @@ export async function SantriTableCard({
                     </TableCell>
 
                     <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Aksi"
-                            className="h-8 w-8"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Detail</DropdownMenuItem>
-                          <DropdownMenuItem>Edit</DropdownMenuItem>
-                          <UpdateRegionalAction
-                            studentId={s.id}
-                            studentName={s.name}
-                            studentNis={s.nis ?? ""}
-                            currentProvinceId={s.provinceId}
-                            currentRegencyId={s.regencyId}
-                            currentDistrictId={s.districtId}
-                            provinces={provinces}
-                            regencies={regencies}
-                          />
-                          <DropdownMenuItem className="text-destructive">
-                            Hapus
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <SantriRowActions 
+                        student={s} 
+                        provinces={provinces} 
+                        regencies={regencies} 
+                      />
                     </TableCell>
                   </TableRow>
                 );
