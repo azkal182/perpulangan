@@ -1,6 +1,6 @@
 "use client";
 
-import type { PrintDataItem } from "../../lib/print-utils";
+import { getKordaColor, type PrintDataItem } from "../../lib/print-utils";
 
 interface LuggageCardTemplateProps {
   data: PrintDataItem;
@@ -13,14 +13,11 @@ export function LuggageCardTemplate({
   width,
   height,
 }: LuggageCardTemplateProps) {
-  const isPutra = data.studentGender === "L";
-  const headerBg = isPutra ? "bg-blue-600" : "bg-pink-600";
-  const borderColor = isPutra ? "border-blue-600" : "border-pink-600";
-  const bgColor = isPutra ? "bg-blue-50" : "bg-pink-50";
-
+  const kordaColor = getKordaColor(data.kordaName);
+  
   return (
     <div
-      className={`${borderColor} ${bgColor} flex flex-col overflow-hidden rounded-lg border-2 shadow-sm`}
+      className={`${kordaColor.border} ${kordaColor.bg} flex flex-col overflow-hidden rounded-lg border-2 shadow-sm`}
       style={{
         width: `${width}mm`,
         height: `${height}mm`,
@@ -28,9 +25,9 @@ export function LuggageCardTemplate({
       }}
     >
       {/* Header */}
-      <div className={`${headerBg} px-3 py-2 text-center`}>
-        <div className="text-xs font-bold uppercase text-white">
-          KARTU BARANG {isPutra ? "PUTRA" : "PUTRI"}
+      <div className={`${kordaColor.headerBg} px-3 py-2 text-center`}>
+        <div className="text-xs font-bold uppercase text-white shadow-sm">
+          KARTU BARANG {data.studentGender === "L" ? "PUTRA" : "PUTRI"}
         </div>
       </div>
 

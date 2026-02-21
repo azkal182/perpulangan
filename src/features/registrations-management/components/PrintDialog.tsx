@@ -26,7 +26,7 @@ import type {
   PrintType,
   PrintDataItem,
 } from "../lib/print-utils";
-import { calculateLayout, PAPER_SIZES } from "../lib/print-utils";
+import { calculateLayout, PAPER_SIZES, getKordaColor } from "../lib/print-utils";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -149,12 +149,74 @@ export function PrintDialog({
           cardWrapper.style.cssText = "all: initial; display: block;";
           container.appendChild(cardWrapper);
 
+          // We need hex colors for the PDF generation since it doesn't process tailwind classes
+          const kordaColor = getKordaColor(item.kordaName);
+          
+          // Map tailwind color classes to hex values for PDF generation
+          const getHexFromClass = (cls: string) => {
+            if (cls.includes('red-500')) return '#ef4444';
+            if (cls.includes('blue-500')) return '#3b82f6';
+            if (cls.includes('emerald-500')) return '#10b981';
+            if (cls.includes('purple-500')) return '#a855f7';
+            if (cls.includes('amber-500')) return '#f59e0b';
+            if (cls.includes('teal-500')) return '#14b8a6';
+            if (cls.includes('pink-500')) return '#ec4899';
+            if (cls.includes('indigo-500')) return '#6366f1';
+            if (cls.includes('orange-500')) return '#f97316';
+            if (cls.includes('cyan-500')) return '#06b6d4';
+            if (cls.includes('fuchsia-500')) return '#d946ef';
+            if (cls.includes('lime-500')) return '#84cc16';
+            return '#3b82f6'; // fallback to blue
+          };
+          
+          const getBgHexFromClass = (cls: string) => {
+            if (cls.includes('red-50')) return '#fef2f2';
+            if (cls.includes('blue-50')) return '#eff6ff';
+            if (cls.includes('emerald-50')) return '#ecfdf5';
+            if (cls.includes('purple-50')) return '#faf5ff';
+            if (cls.includes('amber-50')) return '#fffbeb';
+            if (cls.includes('teal-50')) return '#f0fdfa';
+            if (cls.includes('pink-50')) return '#fdf2f8';
+            if (cls.includes('indigo-50')) return '#eef2ff';
+            if (cls.includes('orange-50')) return '#fff7ed';
+            if (cls.includes('cyan-50')) return '#ecfeff';
+            if (cls.includes('fuchsia-50')) return '#fdf4ff';
+            if (cls.includes('lime-50')) return '#f7fee7';
+            return '#eff6ff'; // fallback to blue
+          };
+          
+          const getTextHexFromClass = (cls: string) => {
+            if (cls.includes('red-800') || cls.includes('red-900')) return '#991b1b';
+            if (cls.includes('blue-800') || cls.includes('blue-900')) return '#1e40af';
+            if (cls.includes('emerald-800') || cls.includes('emerald-900')) return '#065f46';
+            if (cls.includes('purple-800') || cls.includes('purple-900')) return '#6b21a8';
+            if (cls.includes('amber-800') || cls.includes('amber-900')) return '#92400e';
+            if (cls.includes('teal-800') || cls.includes('teal-900')) return '#115e59';
+            if (cls.includes('pink-800') || cls.includes('pink-900')) return '#9d174d';
+            if (cls.includes('indigo-800') || cls.includes('indigo-900')) return '#3730a3';
+            if (cls.includes('orange-800') || cls.includes('orange-900')) return '#9a3412';
+            if (cls.includes('cyan-800') || cls.includes('cyan-900')) return '#155e75';
+            if (cls.includes('fuchsia-800') || cls.includes('fuchsia-900')) return '#86198f';
+            if (cls.includes('lime-800') || cls.includes('lime-900')) return '#3f6212';
+            return '#1e40af'; // fallback to blue
+          };
+
+          const kordaColorHex = {
+            headerHex: kordaColor.headerBg.includes('gradient') 
+              ? `linear-gradient(135deg, ${getHexFromClass(kordaColor.headerBg)} 0%, ${getHexFromClass(kordaColor.headerBg.split(' ')[2] || '')} 100%)` 
+              : getHexFromClass(kordaColor.headerBg),
+            bgHex: getBgHexFromClass(kordaColor.bg),
+            borderHex: getHexFromClass(kordaColor.border),
+            textHex: getTextHexFromClass(kordaColor.text),
+          };
+
           cardWrapper.innerHTML = renderComponentToHTML(
             printType === "luggage_card" ? LuggageCardTemplate : TicketTemplate,
             {
               data: item,
               width: layout.cardWidth,
               height: layout.cardHeight,
+              kordaColor: kordaColorHex
             }
           );
         });
@@ -357,32 +419,27 @@ function renderComponentToHTML(Component: any, props: any): string {
   const isPutra = gender === "PUTRA" || gender === "LAKI-LAKI" || gender === "L";
 
   if (Component.name === "LuggageCardTemplate") {
-    // Modern color palette with gradients
-    const headerGradient = isPutra 
-      ? "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)" 
-      : "linear-gradient(135deg, #be185d 0%, #ec4899 100%)";
-    const bgColor = isPutra ? "#f0f9ff" : "#fdf2f8";
-    const borderColor = isPutra ? "#3b82f6" : "#ec4899";
-    const accentColor = isPutra ? "#1e40af" : "#be185d";
-
+    // Import dynamically just for the helper or reuse the logic here.
+    // We already have the logic in print-utils.ts but we can't easily import it into this helper without moving it or passing it.
+    // Since this is a simple string hash, we will just use the KordaColor imported if we can, but we need to import it at the top of the file.
     return `
-      <div style="all:initial;display:flex;flex-direction:column;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;width:${props.width}mm;height:${props.height}mm;border:3px solid ${borderColor};background:${bgColor};border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1),0 2px 4px rgba(0,0,0,0.06)">
-        <div style="background:${headerGradient};padding:10px 16px;text-align:center;box-sizing:border-box">
+      <div style="all:initial;display:flex;flex-direction:column;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;width:${props.width}mm;height:${props.height}mm;border:3px solid ${props.kordaColor.borderHex};background:${props.kordaColor.bgHex};border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1),0 2px 4px rgba(0,0,0,0.06)">
+        <div style="background:${props.kordaColor.headerHex};padding:10px 16px;text-align:center;box-sizing:border-box">
           <div style="font-size:11px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.5px;font-family:'Segoe UI',Arial,sans-serif">✦ KARTU BARANG ${isPutra ? "PUTRA" : "PUTRI"} ✦</div>
         </div>
         <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;font-size:9.5px;box-sizing:border-box;background:#ffffff;margin:3px;border-radius:8px">
           <div style="font-family:'Segoe UI',Arial,sans-serif">
-            <div style="font-size:8px;font-weight:600;color:${accentColor};text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Nama</div>
+            <div style="font-size:8px;font-weight:600;color:${props.kordaColor.textHex};text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Nama</div>
             <div style="font-weight:600;color:#1f2937;font-size:10px;line-height:1.3;font-family:'Segoe UI',Arial,sans-serif">${props.data.studentName}</div>
-            <div style="font-size:8px;font-weight:600;color:${accentColor};text-transform:uppercase;letter-spacing:0.3px;margin-top:8px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">NIS</div>
+            <div style="font-size:8px;font-weight:600;color:${props.kordaColor.textHex};text-transform:uppercase;letter-spacing:0.3px;margin-top:8px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">NIS</div>
             <div style="font-weight:500;color:#374151;font-family:'Segoe UI',Arial,sans-serif">${props.data.studentNis}</div>
-            <div style="font-size:8px;font-weight:600;color:${accentColor};text-transform:uppercase;letter-spacing:0.3px;margin-top:8px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Korda</div>
+            <div style="font-size:8px;font-weight:600;color:${props.kordaColor.textHex};text-transform:uppercase;letter-spacing:0.3px;margin-top:8px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Korda</div>
             <div style="font-weight:500;color:#374151;font-family:'Segoe UI',Arial,sans-serif">${props.data.kordaName}</div>
           </div>
           <div style="font-family:'Segoe UI',Arial,sans-serif">
-            <div style="font-size:8px;font-weight:600;color:${accentColor};text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Drop Point</div>
+            <div style="font-size:8px;font-weight:600;color:${props.kordaColor.textHex};text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Drop Point</div>
             <div style="font-weight:500;color:#374151;font-family:'Segoe UI',Arial,sans-serif">${props.data.dropPointName}</div>
-            <div style="font-size:8px;font-weight:600;color:${accentColor};text-transform:uppercase;letter-spacing:0.3px;margin-top:8px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Bus</div>
+            <div style="font-size:8px;font-weight:600;color:${props.kordaColor.textHex};text-transform:uppercase;letter-spacing:0.3px;margin-top:8px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Bus</div>
             <div style="font-weight:600;color:#1f2937;font-size:10px;font-family:'Segoe UI',Arial,sans-serif">${props.data.busLabel || "-"}</div>
           </div>
         </div>
