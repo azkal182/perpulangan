@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { logger } from "@/server/logger";
 import type { Korwil } from "../types";
 
@@ -23,11 +24,14 @@ const korwilSelect = {
 
 export const korwilRepository = {
   async findMany(
-    params?: { page?: number; limit?: number },
+    params?: { page?: number; limit?: number; where?: Prisma.KorwilWhereInput },
   ): Promise<{ items: Korwil[]; totalCount: number }> {
     try {
+      const where = params?.where;
+
       if (!params?.page) {
         const items = await prisma.korwil.findMany({
+          where,
           orderBy: { createdAt: "desc" },
           select: korwilSelect,
         });
@@ -43,10 +47,11 @@ export const korwilRepository = {
         prisma.korwil.findMany({
           skip,
           take: limit,
+          where,
           orderBy: { createdAt: "desc" },
           select: korwilSelect,
         }),
-        prisma.korwil.count(),
+        prisma.korwil.count({ where }),
       ]);
 
       logger.debug({ count: items.length, totalCount, page }, "korwilRepository.findMany paginated success");
@@ -57,10 +62,13 @@ export const korwilRepository = {
     }
   },
 
-  async findById(id: string): Promise<Korwil | null> {
+  async findById(
+    id: string,
+    where?: Prisma.KorwilWhereInput,
+  ): Promise<Korwil | null> {
     try {
-      const item = await prisma.korwil.findUnique({
-        where: { id },
+      const item = await prisma.korwil.findFirst({
+        where: where ? { AND: [{ id }, where] } : { id },
         select: korwilSelect,
       });
       logger.debug({ id, found: !!item }, "korwilRepository.findById success");

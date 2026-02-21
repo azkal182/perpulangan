@@ -3,6 +3,12 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import type { RegistrationStatus } from "@/generated/prisma/client";
+import {
+  AccessDeniedError,
+  andWhere,
+  getRegionalAccessScope,
+  registrationScopeWhere,
+} from "@/server/access-scope";
 
 // Update payment status
 export async function updatePaymentStatusAction(params: {
@@ -11,6 +17,7 @@ export async function updatePaymentStatusAction(params: {
   returnPaid?: boolean;
 }) {
   try {
+    const scope = await getRegionalAccessScope();
     const { registrationId, outboundPaid, returnPaid } = params;
 
     const updateData: {
@@ -20,6 +27,14 @@ export async function updatePaymentStatusAction(params: {
 
     if (outboundPaid !== undefined) updateData.outboundPaid = outboundPaid;
     if (returnPaid !== undefined) updateData.returnPaid = returnPaid;
+
+    const existing = await prisma.registration.findFirst({
+      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Registrasi tidak ditemukan" };
+    }
 
     await prisma.registration.update({
       where: { id: registrationId },
@@ -31,6 +46,9 @@ export async function updatePaymentStatusAction(params: {
 
     return { success: true };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to update payment status:", error);
     return { success: false, error: "Gagal mengupdate status pembayaran" };
   }
@@ -43,10 +61,19 @@ export async function cancelRegistrationAction(params: {
   reason?: string;
 }) {
   try {
+    const scope = await getRegionalAccessScope();
     const { registrationId, cancelType, reason } = params;
 
     const status: RegistrationStatus =
       cancelType === "full" ? "CANCELLED" : "PARTIAL_CANCEL";
+
+    const existing = await prisma.registration.findFirst({
+      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Registrasi tidak ditemukan" };
+    }
 
     await prisma.registration.update({
       where: { id: registrationId },
@@ -62,6 +89,9 @@ export async function cancelRegistrationAction(params: {
 
     return { success: true };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to cancel registration:", error);
     return { success: false, error: "Gagal membatalkan registrasi" };
   }
@@ -70,6 +100,15 @@ export async function cancelRegistrationAction(params: {
 // Delete registration
 export async function deleteRegistrationAction(registrationId: string) {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await prisma.registration.findFirst({
+      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Registrasi tidak ditemukan" };
+    }
+
     await prisma.registration.delete({
       where: { id: registrationId },
     });
@@ -79,6 +118,9 @@ export async function deleteRegistrationAction(registrationId: string) {
 
     return { success: true };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to delete registration:", error);
     return { success: false, error: "Gagal menghapus registrasi" };
   }
@@ -87,8 +129,9 @@ export async function deleteRegistrationAction(registrationId: string) {
 // Get registration detail
 export async function getRegistrationDetailAction(registrationId: string) {
   try {
-    const registration = await prisma.registration.findUnique({
-      where: { id: registrationId },
+    const scope = await getRegionalAccessScope();
+    const registration = await prisma.registration.findFirst({
+      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
       include: {
         student: {
           select: {
@@ -140,6 +183,9 @@ export async function getRegistrationDetailAction(registrationId: string) {
 
     return { success: true, data: registration };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to get registration detail:", error);
     return { success: false, error: "Gagal mengambil detail registrasi" };
   }
@@ -152,6 +198,7 @@ export async function refundPaymentAction(params: {
   refundReturn?: boolean;
 }) {
   try {
+    const scope = await getRegionalAccessScope();
     const { registrationId, refundOutbound, refundReturn } = params;
 
     const updateData: {
@@ -161,6 +208,14 @@ export async function refundPaymentAction(params: {
 
     if (refundOutbound) updateData.outboundPaid = false;
     if (refundReturn) updateData.returnPaid = false;
+
+    const existing = await prisma.registration.findFirst({
+      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Registrasi tidak ditemukan" };
+    }
 
     await prisma.registration.update({
       where: { id: registrationId },
@@ -172,6 +227,9 @@ export async function refundPaymentAction(params: {
 
     return { success: true };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to refund payment:", error);
     return { success: false, error: "Gagal melakukan refund" };
   }

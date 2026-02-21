@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import prisma from "@/lib/prisma";
 import {
   registrationRepository,
   type RegistrationCreateData,
@@ -8,6 +9,14 @@ import {
 } from "../repositories/registration.repository";
 import { logger } from "@/server/logger";
 import { RegistrationStatus } from "@/generated/prisma/client";
+import {
+  AccessDeniedError,
+  andWhere,
+  ensureKordaInScope,
+  getRegionalAccessScope,
+  registrationScopeWhere,
+  studentScopeWhere,
+} from "@/server/access-scope";
 
 export async function getRegistrations(params?: {
   eventId?: string;
@@ -15,9 +24,16 @@ export async function getRegistrations(params?: {
   status?: RegistrationStatus;
 }) {
   try {
-    const data = await registrationRepository.findMany(params);
+    const scope = await getRegionalAccessScope();
+    const data = await registrationRepository.findMany({
+      ...params,
+      where: registrationScopeWhere(scope),
+    });
     return { success: true, data };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, params }, "getRegistrations action failed");
     return { success: false, error: "Failed to fetch registrations" };
   }
@@ -25,12 +41,19 @@ export async function getRegistrations(params?: {
 
 export async function getRegistrationById(id: string) {
   try {
-    const data = await registrationRepository.findById(id);
+    const scope = await getRegionalAccessScope();
+    const data = await registrationRepository.findById(
+      id,
+      registrationScopeWhere(scope),
+    );
     if (!data) {
       return { success: false, error: "Registration not found" };
     }
     return { success: true, data };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, id }, "getRegistrationById action failed");
     return { success: false, error: "Failed to fetch registration" };
   }
@@ -38,10 +61,28 @@ export async function getRegistrationById(id: string) {
 
 export async function createRegistration(data: RegistrationCreateData) {
   try {
+    const scope = await getRegionalAccessScope();
+
+    if (data.outboundKordaId) {
+      await ensureKordaInScope(scope, data.outboundKordaId);
+    }
+    if (data.returnKordaId) {
+      await ensureKordaInScope(scope, data.returnKordaId);
+    }
+
+    const student = await prisma.student.findFirst({
+      where: andWhere({ id: data.studentId }, studentScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!student) {
+      return { success: false, error: "Santri tidak ditemukan atau di luar cakupan akses" };
+    }
+
     //Check for duplicate registration
     const existing = await registrationRepository.findMany({
       eventId: data.eventId,
       studentId: data.studentId,
+      where: registrationScopeWhere(scope),
     });
 
     if (existing.length > 0) {
@@ -64,6 +105,9 @@ export async function createRegistration(data: RegistrationCreateData) {
     revalidatePath(`/event/${data.eventId}/participants`);
     return { success: true, data: result };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, data }, "createRegistration action failed");
     return { success: false, error: "Failed to create registration" };
   }
@@ -74,11 +118,30 @@ export async function updateRegistration(
   data: RegistrationUpdateData
 ) {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await registrationRepository.findById(
+      id,
+      registrationScopeWhere(scope),
+    );
+    if (!existing) {
+      return { success: false, error: "Registration not found" };
+    }
+
+    if (data.outboundKordaId) {
+      await ensureKordaInScope(scope, data.outboundKordaId);
+    }
+    if (data.returnKordaId) {
+      await ensureKordaInScope(scope, data.returnKordaId);
+    }
+
     const result = await registrationRepository.update(id, data);
     revalidatePath("/registrasi");
     revalidatePath(`/event/${result.eventId}/participants`);
     return { success: true, data: result };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, id, data }, "updateRegistration action failed");
     return { success: false, error: "Failed to update registration" };
   }
@@ -86,10 +149,22 @@ export async function updateRegistration(
 
 export async function deleteRegistration(id: string) {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await registrationRepository.findById(
+      id,
+      registrationScopeWhere(scope),
+    );
+    if (!existing) {
+      return { success: false, error: "Registration not found" };
+    }
+
     const result = await registrationRepository.delete(id);
     revalidatePath("/registrasi");
     return { success: true, data: result };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, id }, "deleteRegistration action failed");
     return { success: false, error: "Failed to delete registration" };
   }
@@ -97,6 +172,15 @@ export async function deleteRegistration(id: string) {
 
 export async function confirmKordaChange(id: string) {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await registrationRepository.findById(
+      id,
+      registrationScopeWhere(scope),
+    );
+    if (!existing) {
+      return { success: false, error: "Registration not found" };
+    }
+
     const result = await registrationRepository.update(id, {
       kordaChangeConfirmed: true,
     });
@@ -107,6 +191,9 @@ export async function confirmKordaChange(id: string) {
     revalidatePath("/registrasi");
     return { success: true, data: result };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, id }, "confirmKordaChange action failed");
     return { success: false, error: "Failed to confirm Korda change" };
   }
@@ -119,7 +206,11 @@ export async function cancelRegistration(
   refundAmount: number
 ) {
   try {
-    const registration = await registrationRepository.findById(id);
+    const scope = await getRegionalAccessScope();
+    const registration = await registrationRepository.findById(
+      id,
+      registrationScopeWhere(scope),
+    );
     if (!registration) {
       return { success: false, error: "Registration not found" };
     }
@@ -162,6 +253,9 @@ export async function cancelRegistration(
     revalidatePath(`/event/${result.eventId}/participants`);
     return { success: true, data: result };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, id }, "cancelRegistration action failed");
     return { success: false, error: "Failed to cancel registration" };
   }

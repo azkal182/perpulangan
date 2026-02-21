@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
+import { andWhere, getRegionalAccessScope, studentScopeWhere } from "@/server/access-scope";
 
 export type StudentForPDF = {
   name: string;
@@ -34,13 +35,17 @@ export async function getStudentsForPDFExport(): Promise<{
   error?: string;
 }> {
   try {
+    const scope = await getRegionalAccessScope();
     logger.debug("Fetching students for PDF export");
 
     // Fetch all students with their korwil/korda relations
     const students = await prisma.student.findMany({
-      where: {
-        status: true, // Only active students
-      },
+      where: andWhere(
+        {
+          status: true, // Only active students
+        },
+        studentScopeWhere(scope),
+      ),
       select: {
         id: true,
         name: true,

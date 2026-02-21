@@ -16,6 +16,7 @@ import {
   Settings,
   User2,
   Users,
+  Users2,
 } from "lucide-react";
 
 // Data untuk workspace/team selector
@@ -117,13 +118,13 @@ export const others = [
     badge: "5",
   },
   {
-    title: "Pengaturan",
-    url: "/titik_turun",
-    icon: Settings,
+    title: "Users",
+    url: "/dashboard/users",
+    icon: Users2,
   },
   {
-    title: "Pembayaran",
-    url: "/pembayaran",
-    icon: Banknote,
+    title: "Pengaturan",
+    url: "/pengaturan",
+    icon: Settings,
   },
 ];

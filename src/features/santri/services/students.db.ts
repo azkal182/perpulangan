@@ -1,16 +1,25 @@
 import { StudentWhereInput } from "@/generated/prisma/models";
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
+import {
+  andWhere,
+  getRegionalAccessScope,
+  studentScopeWhere,
+} from "@/server/access-scope";
 
 /**
  * Get count of students without provinceId or regencyId
  */
 export async function getIncompleteRegionalCount() {
   try {
+    const scope = await getRegionalAccessScope();
     const count = await prisma.student.count({
-      where: {
-        OR: [{ provinceId: null }, { regencyId: null }],
-      },
+      where: andWhere(
+        {
+          OR: [{ provinceId: null }, { regencyId: null }],
+        } as StudentWhereInput,
+        studentScopeWhere(scope) as StudentWhereInput | undefined,
+      ),
     });
     return count;
   } catch (error) {
@@ -31,6 +40,8 @@ export async function getStudentsPage(
   kordaId?: string,
   incompleteRegional?: boolean,
 ) {
+  const scope = await getRegionalAccessScope();
+
   const query = (q ?? "").trim();
   const korwilRaw = (korwilId ?? "").trim();
   const kordaRaw = (kordaId ?? "").trim();
@@ -68,11 +79,17 @@ export async function getStudentsPage(
 
   //   where.provinceId = 11;
 
+  const finalWhere =
+    andWhere(
+      Object.keys(where).length > 0 ? where : undefined,
+      studentScopeWhere(scope) as StudentWhereInput | undefined,
+    ) ?? {};
+
   try {
     const [total, students] = await prisma.$transaction([
-      prisma.student.count({ where }),
+      prisma.student.count({ where: finalWhere }),
       prisma.student.findMany({
-        where,
+        where: finalWhere,
         skip,
         take: safeSize,
         orderBy: { name: "asc" },

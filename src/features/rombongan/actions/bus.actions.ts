@@ -4,6 +4,14 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
 import { trackerApi } from "@/services/tracker-api.service";
+import {
+  AccessDeniedError,
+  andWhere,
+  busScopeWhere,
+  ensureKordaInScope,
+  ensureKorwilInScope,
+  getRegionalAccessScope,
+} from "@/server/access-scope";
 
 export interface BusWithDetails {
   id: string;
@@ -44,18 +52,29 @@ export async function getBuses(params?: {
   kordaId?: string;
 }): Promise<BusWithDetails[]> {
   try {
+    const scope = await getRegionalAccessScope();
+    if (params?.korwilId) {
+      await ensureKorwilInScope(scope, params.korwilId);
+    }
+    if (params?.kordaId) {
+      await ensureKordaInScope(scope, params.kordaId);
+    }
+
     const buses = await prisma.bus.findMany({
-      where: {
-        ...(params?.eventId && { eventId: params.eventId }),
-        ...(params?.korwilId && { korwilId: params.korwilId }),
-        ...(params?.kordaId && {
-          kordas: {
-            some: {
-              kordaId: params.kordaId,
+      where: andWhere(
+        {
+          ...(params?.eventId && { eventId: params.eventId }),
+          ...(params?.korwilId && { korwilId: params.korwilId }),
+          ...(params?.kordaId && {
+            kordas: {
+              some: {
+                kordaId: params.kordaId,
+              },
             },
-          },
-        }),
-      },
+          }),
+        },
+        busScopeWhere(scope),
+      ),
       include: {
         event: {
           select: {
@@ -93,6 +112,9 @@ export async function getBuses(params?: {
 
     return buses;
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error({ error, params }, "bus.getBuses.failed");
     throw new Error("Failed to fetch buses");
   }
@@ -109,6 +131,14 @@ export async function createBus(data: {
   capacity?: number;
 }): Promise<{ id: string; trackerId: string }> {
   try {
+    const scope = await getRegionalAccessScope();
+    if (data.korwilId) {
+      await ensureKorwilInScope(scope, data.korwilId);
+    }
+    for (const kordaId of data.kordaIds) {
+      await ensureKordaInScope(scope, kordaId);
+    }
+
     // Get event details for tracker API
     const event = await prisma.event.findUnique({
       where: { id: data.eventId },
@@ -157,6 +187,9 @@ export async function createBus(data: {
 
     return { id: bus.id, trackerId };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error({ error, data }, "bus.create.failed");
     throw error;
   }
@@ -175,6 +208,24 @@ export async function updateBus(
   },
 ): Promise<void> {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await prisma.bus.findFirst({
+      where: andWhere({ id }, busScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error("Bus tidak ditemukan");
+    }
+
+    if (data.korwilId) {
+      await ensureKorwilInScope(scope, data.korwilId);
+    }
+    if (data.kordaIds) {
+      for (const kordaId of data.kordaIds) {
+        await ensureKordaInScope(scope, kordaId);
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       // Update bus basic info
       await tx.bus.update({
@@ -206,6 +257,9 @@ export async function updateBus(
     logger.info({ busId: id }, "bus.updated");
     revalidatePath("/rombongan");
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error({ error, busId: id, data }, "bus.update.failed");
     throw new Error("Failed to update bus");
   }
@@ -216,13 +270,21 @@ export async function updateBus(
  */
 export async function toggleBusActive(id: string): Promise<void> {
   try {
+    const scope = await getRegionalAccessScope();
     const bus = await prisma.bus.findUnique({
       where: { id },
-      select: { trackerId: true, isActive: true },
+      select: { id: true, trackerId: true, isActive: true },
     });
 
     if (!bus) {
       throw new Error("Bus not found");
+    }
+
+    const canAccess = await prisma.bus.count({
+      where: andWhere({ id: bus.id }, busScopeWhere(scope)),
+    });
+    if (!canAccess) {
+      throw new AccessDeniedError("Bus di luar cakupan akses");
     }
 
     const newStatus = !bus.isActive;
@@ -241,6 +303,9 @@ export async function toggleBusActive(id: string): Promise<void> {
     logger.info({ busId: id, isActive: newStatus }, "bus.status.toggled");
     revalidatePath("/rombongan");
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error({ error, busId: id }, "bus.toggleActive.failed");
     throw new Error("Failed to toggle bus status");
   }
@@ -251,13 +316,21 @@ export async function toggleBusActive(id: string): Promise<void> {
  */
 export async function deleteBus(id: string): Promise<void> {
   try {
+    const scope = await getRegionalAccessScope();
     const bus = await prisma.bus.findUnique({
       where: { id },
-      select: { trackerId: true },
+      select: { id: true, trackerId: true },
     });
 
     if (!bus) {
       throw new Error("Bus not found");
+    }
+
+    const canAccess = await prisma.bus.count({
+      where: andWhere({ id: bus.id }, busScopeWhere(scope)),
+    });
+    if (!canAccess) {
+      throw new AccessDeniedError("Bus di luar cakupan akses");
     }
 
     // Deactivate in tracker API first
@@ -273,6 +346,9 @@ export async function deleteBus(id: string): Promise<void> {
     logger.info({ busId: id }, "bus.deleted");
     revalidatePath("/rombongan");
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error({ error, busId: id }, "bus.delete.failed");
     throw new Error("Failed to delete bus");
   }

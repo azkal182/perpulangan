@@ -1,6 +1,10 @@
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
-import { Registration, RegistrationStatus } from "@/generated/prisma/client";
+import {
+  Registration,
+  RegistrationStatus,
+  type Prisma,
+} from "@/generated/prisma/client";
 
 export type RegistrationCreateData = {
   eventId: string;
@@ -72,6 +76,7 @@ export const registrationRepository = {
     eventId?: string;
     studentId?: string;
     status?: RegistrationStatus;
+    where?: Prisma.RegistrationWhereInput;
   }): Promise<Registration[]> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,6 +84,13 @@ export const registrationRepository = {
       if (params?.eventId) where.eventId = params.eventId;
       if (params?.studentId) where.studentId = params.studentId;
       if (params?.status) where.status = params.status;
+      if (params?.where) {
+        if (Object.keys(where).length > 0) {
+          where.AND = [params.where];
+        } else {
+          Object.assign(where, params.where);
+        }
+      }
 
       const items = await prisma.registration.findMany({
         where: Object.keys(where).length > 0 ? where : undefined,
@@ -100,10 +112,13 @@ export const registrationRepository = {
     }
   },
 
-  async findById(id: string): Promise<Registration | null> {
+  async findById(
+    id: string,
+    where?: Prisma.RegistrationWhereInput,
+  ): Promise<Registration | null> {
     try {
-      const item = await prisma.registration.findUnique({
-        where: { id },
+      const item = await prisma.registration.findFirst({
+        where: where ? { AND: [{ id }, where] } : { id },
         select: registrationSelect,
       });
       logger.debug(

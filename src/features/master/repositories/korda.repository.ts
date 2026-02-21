@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { logger } from "@/server/logger";
 import type { Korda } from "../types";
 
@@ -26,11 +27,26 @@ const kordaSelect = {
 export const kordaRepository = {
   // Method fleksibel: jika params ada, gunakan pagination. Jika tidak, ambil semua.
   async findMany(
-    params?: { page?: number; limit?: number; korwilId?: string },
+    params?: {
+      page?: number;
+      limit?: number;
+      korwilId?: string;
+      where?: Prisma.KordaWhereInput;
+    },
   ): Promise<{ items: Korda[]; totalCount: number }> {
     try {
-      const where =
-        params?.korwilId !== undefined ? { korwilId: params.korwilId } : undefined;
+      const where: Prisma.KordaWhereInput | undefined = (() => {
+        const parts: Prisma.KordaWhereInput[] = [];
+        if (params?.korwilId !== undefined) {
+          parts.push({ korwilId: params.korwilId });
+        }
+        if (params?.where) {
+          parts.push(params.where);
+        }
+        if (parts.length === 0) return undefined;
+        if (parts.length === 1) return parts[0];
+        return { AND: parts };
+      })();
 
       if (!params?.page) {
         const items = await prisma.korda.findMany({
@@ -65,10 +81,10 @@ export const kordaRepository = {
     }
   },
 
-  async findById(id: string): Promise<Korda | null> {
+  async findById(id: string, where?: Prisma.KordaWhereInput): Promise<Korda | null> {
     try {
-      const item = await prisma.korda.findUnique({
-        where: { id },
+      const item = await prisma.korda.findFirst({
+        where: where ? { AND: [{ id }, where] } : { id },
         select: kordaSelect,
       });
       logger.debug({ id, found: !!item }, "kordaRepository.findById success");

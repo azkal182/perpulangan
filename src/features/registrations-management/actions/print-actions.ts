@@ -3,6 +3,13 @@
 import prisma from "@/lib/prisma";
 import type { PrintDataItem } from "../lib/print-utils";
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  AccessDeniedError,
+  andWhere,
+  ensureKordaInScope,
+  getRegionalAccessScope,
+  registrationScopeWhere,
+} from "@/server/access-scope";
 
 export interface GetPrintDataParams {
   eventId: string;
@@ -17,6 +24,7 @@ export async function getPrintDataAction(
   params: GetPrintDataParams,
 ): Promise<{ success: boolean; data?: PrintDataItem[]; error?: string }> {
   try {
+    const scope = await getRegionalAccessScope();
     const { eventId, gender, kordaId, dropPointId, studentName } = params;
 
     // Build where clause - simplified, just need drop points
@@ -45,6 +53,7 @@ export async function getPrintDataAction(
 
     // Korda filter (either outbound or return)
     if (kordaId) {
+      await ensureKordaInScope(scope, kordaId);
       const orConditions = where.OR || [];
       where.AND = [
         { OR: orConditions },
@@ -54,6 +63,8 @@ export async function getPrintDataAction(
       ];
       delete where.OR;
     }
+
+    const finalWhere = andWhere(where, registrationScopeWhere(scope));
 
     // Drop point filter (either outbound or return)
     if (dropPointId) {
@@ -77,7 +88,7 @@ export async function getPrintDataAction(
     }
 
     const registrations = await prisma.registration.findMany({
-      where,
+      where: finalWhere,
       include: {
         student: {
           select: {
@@ -154,6 +165,12 @@ export async function getPrintDataAction(
 
     return { success: true, data: printData };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
     console.error("Error fetching print data:", error);
     return {
       success: false,

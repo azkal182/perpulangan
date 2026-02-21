@@ -1,5 +1,6 @@
 import { DropPoint } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { logger } from "@/server/logger";
 // import { DropPoint } from "@/generated/prisma/models";
 
@@ -26,9 +27,19 @@ const dropPointSelect = {
 };
 
 export const dropPointRepository = {
-  async findMany(params?: { kordaId?: string }): Promise<DropPoint[]> {
+  async findMany(params?: {
+    kordaId?: string;
+    where?: Prisma.DropPointWhereInput;
+  }): Promise<DropPoint[]> {
     try {
-      const where = params?.kordaId ? { kordaId: params.kordaId } : undefined;
+      const where: Prisma.DropPointWhereInput | undefined = (() => {
+        const parts: Prisma.DropPointWhereInput[] = [];
+        if (params?.kordaId) parts.push({ kordaId: params.kordaId });
+        if (params?.where) parts.push(params.where);
+        if (parts.length === 0) return undefined;
+        if (parts.length === 1) return parts[0];
+        return { AND: parts };
+      })();
       const items = await prisma.dropPoint.findMany({
         where,
         orderBy: { name: "asc" },
@@ -42,10 +53,13 @@ export const dropPointRepository = {
     }
   },
 
-  async findById(id: string): Promise<DropPoint | null> {
+  async findById(
+    id: string,
+    where?: Prisma.DropPointWhereInput,
+  ): Promise<DropPoint | null> {
     try {
-      const item = await prisma.dropPoint.findUnique({
-        where: { id },
+      const item = await prisma.dropPoint.findFirst({
+        where: where ? { AND: [{ id }, where] } : { id },
         select: dropPointSelect,
       });
       logger.debug({ id, found: !!item }, "dropPointRepository.findById success");

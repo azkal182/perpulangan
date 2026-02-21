@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
+import { AccessDeniedError, getRegionalAccessScope, requireAdmin } from "@/server/access-scope";
 
 export type StudentNormalized = {
   idApi: string;
@@ -118,6 +119,21 @@ export async function bulkUpsertStudents(
     errors: [],
     skippedRows: [],
   };
+
+  try {
+    const scope = await getRegionalAccessScope();
+    requireAdmin(scope);
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      result.failed = rawRows?.length ?? 0;
+      result.errors.push({
+        index: -1,
+        message: error.message,
+      });
+      return result;
+    }
+    throw error;
+  }
 
   if (!Array.isArray(rawRows) || rawRows.length === 0) return result;
   //   console.log(JSON.stringify(rawRows[0], null, 2));

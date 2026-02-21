@@ -2,6 +2,13 @@
 
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
+import {
+  AccessDeniedError,
+  andWhere,
+  ensureKordaInScope,
+  getRegionalAccessScope,
+  studentScopeWhere,
+} from "@/server/access-scope";
 
 export type StudentBasic = {
   id: string;
@@ -23,14 +30,20 @@ export async function getStudentsByKorda(kordaId: string): Promise<{
   error?: string;
 }> {
   try {
+    const scope = await getRegionalAccessScope();
+    await ensureKordaInScope(scope, kordaId);
+
     logger.debug({ kordaId }, "Fetching students by kordaId");
 
     const students = await prisma.student.findMany({
-      where: {
-        regency: {
-          kordaId: kordaId,
+      where: andWhere(
+        {
+          regency: {
+            kordaId: kordaId,
+          },
         },
-      },
+        studentScopeWhere(scope),
+      ),
       select: {
         id: true,
         name: true,
@@ -52,6 +65,12 @@ export async function getStudentsByKorda(kordaId: string): Promise<{
       students,
     };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
     logger.error(
       { err: error, kordaId },
       "Failed to fetch students by kordaId",
@@ -74,6 +93,8 @@ export async function searchStudents(
   kordaId?: string,
 ): Promise<StudentBasic[]> {
   try {
+    const scope = await getRegionalAccessScope();
+
     const trimmedQuery = query.trim();
 
     logger.debug({ query: trimmedQuery, kordaId }, "Searching students");
@@ -83,40 +104,46 @@ export async function searchStudents(
       return [];
     }
 
+    if (kordaId) {
+      await ensureKordaInScope(scope, kordaId);
+    }
+
     const students = await prisma.student.findMany({
-      where: {
-        AND: [
-          {
-            OR: [
-              {
-                name: {
-                  contains: trimmedQuery,
-                  mode: "insensitive",
-                },
-              },
-              {
-                nis: {
-                  contains: trimmedQuery,
-                  mode: "insensitive",
-                },
-              },
-            ],
-          },
-          {
-            status: true, // Only active students
-          },
-          // Filter by Korda if provided
-          ...(kordaId
-            ? [
+      where: andWhere(
+        {
+          AND: [
+            {
+              OR: [
                 {
-                  regency: {
-                    kordaId: kordaId,
+                  name: {
+                    contains: trimmedQuery,
+                    mode: "insensitive",
                   },
                 },
-              ]
-            : []),
-        ],
-      },
+                {
+                  nis: {
+                    contains: trimmedQuery,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            },
+            {
+              status: true, // Only active students
+            },
+            ...(kordaId
+              ? [
+                  {
+                    regency: {
+                      kordaId: kordaId,
+                    },
+                  },
+                ]
+              : []),
+          ],
+        },
+        studentScopeWhere(scope),
+      ),
       select: {
         id: true,
         name: true,

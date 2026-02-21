@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { logger } from "@/server/logger";
 import type { RegencyOption } from "../types";
 
@@ -7,6 +8,7 @@ export const regencyRepository = {
     q?: string;
     provinceId?: number;
     limit?: number;
+    where?: Prisma.RegencyWhereInput;
   }): Promise<RegencyOption[]> {
     try {
       const q = params?.q?.trim();
@@ -15,7 +17,7 @@ export const regencyRepository = {
 
       // logger.debug({ q, provinceId, take }, "regencyRepository.search called");
 
-      const where = {
+      const where: Prisma.RegencyWhereInput = {
         ...(provinceId ? { provinceId } : {}),
         ...(q
           ? {
@@ -27,6 +29,7 @@ export const regencyRepository = {
               ],
             }
           : {}),
+        ...(params?.where ? { AND: [params.where] } : {}),
       };
 
       const items = await prisma.regency.findMany({

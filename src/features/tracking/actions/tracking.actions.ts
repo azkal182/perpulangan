@@ -6,18 +6,36 @@ import {
   trackerApi,
   type MonitoringData,
 } from "@/services/tracker-api.service";
+import {
+  AccessDeniedError,
+  andWhere,
+  busScopeWhere,
+  ensureKordaInScope,
+  getRegionalAccessScope,
+  kordaScopeWhere,
+} from "@/server/access-scope";
 
 /**
  * Get events that have been synced to tracker API (for dropdown)
  */
 export async function getTrackingEvents() {
   try {
-    const events = await prisma.event.findMany({
-      where: {
-        trackerEventId: {
-          not: null,
-        },
+    const scope = await getRegionalAccessScope();
+    const eventWhere = {
+      trackerEventId: {
+        not: null,
       },
+      ...(scope.role === "admin"
+        ? {}
+        : {
+            buses: {
+              some: busScopeWhere(scope),
+            },
+          }),
+    };
+
+    const events = await prisma.event.findMany({
+      where: eventWhere,
       select: {
         id: true,
         name: true,
@@ -45,6 +63,11 @@ export async function getBusesForTracking(params: {
   kordaId?: string;
 }) {
   try {
+    const scope = await getRegionalAccessScope();
+    if (params.kordaId) {
+      await ensureKordaInScope(scope, params.kordaId);
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {
       eventId: params.eventId,
@@ -62,7 +85,7 @@ export async function getBusesForTracking(params: {
     }
 
     const buses = await prisma.bus.findMany({
-      where,
+      where: andWhere(where, busScopeWhere(scope)),
       select: {
         id: true,
         label: true,
@@ -95,6 +118,9 @@ export async function getBusesForTracking(params: {
       kordas: bus.kordas.map((bk) => bk.korda),
     }));
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return [];
+    }
     logger.error(
       { error, eventId: params.eventId },
       "tracking.getBuses.failed",
@@ -112,6 +138,18 @@ export async function getGPSPositions(eventId: string): Promise<{
   message?: string;
 }> {
   try {
+    const scope = await getRegionalAccessScope();
+    const canAccess = await prisma.bus.count({
+      where: andWhere({ eventId }, busScopeWhere(scope)),
+    });
+    if (!canAccess) {
+      return {
+        success: false,
+        data: [],
+        message: "Event di luar cakupan akses",
+      };
+    }
+
     // Get event's trackerEventId
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -153,7 +191,9 @@ export async function getGPSPositions(eventId: string): Promise<{
  */
 export async function getKordasForFilter() {
   try {
+    const scope = await getRegionalAccessScope();
     const kordas = await prisma.korda.findMany({
+      where: kordaScopeWhere(scope),
       select: {
         id: true,
         name: true,
@@ -165,6 +205,9 @@ export async function getKordasForFilter() {
 
     return kordas;
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return [];
+    }
     logger.error({ error }, "tracking.getKordas.failed");
     return [];
   }

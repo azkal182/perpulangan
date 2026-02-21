@@ -34,6 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  getUserAccessOptions,
+  getUsersRegionalAccess,
+  updateUserRegionalAccess,
+  type KorwilAccessOption,
+  type KordaAccessOption,
+} from "@/features/user-management/actions/user-access.action";
 
 type ManagedUser = {
   id: string;
@@ -43,7 +50,28 @@ type ManagedUser = {
   banned?: boolean | null;
   banReason?: string | null;
   createdAt?: string | Date | null;
+  korwilId?: string | null;
+  korwilName?: string | null;
+  kordaId?: string | null;
+  kordaName?: string | null;
 };
+
+type ScopeDraft = {
+  korwilId: string;
+  kordaId: string;
+};
+
+function toAppRole(value?: string | null): AppRole {
+  if (!value) return "korda";
+  if (roleOptions.includes(value as AppRole)) {
+    return value as AppRole;
+  }
+  return "korda";
+}
+
+function emptyScope(): ScopeDraft {
+  return { korwilId: "", kordaId: "" };
+}
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -54,6 +82,12 @@ export default function UserManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [roleEdits, setRoleEdits] = useState<Record<string, string>>({});
+  const [scopeEdits, setScopeEdits] = useState<Record<string, ScopeDraft>>({});
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+
+  const [korwilOptions, setKorwilOptions] = useState<KorwilAccessOption[]>([]);
+  const [kordaOptions, setKordaOptions] = useState<KordaAccessOption[]>([]);
+
   const [isCreating, setIsCreating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -61,6 +95,8 @@ export default function UserManagementPage() {
     email: "",
     password: "",
     role: "korda",
+    korwilId: "",
+    kordaId: "",
   });
 
   useEffect(() => {
@@ -76,6 +112,7 @@ export default function UserManagementPage() {
 
   const canList = useMemo(() => {
     if (!session?.user) return false;
+    if (roleValue === "korda") return false;
     return admin.checkRolePermission({
       role: roleValue,
       permissions: { user: ["list"] },
@@ -114,6 +151,22 @@ export default function UserManagementPage() {
     });
   }, [roleValue, session?.user]);
 
+  const assignableRoles = useMemo<AppRole[]>(() => {
+    if (roleValue === "admin") return [...roleOptions];
+    if (roleValue === "korwil") return ["korda"];
+    return [];
+  }, [roleValue]);
+
+  const loadAccessOptions = useCallback(async () => {
+    const res = await getUserAccessOptions();
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    setKorwilOptions(res.data.korwils);
+    setKordaOptions(res.data.kordas);
+  }, []);
+
   const loadUsers = useCallback(async () => {
     if (!canList) return;
     setError(null);
@@ -127,20 +180,72 @@ export default function UserManagementPage() {
       setError(res.error.message || "Failed to load users.");
       setUsers([]);
       setTotal(null);
-    } else {
-      setUsers(res.data?.users ?? []);
-      setTotal(res.data?.total ?? null);
+      setIsLoading(false);
+      return;
     }
 
+    const baseUsers = (res.data?.users ?? []) as ManagedUser[];
+    const accessRes = await getUsersRegionalAccess(baseUsers.map((u) => u.id));
+    const accessMap = accessRes.success ? accessRes.data : {};
+
+    const filteredUsers =
+      roleValue === "korwil"
+        ? baseUsers.filter((u) => Boolean(accessMap[u.id]))
+        : baseUsers;
+
+    const merged = filteredUsers.map((u) => ({
+      ...u,
+      ...(accessMap[u.id] ?? {}),
+    }));
+
+    const nextRoleEdits: Record<string, string> = {};
+    const nextScopeEdits: Record<string, ScopeDraft> = {};
+    for (const user of merged) {
+      nextRoleEdits[user.id] = user.role ?? "korda";
+      nextScopeEdits[user.id] = {
+        korwilId: user.korwilId ?? "",
+        kordaId: user.kordaId ?? "",
+      };
+    }
+
+    setUsers(merged);
+    setTotal(res.data?.total ?? null);
+    setRoleEdits(nextRoleEdits);
+    setScopeEdits(nextScopeEdits);
     setIsLoading(false);
-  }, [canList, searchValue]);
+  }, [canList, searchValue, roleValue]);
 
   useEffect(() => {
     if (session?.user && canList) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadAccessOptions();
       void loadUsers();
     }
-  }, [session?.user, canList, loadUsers]);
+  }, [session?.user, canList, loadAccessOptions, loadUsers]);
+
+  function getUserScopeLabel(user: ManagedUser) {
+    const role = toAppRole(user.role);
+    if (role === "admin") return "Akses: semua wilayah";
+    if (role === "korwil") {
+      return user.korwilName
+        ? `Korwil: ${user.korwilName}`
+        : "Korwil: belum diatur";
+    }
+    return user.kordaName ? `Korda: ${user.kordaName}` : "Korda: belum diatur";
+  }
+
+  function getScopeDraftForUser(user: ManagedUser) {
+    return scopeEdits[user.id] ?? emptyScope();
+  }
+
+  function validateScope(role: AppRole, scope: ScopeDraft): string | null {
+    if (role === "korwil" && !scope.korwilId) {
+      return "Korwil wajib dipilih untuk role korwil.";
+    }
+    if (role === "korda" && !scope.kordaId) {
+      return "Korda wajib dipilih untuk role korda.";
+    }
+    return null;
+  }
 
   async function handleCreateUser(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -149,36 +254,99 @@ export default function UserManagementPage() {
     setError(null);
     setIsCreating(true);
 
+    const createRole = toAppRole(createForm.role);
+    const validateError = validateScope(createRole, {
+      korwilId: createForm.korwilId,
+      kordaId: createForm.kordaId,
+    });
+
+    if (validateError) {
+      setError(validateError);
+      setIsCreating(false);
+      return;
+    }
+
     const res = await admin.createUser({
       name: createForm.name,
       email: createForm.email,
       password: createForm.password || undefined,
-      role: createForm.role as AppRole,
+      role: createRole,
     });
 
     if (res.error) {
       setError(res.error.message || "Failed to create user.");
-    } else {
-      setCreateForm({ name: "", email: "", password: "", role: "korda" });
-      setDialogOpen(false);
-      await loadUsers();
+      setIsCreating(false);
+      return;
     }
 
+    const createdUserId = res.data?.user?.id;
+    if (createdUserId) {
+      const accessRes = await updateUserRegionalAccess({
+        userId: createdUserId,
+        role: createRole,
+        korwilId: createForm.korwilId || null,
+        kordaId: createForm.kordaId || null,
+      });
+
+      if (!accessRes.success) {
+        setError(
+          `User berhasil dibuat, tetapi set akses wilayah gagal: ${accessRes.error}`,
+        );
+      }
+    }
+
+    setCreateForm({
+      name: "",
+      email: "",
+      password: "",
+      role: "korda",
+      korwilId: "",
+      kordaId: "",
+    });
+    setDialogOpen(false);
+    await loadUsers();
     setIsCreating(false);
   }
 
-  async function handleSetRole(userId: string) {
+  async function handleSaveUser(user: ManagedUser) {
     if (!canSetRole) return;
-    const nextRole = roleEdits[userId];
-    if (!nextRole) return;
 
-    setError(null);
-    const res = await admin.setRole({ userId, role: nextRole as AppRole });
-    if (res.error) {
-      setError(res.error.message || "Failed to update role.");
-    } else {
-      await loadUsers();
+    const nextRole = toAppRole(roleEdits[user.id] ?? user.role);
+    const draft = getScopeDraftForUser(user);
+
+    const validateError = validateScope(nextRole, draft);
+    if (validateError) {
+      setError(validateError);
+      return;
     }
+
+    setSavingUserId(user.id);
+    setError(null);
+
+    if (nextRole !== toAppRole(user.role)) {
+      const roleRes = await admin.setRole({ userId: user.id, role: nextRole });
+      if (roleRes.error) {
+        setError(roleRes.error.message || "Failed to update role.");
+        setSavingUserId(null);
+        return;
+      }
+    }
+
+    const accessRes = await updateUserRegionalAccess({
+      userId: user.id,
+      role: nextRole,
+      korwilId: draft.korwilId || null,
+      kordaId: draft.kordaId || null,
+    });
+
+    if (!accessRes.success) {
+      setError(accessRes.error || "Failed to update regional access.");
+      setSavingUserId(null);
+      return;
+    }
+
+    await loadUsers();
+    setSavingUserId(null);
   }
 
   async function handleBan(userId: string) {
@@ -249,9 +417,7 @@ export default function UserManagementPage() {
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
               <div>
-                <h2 className="font-semibold text-destructive">
-                  Access Denied
-                </h2>
+                <h2 className="font-semibold text-destructive">Access Denied</h2>
                 <p className="mt-1 text-sm text-destructive/80">
                   You do not have permission to view users.
                 </p>
@@ -265,7 +431,6 @@ export default function UserManagementPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <div className="border-b bg-card">
         <div className="mx-auto max-w-7xl px-6 py-8">
           <div className="flex items-start justify-between">
@@ -351,14 +516,19 @@ export default function UserManagementPage() {
                       <Select
                         value={createForm.role}
                         onValueChange={(value) =>
-                          setCreateForm((prev) => ({ ...prev, role: value }))
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            role: value,
+                            ...(value !== "korwil" ? { korwilId: "" } : {}),
+                            ...(value !== "korda" ? { kordaId: "" } : {}),
+                          }))
                         }
                       >
                         <SelectTrigger id="role">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {roleOptions.map((role) => (
+                          {assignableRoles.map((role) => (
                             <SelectItem key={role} value={role}>
                               {role}
                             </SelectItem>
@@ -366,6 +536,54 @@ export default function UserManagementPage() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {createForm.role === "korwil" && (
+                      <div className="space-y-2">
+                        <Label>Akses Korwil</Label>
+                        <Select
+                          value={createForm.korwilId}
+                          onValueChange={(value) =>
+                            setCreateForm((prev) => ({ ...prev, korwilId: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih korwil" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {korwilOptions.map((korwil) => (
+                              <SelectItem key={korwil.id} value={korwil.id}>
+                                {korwil.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {createForm.role === "korda" && (
+                      <div className="space-y-2">
+                        <Label>Akses Korda</Label>
+                        <Select
+                          value={createForm.kordaId}
+                          onValueChange={(value) =>
+                            setCreateForm((prev) => ({ ...prev, kordaId: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih korda" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {kordaOptions.map((korda) => (
+                              <SelectItem key={korda.id} value={korda.id}>
+                                {korda.name}
+                                {korda.korwilName ? ` (${korda.korwilName})` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
                     <div className="flex justify-end gap-3 pt-4">
                       <Button
                         type="button"
@@ -398,7 +616,6 @@ export default function UserManagementPage() {
             )}
           </div>
 
-          {/* Stats Bar */}
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-lg border bg-card p-4">
               <div className="flex items-center justify-between">
@@ -442,7 +659,6 @@ export default function UserManagementPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Error Alert */}
         {error && (
           <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
             <div className="flex items-start gap-3">
@@ -460,7 +676,6 @@ export default function UserManagementPage() {
           </div>
         )}
 
-        {/* Search and Filter */}
         <div className="mb-6 rounded-xl border bg-card p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
@@ -474,11 +689,7 @@ export default function UserManagementPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={loadUsers}
-                disabled={isLoading}
-                className="gap-2"
-              >
+              <Button onClick={loadUsers} disabled={isLoading} className="gap-2">
                 <Search className="h-4 w-4" />
                 Search
               </Button>
@@ -497,7 +708,6 @@ export default function UserManagementPage() {
           </div>
         </div>
 
-        {/* Users List */}
         <div className="rounded-xl border bg-card">
           <div className="border-b p-6">
             <h2 className="text-lg font-semibold">Users</h2>
@@ -514,9 +724,7 @@ export default function UserManagementPage() {
             <div className="flex items-center justify-center p-12">
               <div className="flex flex-col items-center gap-3">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-                <p className="text-sm text-muted-foreground">
-                  Loading users...
-                </p>
+                <p className="text-sm text-muted-foreground">Loading users...</p>
               </div>
             </div>
           ) : users.length === 0 ? (
@@ -532,8 +740,24 @@ export default function UserManagementPage() {
           ) : (
             <div className="divide-y">
               {users.map((user, index) => {
-                const selectedRole = roleEdits[user.id] ?? user.role ?? "korda";
-                const roleChanged = selectedRole !== user.role;
+                const selectedRole = toAppRole(roleEdits[user.id] ?? user.role);
+                const draft = getScopeDraftForUser(user);
+                const rowRoleOptions = (
+                  assignableRoles.includes(selectedRole)
+                    ? assignableRoles
+                    : [selectedRole, ...assignableRoles]
+                ).filter((role, idx, arr) => arr.indexOf(role) === idx);
+
+                const roleChanged = selectedRole !== toAppRole(user.role);
+                const scopeChanged =
+                  (selectedRole === "korwil" &&
+                    draft.korwilId !== (user.korwilId ?? "")) ||
+                  (selectedRole === "korda" &&
+                    draft.kordaId !== (user.kordaId ?? "")) ||
+                  (selectedRole === "admin" &&
+                    Boolean(user.korwilId || user.kordaId));
+
+                const hasChanges = roleChanged || scopeChanged;
 
                 return (
                   <div
@@ -544,7 +768,6 @@ export default function UserManagementPage() {
                     }}
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      {/* User Info */}
                       <div className="flex-1">
                         <div className="flex items-start gap-3">
                           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 font-semibold text-primary-foreground">
@@ -568,23 +791,25 @@ export default function UserManagementPage() {
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs font-medium">
                                 <Shield className="h-3 w-3" />
-                                {user.role ?? "korda"}
+                                {selectedRole}
+                              </span>
+                              <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                                {getUserScopeLabel({
+                                  ...user,
+                                  role: selectedRole,
+                                })}
                               </span>
                               {user.createdAt && (
                                 <span className="text-xs text-muted-foreground">
                                   Joined{" "}
-                                  {new Date(
-                                    user.createdAt,
-                                  ).toLocaleDateString()}
+                                  {new Date(user.createdAt).toLocaleDateString()}
                                 </span>
                               )}
                             </div>
                             {user.banReason && (
                               <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
                                 <p className="text-xs text-destructive">
-                                  <span className="font-medium">
-                                    Ban reason:
-                                  </span>{" "}
+                                  <span className="font-medium">Ban reason:</span>{" "}
                                   {user.banReason}
                                 </p>
                               </div>
@@ -593,7 +818,6 @@ export default function UserManagementPage() {
                         </div>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex flex-col gap-3 lg:items-end">
                         <div className="flex flex-wrap items-center gap-2">
                           <Select
@@ -610,20 +834,72 @@ export default function UserManagementPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {roleOptions.map((role) => (
+                              {rowRoleOptions.map((role) => (
                                 <SelectItem key={role} value={role}>
                                   {role}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          {roleChanged && (
-                            <Button
-                              onClick={() => handleSetRole(user.id)}
+
+                          {selectedRole === "korwil" && (
+                            <Select
+                              value={draft.korwilId}
+                              onValueChange={(value) =>
+                                setScopeEdits((prev) => ({
+                                  ...prev,
+                                  [user.id]: { ...draft, korwilId: value },
+                                }))
+                              }
                               disabled={!canSetRole}
+                            >
+                              <SelectTrigger className="w-[220px]">
+                                <SelectValue placeholder="Pilih korwil" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {korwilOptions.map((korwil) => (
+                                  <SelectItem key={korwil.id} value={korwil.id}>
+                                    {korwil.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+
+                          {selectedRole === "korda" && (
+                            <Select
+                              value={draft.kordaId}
+                              onValueChange={(value) =>
+                                setScopeEdits((prev) => ({
+                                  ...prev,
+                                  [user.id]: { ...draft, kordaId: value },
+                                }))
+                              }
+                              disabled={!canSetRole}
+                            >
+                              <SelectTrigger className="w-[260px]">
+                                <SelectValue placeholder="Pilih korda" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {kordaOptions.map((korda) => (
+                                  <SelectItem key={korda.id} value={korda.id}>
+                                    {korda.name}
+                                    {korda.korwilName
+                                      ? ` (${korda.korwilName})`
+                                      : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+
+                          {hasChanges && (
+                            <Button
+                              onClick={() => handleSaveUser(user)}
+                              disabled={!canSetRole || savingUserId === user.id}
                               size="sm"
                             >
-                              Update Role
+                              {savingUserId === user.id ? "Saving..." : "Save"}
                             </Button>
                           )}
                         </div>

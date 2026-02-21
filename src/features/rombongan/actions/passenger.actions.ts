@@ -3,6 +3,13 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
+import {
+  AccessDeniedError,
+  andWhere,
+  busScopeWhere,
+  getRegionalAccessScope,
+  registrationScopeWhere,
+} from "@/server/access-scope";
 
 export interface BusPassenger {
   registrationId: string;
@@ -36,9 +43,20 @@ export async function getBusPassengers(
   journey: "outbound" | "return",
 ): Promise<BusPassenger[]> {
   try {
+    const scope = await getRegionalAccessScope();
+    const canAccessBus = await prisma.bus.count({
+      where: andWhere({ id: busId }, busScopeWhere(scope)),
+    });
+    if (!canAccessBus) {
+      throw new AccessDeniedError("Bus di luar cakupan akses");
+    }
+
     if (journey === "outbound") {
       const regs = await prisma.registration.findMany({
-        where: { outboundBusId: busId },
+        where: andWhere(
+          { outboundBusId: busId },
+          registrationScopeWhere(scope),
+        ),
         include: {
           student: {
             select: { id: true, name: true, nis: true, gender: true },
@@ -62,7 +80,10 @@ export async function getBusPassengers(
       }));
     } else {
       const regs = await prisma.registration.findMany({
-        where: { returnBusId: busId },
+        where: andWhere(
+          { returnBusId: busId },
+          registrationScopeWhere(scope),
+        ),
         include: {
           student: {
             select: { id: true, name: true, nis: true, gender: true },
@@ -86,6 +107,9 @@ export async function getBusPassengers(
       }));
     }
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error(
       { error, busId, journey },
       "passenger.getBusPassengers.failed",
@@ -104,9 +128,10 @@ export async function getAssignableRegistrations(
   search?: string,
 ): Promise<AssignableRegistration[]> {
   try {
+    const scope = await getRegionalAccessScope();
     // Get bus info (event only — korda filter dihapus agar semua peserta event bisa di-assign)
-    const bus = await prisma.bus.findUnique({
-      where: { id: busId },
+    const bus = await prisma.bus.findFirst({
+      where: andWhere({ id: busId }, busScopeWhere(scope)),
       select: { eventId: true },
     });
     if (!bus) throw new Error("Bus tidak ditemukan");
@@ -122,12 +147,15 @@ export async function getAssignableRegistrations(
 
     if (journey === "outbound") {
       const regs = await prisma.registration.findMany({
-        where: {
-          eventId: bus.eventId,
-          outboundBusId: null, // belum di-assign ke bus manapun
-          status: { in: ["CONFIRMED", "PARTIAL_CANCEL"] },
-          ...(searchFilter && { student: searchFilter }),
-        },
+        where: andWhere(
+          {
+            eventId: bus.eventId,
+            outboundBusId: null, // belum di-assign ke bus manapun
+            status: { in: ["CONFIRMED", "PARTIAL_CANCEL"] },
+            ...(searchFilter && { student: searchFilter }),
+          },
+          registrationScopeWhere(scope),
+        ),
         include: {
           student: {
             select: { id: true, name: true, nis: true, gender: true },
@@ -149,12 +177,15 @@ export async function getAssignableRegistrations(
       }));
     } else {
       const regs = await prisma.registration.findMany({
-        where: {
-          eventId: bus.eventId,
-          returnBusId: null, // belum di-assign ke bus manapun
-          status: { in: ["CONFIRMED", "PARTIAL_CANCEL"] },
-          ...(searchFilter && { student: searchFilter }),
-        },
+        where: andWhere(
+          {
+            eventId: bus.eventId,
+            returnBusId: null, // belum di-assign ke bus manapun
+            status: { in: ["CONFIRMED", "PARTIAL_CANCEL"] },
+            ...(searchFilter && { student: searchFilter }),
+          },
+          registrationScopeWhere(scope),
+        ),
         include: {
           student: {
             select: { id: true, name: true, nis: true, gender: true },
@@ -176,6 +207,9 @@ export async function getAssignableRegistrations(
       }));
     }
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error({ error, busId, journey }, "passenger.getAssignable.failed");
     throw new Error("Gagal memuat daftar peserta yang bisa di-assign");
   }
@@ -190,6 +224,28 @@ export async function assignToBus(
   journey: "outbound" | "return",
 ): Promise<void> {
   try {
+    const scope = await getRegionalAccessScope();
+    const [bus, registration] = await Promise.all([
+      prisma.bus.findFirst({
+        where: andWhere({ id: busId }, busScopeWhere(scope)),
+        select: { id: true, eventId: true },
+      }),
+      prisma.registration.findFirst({
+        where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
+        select: { id: true, eventId: true },
+      }),
+    ]);
+
+    if (!bus) {
+      throw new AccessDeniedError("Bus di luar cakupan akses");
+    }
+    if (!registration) {
+      throw new AccessDeniedError("Registrasi di luar cakupan akses");
+    }
+    if (registration.eventId !== bus.eventId) {
+      throw new Error("Registrasi tidak sesuai event bus");
+    }
+
     if (journey === "outbound") {
       await prisma.registration.update({
         where: { id: registrationId },
@@ -204,6 +260,9 @@ export async function assignToBus(
     logger.info({ registrationId, busId, journey }, "passenger.assigned");
     revalidatePath("/rombongan");
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error(
       { error, registrationId, busId, journey },
       "passenger.assign.failed",
@@ -220,6 +279,15 @@ export async function unassignFromBus(
   journey: "outbound" | "return",
 ): Promise<void> {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await prisma.registration.findFirst({
+      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new AccessDeniedError("Registrasi di luar cakupan akses");
+    }
+
     if (journey === "outbound") {
       await prisma.registration.update({
         where: { id: registrationId },
@@ -234,6 +302,9 @@ export async function unassignFromBus(
     logger.info({ registrationId, journey }, "passenger.unassigned");
     revalidatePath("/rombongan");
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      throw new Error(error.message);
+    }
     logger.error(
       { error, registrationId, journey },
       "passenger.unassign.failed",

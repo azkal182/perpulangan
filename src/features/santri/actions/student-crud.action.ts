@@ -3,6 +3,13 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
+import {
+  AccessDeniedError,
+  andWhere,
+  ensureKordaInScope,
+  getRegionalAccessScope,
+  studentScopeWhere,
+} from "@/server/access-scope";
 
 export type UpdateStudentInput = {
   id: string;
@@ -22,8 +29,9 @@ export type UpdateStudentInput = {
 
 export async function getStudentById(id: string) {
   try {
-    const student = await prisma.student.findUnique({
-      where: { id },
+    const scope = await getRegionalAccessScope();
+    const student = await prisma.student.findFirst({
+      where: andWhere({ id }, studentScopeWhere(scope)),
     });
 
     if (!student) {
@@ -39,7 +47,34 @@ export async function getStudentById(id: string) {
 
 export async function updateStudent(input: UpdateStudentInput) {
   try {
+    const scope = await getRegionalAccessScope();
     const { id, ...data } = input;
+
+    const existing = await prisma.student.findFirst({
+      where: andWhere({ id }, studentScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Santri tidak ditemukan" };
+    }
+
+    if (data.regencyId) {
+      const regency = await prisma.regency.findUnique({
+        where: { id: data.regencyId },
+        select: { kordaId: true },
+      });
+      if (!regency) {
+        return { success: false, error: "Regency tidak ditemukan" };
+      }
+      if (regency.kordaId) {
+        await ensureKordaInScope(scope, regency.kordaId);
+      } else if (scope.role !== "admin") {
+        return {
+          success: false,
+          error: "Regency belum terhubung ke korda yang dapat diakses",
+        };
+      }
+    }
 
     await prisma.student.update({
       where: { id },
@@ -53,6 +88,9 @@ export async function updateStudent(input: UpdateStudentInput) {
 
     return { success: true };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, input }, "Failed to update student");
     return { success: false, error: "Gagal memperbarui data santri" };
   }
@@ -60,6 +98,15 @@ export async function updateStudent(input: UpdateStudentInput) {
 
 export async function deleteStudent(id: string) {
   try {
+    const scope = await getRegionalAccessScope();
+    const existing = await prisma.student.findFirst({
+      where: andWhere({ id }, studentScopeWhere(scope)),
+      select: { id: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Santri tidak ditemukan" };
+    }
+
     await prisma.student.delete({
       where: { id },
     });
@@ -69,6 +116,9 @@ export async function deleteStudent(id: string) {
 
     return { success: true };
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return { success: false, error: error.message };
+    }
     logger.error({ err: error, id }, "Failed to delete student");
 
     // Check if it's a foreign key constraint error

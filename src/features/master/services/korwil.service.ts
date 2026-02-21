@@ -1,4 +1,10 @@
 import { failure, PaginatedData, Result, success } from "@/lib/result";
+import {
+  AccessDeniedError,
+  getRegionalAccessScope,
+  korwilScopeWhere,
+  requireAdmin,
+} from "@/server/access-scope";
 import type { Korwil } from "../types";
 import { korwilRepository } from "../repositories/korwil.repository";
 import type {
@@ -12,6 +18,8 @@ export const korwilService = {
     input?: KorwilListInput,
   ): Promise<Result<PaginatedData<Korwil> | Korwil[]>> {
     try {
+      const scope = await getRegionalAccessScope();
+      const where = korwilScopeWhere(scope);
       const page = input?.page;
       const limit = input?.limit ?? 10;
 
@@ -19,6 +27,7 @@ export const korwilService = {
         const { items, totalCount } = await korwilRepository.findMany({
           page,
           limit,
+          where,
         });
         return success({
           items,
@@ -31,37 +40,52 @@ export const korwilService = {
         });
       }
 
-      const { items } = await korwilRepository.findMany();
+      const { items } = await korwilRepository.findMany({ where });
       return success(items);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
+      if (e instanceof AccessDeniedError) {
+        return failure(e.message);
+      }
       return failure("Gagal mengambil data korwil");
     }
   },
 
   async getKorwilById(id: string): Promise<Result<Korwil>> {
     try {
-      const item = await korwilRepository.findById(id);
+      const scope = await getRegionalAccessScope();
+      const item = await korwilRepository.findById(id, korwilScopeWhere(scope));
       if (!item) return failure("Korwil tidak ditemukan");
       return success(item);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
+      if (e instanceof AccessDeniedError) {
+        return failure(e.message);
+      }
       return failure("Gagal mengambil data korwil");
     }
   },
 
   async createKorwil(payload: KorwilCreateInput): Promise<Result<Korwil>> {
     try {
+      const scope = await getRegionalAccessScope();
+      requireAdmin(scope);
       const created = await korwilRepository.create(payload);
       return success(created);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
+      if (e instanceof AccessDeniedError) {
+        return failure(e.message);
+      }
       return failure("Gagal membuat korwil");
     }
   },
 
   async updateKorwil(payload: KorwilUpdateInput): Promise<Result<Korwil>> {
     try {
+      const scope = await getRegionalAccessScope();
+      requireAdmin(scope);
+
       const existing = await korwilRepository.findById(payload.id);
       if (!existing) return failure("Korwil tidak ditemukan");
 
@@ -69,12 +93,18 @@ export const korwilService = {
       return success(updated);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
+      if (e instanceof AccessDeniedError) {
+        return failure(e.message);
+      }
       return failure("Gagal memperbarui korwil");
     }
   },
 
   async deleteKorwil(id: string): Promise<Result<Korwil>> {
     try {
+      const scope = await getRegionalAccessScope();
+      requireAdmin(scope);
+
       const existing = await korwilRepository.findById(id);
       if (!existing) return failure("Korwil tidak ditemukan");
 
@@ -82,6 +112,9 @@ export const korwilService = {
       return success(deleted);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
+      if (e instanceof AccessDeniedError) {
+        return failure(e.message);
+      }
       return failure("Gagal menghapus korwil");
     }
   },

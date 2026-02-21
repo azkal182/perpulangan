@@ -1,5 +1,10 @@
 import prisma from "@/lib/prisma";
 import type { Prisma, RegistrationStatus } from "@/generated/prisma/client";
+import {
+  andWhere,
+  getRegionalAccessScope,
+  registrationScopeWhere,
+} from "@/server/access-scope";
 
 export interface RegistrationFilters {
   eventId: string;
@@ -45,6 +50,7 @@ export interface RegistrationWithDetails {
 export async function getFilteredRegistrations(
   filters: RegistrationFilters,
 ): Promise<{ data: RegistrationWithDetails[]; total: number }> {
+  const scope = await getRegionalAccessScope();
   const {
     eventId,
     journeyType = "all",
@@ -117,10 +123,12 @@ export async function getFilteredRegistrations(
     };
   }
 
+  const finalWhere = andWhere(where, registrationScopeWhere(scope));
+
   // Execute query with pagination
   const [data, total] = await Promise.all([
     prisma.registration.findMany({
-      where,
+      where: finalWhere,
       include: {
         student: {
           select: {
@@ -148,7 +156,7 @@ export async function getFilteredRegistrations(
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.registration.count({ where }),
+    prisma.registration.count({ where: finalWhere }),
   ]);
 
   return { data, total };
@@ -177,8 +185,9 @@ export interface RegistrationStats {
 export async function getRegistrationStats(
   eventId: string,
 ): Promise<RegistrationStats> {
+  const scope = await getRegionalAccessScope();
   const allRegistrations = await prisma.registration.findMany({
-    where: { eventId },
+    where: andWhere({ eventId }, registrationScopeWhere(scope)),
     select: {
       outboundDate: true,
       returnDate: true,
