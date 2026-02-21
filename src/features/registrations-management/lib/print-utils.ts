@@ -173,10 +173,10 @@ export function calculateLayout(
           rows: 5,
           cardWidth,
           cardHeight,
-          marginX: 10,
-          marginY: 10,
-          gapX: 10,
-          gapY: 8,
+          marginX: 15,
+          marginY: 11,
+          gapX: 0,
+          gapY: 0,
         };
       case "F4":
         return {
@@ -184,10 +184,10 @@ export function calculateLayout(
           rows: 6,
           cardWidth,
           cardHeight,
-          marginX: 12,
-          marginY: 8,
-          gapX: 10,
-          gapY: 6,
+          marginX: 17.5,
+          marginY: 0,
+          gapX: 0,
+          gapY: 0,
         };
       case "A3":
         return {
@@ -195,10 +195,10 @@ export function calculateLayout(
           rows: 7,
           cardWidth,
           cardHeight,
-          marginX: 10,
-          marginY: 10,
-          gapX: 10,
-          gapY: 8,
+          marginX: 13.5,
+          marginY: 17.5,
+          gapX: 0,
+          gapY: 0,
         };
     }
   } else {

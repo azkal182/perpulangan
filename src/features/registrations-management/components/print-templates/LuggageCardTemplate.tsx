@@ -17,7 +17,7 @@ export function LuggageCardTemplate({
   
   return (
     <div
-      className={`${kordaColor.border} ${kordaColor.bg} flex flex-col overflow-hidden rounded-lg border-2 shadow-sm`}
+      className={`${kordaColor.border} ${kordaColor.bg} flex flex-col overflow-hidden border-2 shadow-sm`}
       style={{
         width: `${width}mm`,
         height: `${height}mm`,

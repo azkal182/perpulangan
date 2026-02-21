@@ -423,11 +423,11 @@ function renderComponentToHTML(Component: any, props: any): string {
     // We already have the logic in print-utils.ts but we can't easily import it into this helper without moving it or passing it.
     // Since this is a simple string hash, we will just use the KordaColor imported if we can, but we need to import it at the top of the file.
     return `
-      <div style="all:initial;display:flex;flex-direction:column;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;width:${props.width}mm;height:${props.height}mm;border:3px solid ${props.kordaColor.borderHex};background:${props.kordaColor.bgHex};border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1),0 2px 4px rgba(0,0,0,0.06)">
+      <div style="all:initial;display:flex;flex-direction:column;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;width:${props.width}mm;height:${props.height}mm;border:1.5px solid ${props.kordaColor.borderHex};background:${props.kordaColor.bgHex};overflow:hidden;">
         <div style="background:${props.kordaColor.headerHex};padding:10px 16px;text-align:center;box-sizing:border-box">
           <div style="font-size:11px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.5px;font-family:'Segoe UI',Arial,sans-serif">✦ KARTU BARANG ${isPutra ? "PUTRA" : "PUTRI"} ✦</div>
         </div>
-        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;font-size:9.5px;box-sizing:border-box;background:#ffffff;margin:3px;border-radius:8px">
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;font-size:9.5px;box-sizing:border-box;background:#ffffff;margin:3px;">
           <div style="font-family:'Segoe UI',Arial,sans-serif">
             <div style="font-size:8px;font-weight:600;color:${props.kordaColor.textHex};text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Nama</div>
             <div style="font-weight:600;color:#1f2937;font-size:10px;line-height:1.3;font-family:'Segoe UI',Arial,sans-serif">${props.data.studentName}</div>
