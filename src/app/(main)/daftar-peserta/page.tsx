@@ -98,11 +98,7 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
                 <div className="text-lg font-semibold">Daftar Peserta Terdaftar</div>
                 <div className="text-sm text-muted-foreground">{activeEvent.name}</div>
               </div>
-              <PrintButton
-                eventId={activeEvent.id}
-                kordas={kordas}
-                dropPoints={dropPoints}
-              />
+              <PrintButton />
             </div>
           </div>
         </div>

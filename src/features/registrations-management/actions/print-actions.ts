@@ -6,9 +6,10 @@ import type { Prisma } from "@/generated/prisma/client";
 
 export interface GetPrintDataParams {
   eventId: string;
-  gender?: "L" | "P";
+  gender?: "Laki-laki" | "Perempuan";
   kordaId?: string;
   dropPointId?: string;
+  studentName?: string;
   journeyType?: "outbound" | "return" | "both";
 }
 
@@ -16,14 +17,7 @@ export async function getPrintDataAction(
   params: GetPrintDataParams,
 ): Promise<{ success: boolean; data?: PrintDataItem[]; error?: string }> {
   try {
-    const { eventId, gender, kordaId, dropPointId } = params;
-
-    console.log("🔍 Print action called with:", {
-      eventId,
-      gender,
-      kordaId,
-      dropPointId,
-    });
+    const { eventId, gender, kordaId, dropPointId, studentName } = params;
 
     // Build where clause - simplified, just need drop points
     const where: Prisma.RegistrationWhereInput = {
@@ -35,9 +29,18 @@ export async function getPrintDataAction(
       ],
     };
 
-    // Gender filter on student
+    const studentFilter: Prisma.StudentWhereInput = {};
     if (gender) {
-      where.student = { gender };
+      studentFilter.gender = gender;
+    }
+    if (studentName) {
+      studentFilter.name = {
+        contains: studentName,
+        mode: "insensitive",
+      };
+    }
+    if (Object.keys(studentFilter).length > 0) {
+      where.student = studentFilter;
     }
 
     // Korda filter (either outbound or return)
@@ -111,8 +114,6 @@ export async function getPrintDataAction(
       },
       orderBy: [{ student: { name: "asc" } }],
     });
-
-    console.log(`📊 Found ${registrations.length} registrations`);
 
     // Transform data and get bus labels
     const printData: PrintDataItem[] = await Promise.all(

@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, FileDown, Eye } from "lucide-react";
+import { Loader2, FileDown, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { getPrintDataAction } from "../actions/print-actions";
 import type {
   PaperSize,
@@ -27,6 +27,7 @@ import type {
   PrintDataItem,
 } from "../lib/print-utils";
 import { calculateLayout, PAPER_SIZES, getKordaColor } from "../lib/print-utils";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 
@@ -38,6 +39,15 @@ interface PrintDialogProps {
   dropPoints: Array<{ id: string; name: string }>;
 }
 
+interface PrintWorkspaceProps {
+  eventId: string;
+  kordas: Array<{ id: string; name: string }>;
+  dropPoints: Array<{ id: string; name: string }>;
+  onClose?: () => void;
+  showCloseButton?: boolean;
+  className?: string;
+}
+
 export function PrintDialog({
   open,
   onOpenChange,
@@ -45,44 +55,109 @@ export function PrintDialog({
   kordas,
   dropPoints,
 }: PrintDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Cetak Kartu & Tiket</DialogTitle>
+          <DialogDescription>
+            Pilih jenis dokumen, filter, dan ukuran kertas untuk print
+          </DialogDescription>
+        </DialogHeader>
+        <PrintWorkspace
+          eventId={eventId}
+          kordas={kordas}
+          dropPoints={dropPoints}
+          onClose={() => onOpenChange(false)}
+          showCloseButton
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PrintWorkspace({
+  eventId,
+  kordas,
+  dropPoints,
+  onClose,
+  showCloseButton = false,
+  className,
+}: PrintWorkspaceProps) {
   const [printType, setPrintType] = useState<PrintType>("luggage_card");
   const [paperSize, setPaperSize] = useState<PaperSize>("A4");
-  const [genderFilter, setGenderFilter] = useState<"all" | "L" | "P">("all");
+  const [genderFilter, setGenderFilter] = useState<
+    "all" | "Laki-laki" | "Perempuan"
+  >("all");
+  const [nameFilter, setNameFilter] = useState("");
   const [kordaFilter, setKordaFilter] = useState<string>("all");
   const [dropPointFilter, setDropPointFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<PrintDataItem[] | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
+  const [previewViewportSize, setPreviewViewportSize] = useState({
+    width: 0,
+    height: 0,
+  });
+  const resetPreview = () => {
+    setShowPreview(false);
+    setPreviewPageIndex(0);
+  };
+
+  useEffect(() => {
+    const target = previewViewportRef.current;
+    if (!target) {
+      return;
+    }
+
+    const updateSize = () => {
+      setPreviewViewportSize({
+        width: target.clientWidth,
+        height: target.clientHeight,
+      });
+    };
+
+    updateSize();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [showPreview]);
 
   const handlePreview = async () => {
     setLoading(true);
-    console.log("🔍 Preview clicked, fetching data...");
     try {
       const result = await getPrintDataAction({
         eventId,
         gender: genderFilter === "all" ? undefined : genderFilter,
+        studentName: nameFilter.trim() || undefined,
         kordaId: kordaFilter === "all" ? undefined : kordaFilter,
         dropPointId: dropPointFilter === "all" ? undefined : dropPointFilter,
       });
 
-      console.log("📦 Server response:", result);
-
       if (result.success && result.data) {
-        console.log(`✅ Got ${result.data.length} items`);
         if (result.data.length === 0) {
           toast.error("Tidak ada data ditemukan dengan filter yang dipilih");
-          setLoading(false);
+          setShowPreview(false);
+          setPreviewPageIndex(0);
           return;
         }
         setPreviewData(result.data);
         setShowPreview(true);
+        setPreviewPageIndex(0);
         toast.success(`Preview siap: ${result.data.length} item`);
       } else {
-        console.error("❌ Error from server:", result.error);
         toast.error(result.error || "Gagal memuat data");
       }
     } catch (error) {
-      console.error("💥 Exception:", error);
+      console.error(error);
       toast.error("Terjadi kesalahan saat memuat data");
     } finally {
       setLoading(false);
@@ -140,7 +215,7 @@ export function PrintDialog({
 
       toast.dismiss();
       toast.success(`PDF berhasil dibuat (${previewData.length} item)`);
-      onOpenChange(false);
+      onClose?.();
     } catch (error) {
       toast.dismiss();
       toast.error("Gagal membuat PDF");
@@ -150,154 +225,276 @@ export function PrintDialog({
     }
   };
 
+  const layout = calculateLayout(paperSize, printType);
+  const paper = PAPER_SIZES[paperSize];
+  const cardsPerPage = layout.columns * layout.rows;
+  const previewPages =
+    previewData && showPreview ? buildPagesByKorda(previewData, cardsPerPage) : [];
+  const totalPreviewPages = previewPages.length;
+  const currentPreviewPage =
+    totalPreviewPages > 0
+      ? Math.min(previewPageIndex, totalPreviewPages - 1)
+      : 0;
+  const currentPreviewItems = previewPages[currentPreviewPage] ?? [];
+  const mmToPx = (mm: number) => mm * 3.7795275591;
+  const paperWidthPx = mmToPx(paper.width);
+  const paperHeightPx = mmToPx(paper.height);
+  const availableWidthPx = Math.max(0, previewViewportSize.width - 24);
+  const availableHeightPx = Math.max(0, previewViewportSize.height - 24);
+  const fallbackScale = paperSize === "A3" ? 0.34 : 0.4;
+  const fitScale =
+    availableWidthPx > 0 && availableHeightPx > 0
+      ? Math.min(
+          availableWidthPx / paperWidthPx,
+          availableHeightPx / paperHeightPx,
+        )
+      : fallbackScale;
+  const previewScale = Math.min(1, Math.max(0.16, fitScale));
+  const scaledPaperWidthPx = paperWidthPx * previewScale;
+  const scaledPaperHeightPx = paperHeightPx * previewScale;
+  const previewCardWidthPx = mmToPx(layout.cardWidth) * previewScale;
+  const previewCardHeightPx = mmToPx(layout.cardHeight) * previewScale;
+  const previewMarginXPx = mmToPx(layout.marginX) * previewScale;
+  const previewMarginYPx = mmToPx(layout.marginY) * previewScale;
+  const previewGapXPx = mmToPx(layout.gapX) * previewScale;
+  const previewGapYPx = mmToPx(layout.gapY) * previewScale;
+
+  const handlePreviewPageChange = (direction: -1 | 1) => {
+    setPreviewPageIndex((prev) => {
+      if (totalPreviewPages <= 0) {
+        return 0;
+      }
+      const next = prev + direction;
+      return Math.max(0, Math.min(totalPreviewPages - 1, next));
+    });
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Cetak Kartu & Tiket</DialogTitle>
-          <DialogDescription>
-            Pilih jenis dokumen, filter, dan ukuran kertas untuk print
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 py-4">
-          {/* Print Type */}
-          <div className="space-y-3">
-            <Label>Jenis Dokumen</Label>
-            <RadioGroup
-              value={printType}
-              onValueChange={(value) => {
-                setPrintType(value as PrintType);
-                setShowPreview(false);
-              }}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="luggage_card" id="luggage_card" />
-                <Label htmlFor="luggage_card" className="font-normal">
-                  Kartu Barang (Gender-Based Colors)
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="ticket" id="ticket" />
-                <Label htmlFor="ticket" className="font-normal">
-                  Tiket Perjalanan (Gradient Design)
-                </Label>
-              </div>
-            </RadioGroup>
+    <div className={cn("space-y-6 py-4", className)}>
+      {/* Print Type */}
+      <div className="space-y-3">
+        <Label>Jenis Dokumen</Label>
+        <RadioGroup
+          value={printType}
+          onValueChange={(value) => {
+            setPrintType(value as PrintType);
+            resetPreview();
+          }}
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="luggage_card" id="luggage_card" />
+            <Label htmlFor="luggage_card" className="font-normal">
+              Kartu Barang
+            </Label>
           </div>
-
-          {/* Filters */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Filter Gender</Label>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <Select value={genderFilter} onValueChange={(v: any) => { setGenderFilter(v); setShowPreview(false); }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua</SelectItem>
-                  <SelectItem value="L">Putra</SelectItem>
-                  <SelectItem value="P">Putri</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Filter Korda</Label>
-              <Select value={kordaFilter} onValueChange={(v) => { setKordaFilter(v); setShowPreview(false); }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua</SelectItem>
-                  {kordas.map((k) => (
-                    <SelectItem key={k.id} value={k.id}>
-                      {k.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Filter Drop Point</Label>
-              <Select value={dropPointFilter} onValueChange={(v) => { setDropPointFilter(v); setShowPreview(false); }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua</SelectItem>
-                  {dropPoints.map((dp) => (
-                    <SelectItem key={dp.id} value={dp.id}>
-                      {dp.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="ticket" id="ticket" />
+            <Label htmlFor="ticket" className="font-normal">
+              Tiket Perjalanan
+            </Label>
           </div>
+        </RadioGroup>
+      </div>
 
-          {/* Paper Size */}
-          <div className="space-y-2">
-            <Label>Ukuran Kertas</Label>
-            <Select value={paperSize} onValueChange={(v: PaperSize) => { setPaperSize(v); setShowPreview(false); }}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="A4">A4 (210 x 297 mm)</SelectItem>
-                <SelectItem value="F4">F4 (215 x 330 mm)</SelectItem>
-                <SelectItem value="A3">A3 (297 x 420 mm)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Preview Info */}
-          {showPreview && previewData && (
-            <div className="rounded-lg bg-green-50 p-4">
-              <p className="text-sm font-medium text-green-800">
-                ✅ Preview siap: {previewData.length} item akan dicetak
-              </p>
-              <p className="mt-1 text-xs text-green-600">
-                Layout: {calculateLayout(paperSize, printType).columns} kolom x{" "}
-                {calculateLayout(paperSize, printType).rows} baris per halaman
-              </p>
-            </div>
-          )}
+      {/* Filters */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="space-y-2">
+          <Label htmlFor="student-name-filter">Filter Nama</Label>
+          <Input
+            id="student-name-filter"
+            value={nameFilter}
+            onChange={(event) => {
+              setNameFilter(event.target.value);
+              resetPreview();
+            }}
+            placeholder="Cari nama peserta"
+          />
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <div className="space-y-2">
+          <Label>Filter Gender</Label>
+          <Select
+            value={genderFilter}
+            onValueChange={(value: "all" | "Laki-laki" | "Perempuan") => {
+              setGenderFilter(value);
+              resetPreview();
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua</SelectItem>
+              <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+              <SelectItem value="Perempuan">Perempuan</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Filter Korda</Label>
+          <Select value={kordaFilter} onValueChange={(v) => { setKordaFilter(v); resetPreview(); }}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua</SelectItem>
+              {kordas.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  {k.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Filter Drop Point</Label>
+          <Select value={dropPointFilter} onValueChange={(v) => { setDropPointFilter(v); resetPreview(); }}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua</SelectItem>
+              {dropPoints.map((dp) => (
+                <SelectItem key={dp.id} value={dp.id}>
+                  {dp.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Paper Size */}
+      <div className="space-y-2">
+        <Label>Ukuran Kertas</Label>
+        <Select value={paperSize} onValueChange={(v: PaperSize) => { setPaperSize(v); resetPreview(); }}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="A4">A4 (210 x 297 mm)</SelectItem>
+            <SelectItem value="F4">F4 (215 x 330 mm)</SelectItem>
+            <SelectItem value="A3">A3 (297 x 420 mm)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Preview */}
+      {showPreview && previewData && (
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">
+                Preview siap: {previewData.length} item
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Layout: {layout.columns} kolom x {layout.rows} baris per halaman
+              </p>
+            </div>
+            {totalPreviewPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handlePreviewPageChange(-1)}
+                  disabled={currentPreviewPage <= 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="text-xs font-medium text-muted-foreground">
+                  Halaman {currentPreviewPage + 1} / {totalPreviewPages}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handlePreviewPageChange(1)}
+                  disabled={currentPreviewPage >= totalPreviewPages - 1}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div
+            ref={previewViewportRef}
+            className="relative h-[70vh] min-h-[320px] max-h-[860px] overflow-auto rounded-md border bg-muted/40 p-3"
+          >
+            <div
+              className="relative mx-auto border border-slate-200 bg-white shadow-sm"
+              style={{
+                width: scaledPaperWidthPx,
+                height: scaledPaperHeightPx,
+              }}
+            >
+              {currentPreviewItems.map((item, index) => {
+                const row = Math.floor(index / layout.columns);
+                const col = index % layout.columns;
+                const left =
+                  previewMarginXPx + col * (previewCardWidthPx + previewGapXPx);
+                const top =
+                  previewMarginYPx + row * (previewCardHeightPx + previewGapYPx);
+
+                return (
+                  <div
+                    key={`${item.id}-${index}`}
+                    className="absolute overflow-hidden"
+                    style={{
+                      left,
+                      top,
+                      width: previewCardWidthPx,
+                      height: previewCardHeightPx,
+                    }}
+                  >
+                    {printType === "luggage_card" ? (
+                      <PreviewLuggageCard item={item} />
+                    ) : (
+                      <PreviewTicketCard item={item} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2 pt-2">
+        {showCloseButton && (
+          <Button variant="outline" onClick={() => onClose?.()}>
             Batal
           </Button>
-          <Button
-            variant="secondary"
-            onClick={handlePreview}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                <Eye className="mr-2 h-4 w-4" />
-                Preview
-              </>
-            )}
-          </Button>
-          <Button
-            onClick={handleGeneratePDF}
-            disabled={!showPreview || loading}
-          >
-            <FileDown className="mr-2 h-4 w-4" />
-            Generate PDF
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        )}
+        <Button
+          variant="secondary"
+          onClick={handlePreview}
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              <Eye className="mr-2 h-4 w-4" />
+              Preview
+            </>
+          )}
+        </Button>
+        <Button
+          onClick={handleGeneratePDF}
+          disabled={!showPreview || loading}
+        >
+          <FileDown className="mr-2 h-4 w-4" />
+          Generate PDF
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -442,6 +639,139 @@ function buildPagesByKorda(
   });
 
   return pages;
+}
+
+function truncatePreviewText(
+  value: string | null | undefined,
+  maxChars: number,
+): string {
+  const text = normalizeText(value);
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(1, maxChars - 3)).trimEnd()}...`;
+}
+
+function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
+  const palette = getHexPalette(item.kordaName);
+  const gender = normalizeText(item.studentGender).toUpperCase();
+  const genderLabel =
+    gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN"
+      ? "PUTRI"
+      : "PUTRA";
+  const kordaText = truncatePreviewText(item.kordaName, 16).toUpperCase();
+  const studentName = truncatePreviewText(item.studentName, 30);
+  const leftKorda = truncatePreviewText(item.kordaName, 18);
+  const studentNis = truncatePreviewText(item.studentNis, 20);
+  const dropPoint = truncatePreviewText(item.dropPointName, 20);
+  const busLabel = truncatePreviewText(item.busLabel, 20);
+  const busBadgeWidth = Math.max(
+    48,
+    Math.min(420, busLabel.length * 15 + 24),
+  );
+
+  return (
+    <svg
+      viewBox="0 0 980 530"
+      className="h-full w-full"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label={`Preview kartu barang ${studentName}`}
+    >
+      <rect x="1" y="1" width="978" height="528" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
+      <rect x="1" y="1" width="978" height="118" fill={palette.header} />
+      <rect x="1" y="119" width="978" height="7" fill={palette.border} />
+      <rect x="1" y="126" width="978" height="93" fill={palette.bg} />
+      <line x1="1" y1="219" x2="979" y2="219" stroke="#d1d5db" strokeWidth="1.4" />
+      <line x1="490" y1="219" x2="490" y2="529" stroke="#e5e7eb" strokeWidth="1.4" />
+
+      <text x="490" y="43" fill="#ffffff" textAnchor="middle" fontSize="34" fontWeight="700" letterSpacing="4">
+        {`KARTU BARANG ${genderLabel}`}
+      </text>
+      <text x="490" y="96" fill="#ffffff" textAnchor="middle" fontSize="61" fontWeight="900">
+        {kordaText}
+      </text>
+
+      <text x="490" y="165" fill={palette.text} textAnchor="middle" fontSize="31" fontWeight="700" letterSpacing="4">
+        NAMA PESERTA
+      </text>
+      <text x="490" y="206" fill="#111827" textAnchor="middle" fontSize="49" fontWeight="700">
+        {studentName}
+      </text>
+
+      <text x="28" y="255" fill="#6b7280" fontSize="31" fontWeight="700">KORDA</text>
+      <text x="28" y="297" fill={palette.text} fontSize="40" fontWeight="700">{leftKorda}</text>
+      <text x="28" y="412" fill="#6b7280" fontSize="31" fontWeight="700">NOMOR INDUK</text>
+      <text x="28" y="454" fill="#374151" fontSize="38" fontWeight="500">{studentNis}</text>
+
+      <text x="518" y="255" fill="#6b7280" fontSize="31" fontWeight="700">DROP POINT</text>
+      <text x="518" y="297" fill="#1f2937" fontSize="38" fontWeight="700">{dropPoint}</text>
+      <text x="518" y="412" fill="#6b7280" fontSize="31" fontWeight="700">BUS</text>
+      <rect x="518" y="420" width={busBadgeWidth} height="44" fill={palette.header} />
+      <text
+        x={518 + busBadgeWidth / 2}
+        y="451"
+        fill="#ffffff"
+        textAnchor="middle"
+        fontSize="31"
+        fontWeight="700"
+      >
+        {busLabel}
+      </text>
+    </svg>
+  );
+}
+
+function PreviewTicketCard({ item }: { item: PrintDataItem }) {
+  const palette = getHexPalette(item.kordaName);
+  const studentName = truncatePreviewText(item.studentName, 28);
+  const studentNis = truncatePreviewText(item.studentNis, 18);
+  const korda = truncatePreviewText(item.kordaName, 18);
+  const busLabel = truncatePreviewText(item.busLabel, 16);
+  const busBadgeWidth = Math.max(
+    40,
+    Math.min(430, busLabel.length * 13 + 24),
+  );
+
+  return (
+    <svg
+      viewBox="0 0 980 200"
+      className="h-full w-full"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label={`Preview tiket perjalanan ${studentName}`}
+    >
+      <rect x="1" y="1" width="978" height="198" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
+      <rect x="1" y="1" width="978" height="56" fill={palette.header} />
+      <rect x="1" y="57" width="978" height="142" fill={palette.bg} />
+      <line x1="1" y1="57" x2="979" y2="57" stroke={palette.border} strokeWidth="1.4" />
+      <line x1="490" y1="57" x2="490" y2="199" stroke="#d1d5db" strokeWidth="1.4" />
+
+      <text x="490" y="40" fill="#ffffff" textAnchor="middle" fontSize="40" fontWeight="700">
+        TIKET PERJALANAN
+      </text>
+
+      <text x="20" y="85" fill="#6b7280" fontSize="23" fontWeight="700">NAMA PESERTA</text>
+      <text x="20" y="116" fill="#111827" fontSize="34" fontWeight="700">{studentName}</text>
+      <text x="20" y="154" fill="#6b7280" fontSize="23" fontWeight="700">NOMOR INDUK</text>
+      <text x="20" y="185" fill="#374151" fontSize="32" fontWeight="500">{studentNis}</text>
+
+      <text x="506" y="85" fill="#6b7280" fontSize="23" fontWeight="700">KORDA</text>
+      <text x="506" y="116" fill="#1f2937" fontSize="34" fontWeight="700">{korda}</text>
+      <text x="506" y="154" fill="#6b7280" fontSize="23" fontWeight="700">BUS</text>
+      <rect x="506" y="158" width={busBadgeWidth} height="31" fill={palette.header} />
+      <text
+        x={506 + busBadgeWidth / 2}
+        y="181"
+        fill="#ffffff"
+        textAnchor="middle"
+        fontSize="23"
+        fontWeight="700"
+      >
+        {busLabel}
+      </text>
+    </svg>
+  );
 }
 
 function resolveTailwindHex(cls: string, fallback: string): string {

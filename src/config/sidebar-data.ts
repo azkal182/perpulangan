@@ -12,6 +12,7 @@ import {
   Home,
   MapPin,
   Navigation,
+  Printer,
   Settings,
   User2,
   Users,
@@ -84,6 +85,11 @@ export const managements = [
     title: "Daftar Peserta",
     url: "/daftar-peserta",
     icon: Users,
+  },
+  {
+    title: "Cetak Kartu & Tiket",
+    url: "/cetak-dokumen",
+    icon: Printer,
   },
   {
     title: "Rombongan",
