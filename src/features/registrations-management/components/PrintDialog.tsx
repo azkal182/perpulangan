@@ -29,7 +29,6 @@ import type {
 import { calculateLayout, PAPER_SIZES, getKordaColor } from "../lib/print-utils";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 interface PrintDialogProps {
   open: boolean;
@@ -120,72 +119,19 @@ export function PrintDialog({
         }
 
         const pageData = pageChunks[pageIndex];
+        pageData.forEach((item, index) => {
+          const row = Math.floor(index / layout.columns);
+          const col = index % layout.columns;
+          const x = layout.marginX + col * (layout.cardWidth + layout.gapX);
+          const y = layout.marginY + row * (layout.cardHeight + layout.gapY);
 
-        if (printType === "luggage_card") {
-          pageData.forEach((item, index) => {
-            const row = Math.floor(index / layout.columns);
-            const col = index % layout.columns;
-            const x = layout.marginX + col * (layout.cardWidth + layout.gapX);
-            const y = layout.marginY + row * (layout.cardHeight + layout.gapY);
+          if (printType === "luggage_card") {
             drawLuggageCardToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
-          });
-          continue;
-        }
+            return;
+          }
 
-        // Ticket path still uses html2canvas-based rendering
-        const container = document.createElement("div");
-        container.style.cssText = `
-          position: absolute;
-          left: -9999px;
-          top: 0;
-          width: ${paper.width}mm;
-          height: ${paper.height}mm;
-          background: white;
-          display: grid;
-          grid-template-columns: repeat(${layout.columns}, ${layout.cardWidth}mm);
-          grid-template-rows: repeat(${layout.rows}, ${layout.cardHeight}mm);
-          gap: ${layout.gapY}mm ${layout.gapX}mm;
-          padding: ${layout.marginY}mm ${layout.marginX}mm;
-          align-content: start;
-          justify-content: start;
-          overflow: hidden;
-          font-family: Arial, sans-serif;
-          box-sizing: border-box;
-        `;
-        document.body.appendChild(container);
-
-        pageData.forEach((item) => {
-          const cardWrapper = document.createElement("div");
-          cardWrapper.style.cssText = `
-            width: ${layout.cardWidth}mm;
-            height: ${layout.cardHeight}mm;
-            box-sizing: border-box;
-            overflow: hidden;
-            display: block;
-          `;
-          cardWrapper.innerHTML = renderTicketToHTML({
-            data: item,
-            width: layout.cardWidth,
-            height: layout.cardHeight,
-          });
-          container.appendChild(cardWrapper);
+          drawTicketToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
         });
-
-        const canvas = await html2canvas(container, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-          onclone: (clonedDoc) => {
-            clonedDoc
-              .querySelectorAll('link[rel="stylesheet"], style')
-              .forEach((el) => el.remove());
-          },
-        });
-
-        const imgData = canvas.toDataURL("image/png");
-        pdf.addImage(imgData, "PNG", 0, 0, paper.width, paper.height);
-        document.body.removeChild(container);
       }
 
       // Download PDF
@@ -358,12 +304,6 @@ export function PrintDialog({
 type PdfRgb = [number, number, number];
 type PdfFontStyle = "normal" | "bold" | "italic" | "bolditalic";
 
-interface TicketHTMLProps {
-  data: PrintDataItem;
-  width: number;
-  height: number;
-}
-
 interface FittedTextResult {
   text: string;
   fontSize: number;
@@ -379,6 +319,13 @@ interface PdfKordaPalette {
   bg: PdfRgb;
   border: PdfRgb;
   text: PdfRgb;
+}
+
+interface HexKordaPalette {
+  header: string;
+  bg: string;
+  border: string;
+  text: string;
 }
 
 const TAILWIND_COLOR_HEX: Record<string, string> = {
@@ -506,6 +453,18 @@ function resolveTailwindHex(cls: string, fallback: string): string {
   return fallback;
 }
 
+function getHexPalette(kordaName: string): HexKordaPalette {
+  const kordaColor = getKordaColor(kordaName);
+  const gradientStartMatch = kordaColor.headerBg.match(/from-[a-z]+-\d+/);
+  const headerSource = gradientStartMatch?.[0] ?? kordaColor.headerBg;
+  const header = resolveTailwindHex(headerSource, "#3b82f6");
+  const bg = resolveTailwindHex(kordaColor.bg, "#eff6ff");
+  const border = resolveTailwindHex(kordaColor.border, "#3b82f6");
+  const text = resolveTailwindHex(kordaColor.text, "#1e40af");
+
+  return { header, bg, border, text };
+}
+
 function hexToRgb(hex: string): PdfRgb {
   const cleaned = hex.replace("#", "");
   const normalized =
@@ -523,19 +482,13 @@ function hexToRgb(hex: string): PdfRgb {
 }
 
 function getPdfPalette(kordaName: string): PdfKordaPalette {
-  const kordaColor = getKordaColor(kordaName);
-  const gradientStartMatch = kordaColor.headerBg.match(/from-[a-z]+-\d+/);
-  const headerSource = gradientStartMatch?.[0] ?? kordaColor.headerBg;
-  const headerHex = resolveTailwindHex(headerSource, "#3b82f6");
-  const bgHex = resolveTailwindHex(kordaColor.bg, "#eff6ff");
-  const borderHex = resolveTailwindHex(kordaColor.border, "#3b82f6");
-  const textHex = resolveTailwindHex(kordaColor.text, "#1e40af");
+  const hexPalette = getHexPalette(kordaName);
 
   return {
-    header: hexToRgb(headerHex),
-    bg: hexToRgb(bgHex),
-    border: hexToRgb(borderHex),
-    text: hexToRgb(textHex),
+    header: hexToRgb(hexPalette.header),
+    bg: hexToRgb(hexPalette.bg),
+    border: hexToRgb(hexPalette.border),
+    text: hexToRgb(hexPalette.text),
   };
 }
 
@@ -821,31 +774,138 @@ function drawLuggageCardToPdf(
   });
 }
 
-function renderTicketToHTML(props: TicketHTMLProps): string {
-  return `
-      <div style="all:initial;display:flex;flex-direction:column;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;width:${props.width}mm;height:${props.height}mm;border:3px solid #14b8a6;background:#f0fdfa;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1),0 2px 4px rgba(0,0,0,0.06)">
-        <div style="background:#0d9488;padding:12px 16px;text-align:center;box-sizing:border-box;border-bottom:3px solid #14b8a6">
-          <div style="font-size:12px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.8px;font-family:'Segoe UI',Arial,sans-serif">🎫 TIKET PERJALANAN 🎫</div>
-        </div>
-        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px;font-size:10px;box-sizing:border-box;background:#ffffff;margin:4px;border-radius:8px">
-          <div style="font-family:'Segoe UI',Arial,sans-serif">
-            <div style="font-size:8px;font-weight:600;color:#0d9488;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Nama Peserta</div>
-            <div style="font-weight:700;color:#1f2937;font-size:11px;line-height:1.3;font-family:'Segoe UI',Arial,sans-serif">${props.data.studentName}</div>
-            <div style="font-size:8px;font-weight:600;color:#0d9488;text-transform:uppercase;letter-spacing:0.3px;margin-top:10px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Nomor Induk</div>
-            <div style="font-weight:600;color:#374151;font-family:'Segoe UI',Arial,sans-serif">${props.data.studentNis}</div>
-            <div style="font-size:8px;font-weight:600;color:#0d9488;text-transform:uppercase;letter-spacing:0.3px;margin-top:10px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Koordinator Daerah</div>
-            <div style="font-weight:600;color:#374151;font-family:'Segoe UI',Arial,sans-serif">${props.data.kordaName}</div>
-          </div>
-          <div style="font-family:'Segoe UI',Arial,sans-serif">
-            <div style="font-size:8px;font-weight:600;color:#0d9488;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Titik Pemberangkatan</div>
-            <div style="font-weight:600;color:#374151;font-family:'Segoe UI',Arial,sans-serif">${props.data.dropPointName}</div>
-            <div style="font-size:8px;font-weight:600;color:#0d9488;text-transform:uppercase;letter-spacing:0.3px;margin-top:10px;margin-bottom:2px;font-family:'Segoe UI',Arial,sans-serif">Nomor Bus</div>
-            <div style="font-weight:700;color:#1f2937;font-size:11px;background:#d1fae5;padding:4px 8px;border-radius:4px;display:inline-block;font-family:'Segoe UI',Arial,sans-serif">${props.data.busLabel || "-"}</div>
-          </div>
-        </div>
-        <div style="border-top:2px dashed #5eead4;padding:10px;text-align:center;box-sizing:border-box;background:#ecfdf5;margin:4px 4px 4px 4px;border-radius:0 0 6px 6px">
-          <p style="all:initial;display:block;text-align:center;font-size:8.5px;font-weight:600;font-style:italic;color:#0f766e;font-family:'Segoe UI',Arial,sans-serif;margin:0;letter-spacing:0.2px">✓ Simpan tiket ini dengan baik selama perjalanan</p>
-        </div>
-      </div>
-    `;
+function drawTicketToPdf(
+  pdf: jsPDF,
+  item: PrintDataItem,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const palette = getPdfPalette(item.kordaName);
+  const labelColor: PdfRgb = [107, 114, 128];
+  const headerHeight = 5.6;
+  const bodyTop = y + headerHeight;
+  const bodyHeight = height - headerHeight;
+  const splitX = x + width / 2;
+  const leftColumnX = x + 1.7;
+  const rightColumnX = splitX + 1.5;
+  const columnWidth = width / 2 - 3.2;
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.rect(x, y, width, height, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.25);
+  pdf.rect(x, y, width, height, "S");
+
+  pdf.setFillColor(...palette.header);
+  pdf.rect(x, y, width, headerHeight, "F");
+
+  const headerTitle = fitSingleLineText(
+    pdf,
+    "TIKET PERJALANAN",
+    width - 6,
+    7.4,
+    6,
+    "bold",
+  );
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(headerTitle.fontSize);
+  pdf.text(headerTitle.text, x + width / 2, y + 3.9, { align: "center" });
+
+  pdf.setFillColor(...palette.bg);
+  pdf.rect(x, bodyTop, width, bodyHeight, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.15);
+  pdf.line(x, bodyTop, x + width, bodyTop);
+
+  pdf.setDrawColor(209, 213, 219);
+  pdf.line(splitX, bodyTop, splitX, y + height);
+
+  const topLabelY = bodyTop + 2.1;
+  const topValueY = bodyTop + 4.6;
+  const bottomLabelY = bodyTop + 8.8;
+  const bottomValueY = bodyTop + 11.3;
+
+  pdf.setTextColor(...labelColor);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.8);
+  pdf.text("NAMA PESERTA", leftColumnX, topLabelY);
+
+  const studentName = fitSingleLineText(
+    pdf,
+    item.studentName,
+    columnWidth,
+    7.6,
+    6.1,
+    "bold",
+  );
+  pdf.setTextColor(17, 24, 39);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(studentName.fontSize);
+  pdf.text(studentName.text, leftColumnX, topValueY);
+
+  pdf.setTextColor(...labelColor);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.8);
+  pdf.text("NOMOR INDUK", leftColumnX, bottomLabelY);
+
+  const studentNis = fitSingleLineText(
+    pdf,
+    item.studentNis,
+    columnWidth,
+    7.1,
+    5.9,
+    "normal",
+  );
+  pdf.setTextColor(55, 65, 81);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(studentNis.fontSize);
+  pdf.text(studentNis.text, leftColumnX, bottomValueY);
+
+  pdf.setTextColor(...labelColor);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.8);
+  pdf.text("KORDA", rightColumnX, topLabelY);
+
+  const korda = fitSingleLineText(
+    pdf,
+    item.kordaName,
+    columnWidth,
+    7.1,
+    5.9,
+    "bold",
+  );
+  pdf.setTextColor(31, 41, 55);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(korda.fontSize);
+  pdf.text(korda.text, rightColumnX, topValueY);
+
+  pdf.setTextColor(...labelColor);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.8);
+  pdf.text("BUS", rightColumnX, bottomLabelY);
+
+  const busValue = fitSingleLineText(
+    pdf,
+    item.busLabel,
+    columnWidth - 2,
+    7,
+    5.9,
+    "bold",
+  );
+  const badgeHeight = 3;
+  const badgeWidth = Math.min(columnWidth, pdf.getTextWidth(busValue.text) + 1.5);
+  const badgeY = bodyTop + 9.2;
+
+  pdf.setFillColor(...palette.header);
+  pdf.rect(rightColumnX, badgeY, badgeWidth, badgeHeight, "F");
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(busValue.fontSize);
+  pdf.text(busValue.text, rightColumnX + badgeWidth / 2, badgeY + 2.05, {
+    align: "center",
+  });
 }

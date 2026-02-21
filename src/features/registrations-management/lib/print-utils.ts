@@ -202,43 +202,43 @@ export function calculateLayout(
         };
     }
   } else {
-    // Ticket: landscape ~120mm x 80mm
-    const cardWidth = 120;
-    const cardHeight = 80;
+    // Ticket: low-height landscape format to match content density
+    const cardWidth = 98;
+    const cardHeight = 20;
 
     switch (paperSize) {
       case "A4":
         return {
-          columns: 1,
-          rows: 3,
+          columns: 2,
+          rows: 12,
           cardWidth,
           cardHeight,
-          marginX: 45,
-          marginY: 20,
+          marginX: 7,
+          marginY: 6,
           gapX: 0,
-          gapY: 15,
+          gapY: 0,
         };
       case "F4":
         return {
-          columns: 1,
-          rows: 4,
+          columns: 2,
+          rows: 15,
           cardWidth,
           cardHeight,
-          marginX: 47,
-          marginY: 15,
+          marginX: 9.5,
+          marginY: 6,
           gapX: 0,
-          gapY: 10,
+          gapY: 0,
         };
       case "A3":
         return {
-          columns: 2,
-          rows: 5,
+          columns: 3,
+          rows: 20,
           cardWidth,
           cardHeight,
-          marginX: 28,
-          marginY: 10,
-          gapX: 10,
-          gapY: 8,
+          marginX: 1.5,
+          marginY: 4,
+          gapX: 0,
+          gapY: 0,
         };
     }
   }
