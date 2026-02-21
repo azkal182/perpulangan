@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Bus, Loader2 } from "lucide-react";
+import { Plus, Bus, Loader2, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -18,6 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { getBuses, deleteBus, toggleBusActive, type BusWithDetails } from "../actions/bus.actions";
 import { getAllEvents, getAllKordas, getAllKorwils } from "../actions/helpers.actions";
@@ -201,7 +207,7 @@ export default function RombonganPage() {
           <TableBody>
             {buses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Belum ada bus. Klik &ldquo;Tambah Bus&rdquo; untuk menambahkan.
                 </TableCell>
               </TableRow>
@@ -245,7 +251,7 @@ export default function RombonganPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="hidden justify-end gap-2 sm:flex">
                         <Button
                           size="sm"
                           variant="outline"
@@ -277,6 +283,56 @@ export default function RombonganPage() {
                         >
                           Hapus
                         </Button>
+                      </div>
+                      <div className="flex justify-end sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Aksi ${bus.label}`}
+                              className="h-8 w-8"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                setManagingBus(bus);
+                              }}
+                            >
+                              Peserta
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                handleToggleActive(bus.id);
+                              }}
+                            >
+                              {bus.isActive ? "Nonaktifkan" : "Aktifkan"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                setEditingBus(bus);
+                                setIsFormOpen(true);
+                              }}
+                            >
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                handleDelete(bus.id);
+                              }}
+                            >
+                              Hapus
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
