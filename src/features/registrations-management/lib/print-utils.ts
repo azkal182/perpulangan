@@ -162,9 +162,9 @@ export function calculateLayout(
   void PAPER_SIZES[paperSize]; // retained for potential future use
 
   if (printType === "luggage_card") {
-    // Landscape card: ~90mm x 55mm
-    const cardWidth = 90;
-    const cardHeight = 55;
+    // Landscape card: wider 98mm x 53mm to keep text compact and proportional
+    const cardWidth = 98;
+    const cardHeight = 53;
 
     switch (paperSize) {
       case "A4":
@@ -173,8 +173,8 @@ export function calculateLayout(
           rows: 5,
           cardWidth,
           cardHeight,
-          marginX: 15,
-          marginY: 11,
+          marginX: 7, // (210 - (98*2)) / 2 = (210 - 196) / 2 = 14 / 2 = 7
+          marginY: 16, // (297 - (53*5)) / 2 = 16
           gapX: 0,
           gapY: 0,
         };
@@ -184,8 +184,8 @@ export function calculateLayout(
           rows: 6,
           cardWidth,
           cardHeight,
-          marginX: 17.5,
-          marginY: 0,
+          marginX: 9.5, // (215 - (98*2)) / 2 = (215 - 196) / 2 = 19 / 2 = 9.5
+          marginY: 6, // (330 - (53*6)) / 2 = 6
           gapX: 0,
           gapY: 0,
         };
@@ -195,8 +195,8 @@ export function calculateLayout(
           rows: 7,
           cardWidth,
           cardHeight,
-          marginX: 13.5,
-          marginY: 17.5,
+          marginX: 1.5, // (297 - (98*3)) / 2 = (297 - 294) / 2 = 3 / 2 = 1.5
+          marginY: 24.5, // (420 - (53*7)) / 2 = 24.5
           gapX: 0,
           gapY: 0,
         };
