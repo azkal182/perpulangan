@@ -111,20 +111,20 @@ export const managements = [
 
 // Data Lainnya
 export const others = [
-  {
-    title: "laporan",
-    url: "/laporan",
-    icon: ClipboardMinus,
-    badge: "5",
-  },
+  //   {
+  //     title: "laporan",
+  //     url: "/laporan",
+  //     icon: ClipboardMinus,
+  //     badge: "5",
+  //   },
   {
     title: "Users",
     url: "/dashboard/users",
     icon: Users2,
   },
-  {
-    title: "Pengaturan",
-    url: "/pengaturan",
-    icon: Settings,
-  },
+  //   {
+  //     title: "Pengaturan",
+  //     url: "/pengaturan",
+  //     icon: Settings,
+  //   },
 ];

@@ -13,9 +13,11 @@ import {
   Search,
   RefreshCw,
   UserPlus,
+  Pencil,
   Shield,
   Ban,
   Key,
+  Trash2,
   Users,
   AlertCircle,
   CheckCircle2,
@@ -67,6 +69,11 @@ type ScopeDraft = {
   kordaId: string;
 };
 
+type ProfileDraft = {
+  name: string;
+  username: string;
+};
+
 function toAppRole(value?: string | null): AppRole {
   if (!value) return "korda";
   if (roleOptions.includes(value as AppRole)) {
@@ -94,7 +101,12 @@ export default function UserManagementPage() {
   const [searchValue, setSearchValue] = useState("");
   const [roleEdits, setRoleEdits] = useState<Record<string, string>>({});
   const [scopeEdits, setScopeEdits] = useState<Record<string, ScopeDraft>>({});
+  const [profileEdits, setProfileEdits] = useState<Record<string, ProfileDraft>>(
+    {},
+  );
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
   const [korwilOptions, setKorwilOptions] = useState<KorwilAccessOption[]>([]);
   const [kordaOptions, setKordaOptions] = useState<KordaAccessOption[]>([]);
@@ -146,11 +158,27 @@ export default function UserManagementPage() {
     });
   }, [roleValue, session?.user]);
 
+  const canUpdateUser = useMemo(() => {
+    if (!session?.user) return false;
+    return admin.checkRolePermission({
+      role: roleValue,
+      permissions: { user: ["update"] },
+    });
+  }, [roleValue, session?.user]);
+
   const canBan = useMemo(() => {
     if (!session?.user) return false;
     return admin.checkRolePermission({
       role: roleValue,
       permissions: { user: ["ban"] },
+    });
+  }, [roleValue, session?.user]);
+
+  const canDelete = useMemo(() => {
+    if (!session?.user) return false;
+    return admin.checkRolePermission({
+      role: roleValue,
+      permissions: { user: ["delete"] },
     });
   }, [roleValue, session?.user]);
 
@@ -188,6 +216,16 @@ export default function UserManagementPage() {
     return map;
   }, [allUsers]);
 
+  const assignedUsernameUserMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of allUsers) {
+      if (user.username) {
+        map.set(normalizeUsername(user.username), user.id);
+      }
+    }
+    return map;
+  }, [allUsers]);
+
   function isKorwilTakenByOtherUser(korwilId: string, userId?: string): boolean {
     const assignedUserId = assignedKorwilUserMap.get(korwilId);
     if (!assignedUserId) return false;
@@ -197,6 +235,17 @@ export default function UserManagementPage() {
 
   function isKordaTakenByOtherUser(kordaId: string, userId?: string): boolean {
     const assignedUserId = assignedKordaUserMap.get(kordaId);
+    if (!assignedUserId) return false;
+    if (userId && assignedUserId === userId) return false;
+    return true;
+  }
+
+  function isUsernameTakenByOtherUser(
+    usernameValue: string,
+    userId?: string,
+  ): boolean {
+    const normalizedUsername = normalizeUsername(usernameValue);
+    const assignedUserId = assignedUsernameUserMap.get(normalizedUsername);
     if (!assignedUserId) return false;
     if (userId && assignedUserId === userId) return false;
     return true;
@@ -259,11 +308,16 @@ export default function UserManagementPage() {
 
     const nextRoleEdits: Record<string, string> = {};
     const nextScopeEdits: Record<string, ScopeDraft> = {};
+    const nextProfileEdits: Record<string, ProfileDraft> = {};
     for (const user of searchedUsers) {
       nextRoleEdits[user.id] = user.role ?? "korda";
       nextScopeEdits[user.id] = {
         korwilId: user.korwilId ?? "",
         kordaId: user.kordaId ?? "",
+      };
+      nextProfileEdits[user.id] = {
+        name: user.name ?? "",
+        username: user.username ?? "",
       };
     }
 
@@ -272,6 +326,7 @@ export default function UserManagementPage() {
     setTotal(searchTerm ? searchedUsers.length : (res.data?.total ?? null));
     setRoleEdits(nextRoleEdits);
     setScopeEdits(nextScopeEdits);
+    setProfileEdits(nextProfileEdits);
     setIsLoading(false);
   }, [canList, searchValue, roleValue]);
 
@@ -305,6 +360,38 @@ export default function UserManagementPage() {
     return scopeEdits[user.id] ?? emptyScope();
   }
 
+  function getProfileDraftForUser(user: ManagedUser): ProfileDraft {
+    return (
+      profileEdits[user.id] ?? {
+        name: user.name ?? "",
+        username: user.username ?? "",
+      }
+    );
+  }
+
+  function openEditDialog(user: ManagedUser) {
+    setRoleEdits((prev) => ({
+      ...prev,
+      [user.id]: user.role ?? "korda",
+    }));
+    setScopeEdits((prev) => ({
+      ...prev,
+      [user.id]: {
+        korwilId: user.korwilId ?? "",
+        kordaId: user.kordaId ?? "",
+      },
+    }));
+    setProfileEdits((prev) => ({
+      ...prev,
+      [user.id]: {
+        name: user.name ?? "",
+        username: user.username ?? "",
+      },
+    }));
+    setError(null);
+    setEditingUserId(user.id);
+  }
+
   function validateScope(role: AppRole, scope: ScopeDraft): string | null {
     if (role === "korwil" && !scope.korwilId) {
       return "Korwil wajib dipilih untuk role korwil.";
@@ -327,6 +414,12 @@ export default function UserManagementPage() {
     const usernameError = validateUsername(normalizedUsername);
     if (usernameError) {
       setError(usernameError);
+      setIsCreating(false);
+      return;
+    }
+
+    if (isUsernameTakenByOtherUser(normalizedUsername)) {
+      setError("Username ini sudah digunakan oleh user lain.");
       setIsCreating(false);
       return;
     }
@@ -421,63 +514,130 @@ export default function UserManagementPage() {
     setIsCreating(false);
   }
 
-  async function handleSaveUser(user: ManagedUser) {
-    if (!canSetRole) return;
+  async function handleSaveUser(user: ManagedUser): Promise<boolean> {
+    if (!canSetRole && !canUpdateUser) return false;
 
+    const currentRole = toAppRole(user.role);
     const nextRole = toAppRole(roleEdits[user.id] ?? user.role);
     const draft = getScopeDraftForUser(user);
+    const profileDraft = getProfileDraftForUser(user);
+    const nextName = profileDraft.name.trim();
+    const currentName = (user.name ?? "").trim();
+    const nextUsername = normalizeUsername(profileDraft.username);
+    const currentUsername = normalizeUsername(user.username ?? "");
 
-    const validateError = validateScope(nextRole, draft);
-    if (validateError) {
-      setError(validateError);
-      return;
+    const roleChanged = nextRole !== currentRole;
+    const scopeChanged =
+      (nextRole === "korwil" && draft.korwilId !== (user.korwilId ?? "")) ||
+      (nextRole === "korda" && draft.kordaId !== (user.kordaId ?? "")) ||
+      (nextRole === "admin" && Boolean(user.korwilId || user.kordaId));
+
+    const profileChanged =
+      nextName !== currentName || nextUsername !== currentUsername;
+    const roleOrScopeChanged = roleChanged || scopeChanged;
+
+    if (!profileChanged && !roleOrScopeChanged) return false;
+
+    if (profileChanged) {
+      if (!canUpdateUser) {
+        setError("Anda tidak punya izin untuk update profil user.");
+        return false;
+      }
+
+      if (!nextName) {
+        setError("Nama wajib diisi.");
+        return false;
+      }
+
+      const usernameError = validateUsername(nextUsername);
+      if (usernameError) {
+        setError(usernameError);
+        return false;
+      }
+
+      if (isUsernameTakenByOtherUser(nextUsername, user.id)) {
+        setError("Username ini sudah digunakan oleh user lain.");
+        return false;
+      }
     }
 
-    if (
-      nextRole === "korwil" &&
-      draft.korwilId &&
-      isKorwilTakenByOtherUser(draft.korwilId, user.id)
-    ) {
-      setError("Korwil ini sudah terhubung ke user lain.");
-      return;
-    }
+    if (roleOrScopeChanged) {
+      if (!canSetRole) {
+        setError("Anda tidak punya izin untuk update role user.");
+        return false;
+      }
 
-    if (
-      nextRole === "korda" &&
-      draft.kordaId &&
-      isKordaTakenByOtherUser(draft.kordaId, user.id)
-    ) {
-      setError("Korda ini sudah terhubung ke user lain.");
-      return;
+      const validateError = validateScope(nextRole, draft);
+      if (validateError) {
+        setError(validateError);
+        return false;
+      }
+
+      if (
+        nextRole === "korwil" &&
+        draft.korwilId &&
+        isKorwilTakenByOtherUser(draft.korwilId, user.id)
+      ) {
+        setError("Korwil ini sudah terhubung ke user lain.");
+        return false;
+      }
+
+      if (
+        nextRole === "korda" &&
+        draft.kordaId &&
+        isKordaTakenByOtherUser(draft.kordaId, user.id)
+      ) {
+        setError("Korda ini sudah terhubung ke user lain.");
+        return false;
+      }
     }
 
     setSavingUserId(user.id);
     setError(null);
 
-    if (nextRole !== toAppRole(user.role)) {
+    if (profileChanged) {
+      const profileRes = await admin.updateUser({
+        userId: user.id,
+        data: {
+          name: nextName,
+          username: nextUsername,
+        },
+      });
+
+      if (profileRes.error) {
+        setError(profileRes.error.message || "Failed to update user profile.");
+        setSavingUserId(null);
+        return false;
+      }
+    }
+
+    if (roleChanged) {
       const roleRes = await admin.setRole({ userId: user.id, role: nextRole });
       if (roleRes.error) {
         setError(roleRes.error.message || "Failed to update role.");
         setSavingUserId(null);
-        return;
+        return false;
       }
     }
 
-    const accessRes = await updateUserRegionalAccess({
-      userId: user.id,
-      role: nextRole,
-      korwilId: draft.korwilId || null,
-      kordaId: draft.kordaId || null,
-    });
+    if (roleOrScopeChanged) {
+      const accessRes = await updateUserRegionalAccess({
+        userId: user.id,
+        role: nextRole,
+        korwilId: draft.korwilId || null,
+        kordaId: draft.kordaId || null,
+      });
 
-    if (!accessRes.success) {
-      setError(accessRes.error || "Failed to update regional access.");
-      setSavingUserId(null);
-      return;
+      if (!accessRes.success) {
+        setError(accessRes.error || "Failed to update regional access.");
+        setSavingUserId(null);
+        return false;
+      }
     }
 
     await loadUsers();
     setSavingUserId(null);
+    return true;
   }
 
   async function handleBan(userId: string) {
@@ -516,6 +676,85 @@ export default function UserManagementPage() {
       setError(res.error.message || "Failed to set password.");
     }
   }
+
+  async function handleDeleteUser(user: ManagedUser) {
+    if (!canDelete) return;
+
+    if (session?.user?.id === user.id) {
+      setError("Anda tidak dapat menghapus akun Anda sendiri.");
+      return;
+    }
+
+    const identity = user.name || user.username || user.email || user.id;
+    const confirmed = window.confirm(
+      `Hapus user "${identity}"? Tindakan ini tidak bisa dibatalkan.`,
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setDeletingUserId(user.id);
+
+    const res = await admin.removeUser({ userId: user.id });
+    if (res.error) {
+      setError(res.error.message || "Failed to delete user.");
+      setDeletingUserId(null);
+      return;
+    }
+
+    if (editingUserId === user.id) {
+      setEditingUserId(null);
+    }
+
+    await loadUsers();
+    setDeletingUserId(null);
+  }
+
+  const editingUser = useMemo(() => {
+    if (!editingUserId) return null;
+    return (
+      users.find((user) => user.id === editingUserId) ??
+      allUsers.find((user) => user.id === editingUserId) ??
+      null
+    );
+  }, [editingUserId, users, allUsers]);
+
+  const editingRole = editingUser
+    ? toAppRole(roleEdits[editingUser.id] ?? editingUser.role)
+    : "korda";
+  const editingScope = editingUser ? getScopeDraftForUser(editingUser) : emptyScope();
+  const editingProfile = editingUser
+    ? getProfileDraftForUser(editingUser)
+    : { name: "", username: "" };
+  const editingRoleOptions = (
+    assignableRoles.includes(editingRole)
+      ? assignableRoles
+      : [editingRole, ...assignableRoles]
+  ).filter((role, idx, arr) => arr.indexOf(role) === idx);
+  const editingRoleChanged = editingUser
+    ? editingRole !== toAppRole(editingUser.role)
+    : false;
+  const editingProfileChanged = editingUser
+    ? editingProfile.name.trim() !== (editingUser.name ?? "").trim() ||
+      normalizeUsername(editingProfile.username) !==
+        normalizeUsername(editingUser.username ?? "")
+    : false;
+  const editingScopeChanged = editingUser
+    ? (editingRole === "korwil" &&
+        editingScope.korwilId !== (editingUser.korwilId ?? "")) ||
+      (editingRole === "korda" &&
+        editingScope.kordaId !== (editingUser.kordaId ?? "")) ||
+      (editingRole === "admin" &&
+        Boolean(editingUser.korwilId || editingUser.kordaId))
+    : false;
+  const editingRoleOrScopeChanged = editingRoleChanged || editingScopeChanged;
+  const editingHasChanges = editingProfileChanged || editingRoleOrScopeChanged;
+  const canSaveEditingUser =
+    (canUpdateUser && editingProfileChanged) ||
+    (canSetRole && editingRoleOrScopeChanged);
+  const canDeleteEditingUser =
+    Boolean(editingUser) &&
+    canDelete &&
+    session?.user?.id !== editingUser?.id;
 
   if (isPending) {
     return (
@@ -899,24 +1138,7 @@ export default function UserManagementPage() {
           ) : (
             <div className="divide-y">
               {users.map((user, index) => {
-                const selectedRole = toAppRole(roleEdits[user.id] ?? user.role);
-                const draft = getScopeDraftForUser(user);
-                const rowRoleOptions = (
-                  assignableRoles.includes(selectedRole)
-                    ? assignableRoles
-                    : [selectedRole, ...assignableRoles]
-                ).filter((role, idx, arr) => arr.indexOf(role) === idx);
-
-                const roleChanged = selectedRole !== toAppRole(user.role);
-                const scopeChanged =
-                  (selectedRole === "korwil" &&
-                    draft.korwilId !== (user.korwilId ?? "")) ||
-                  (selectedRole === "korda" &&
-                    draft.kordaId !== (user.kordaId ?? "")) ||
-                  (selectedRole === "admin" &&
-                    Boolean(user.korwilId || user.kordaId));
-
-                const hasChanges = roleChanged || scopeChanged;
+                const userRole = toAppRole(user.role);
 
                 return (
                   <div
@@ -952,12 +1174,12 @@ export default function UserManagementPage() {
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs font-medium">
                                 <Shield className="h-3 w-3" />
-                                {selectedRole}
+                                {userRole}
                               </span>
                               <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs text-muted-foreground">
                                 {getUserScopeLabel({
                                   ...user,
-                                  role: selectedRole,
+                                  role: userRole,
                                 })}
                               </span>
                               {user.createdAt && (
@@ -980,114 +1202,18 @@ export default function UserManagementPage() {
                       </div>
 
                       <div className="flex flex-col gap-3 lg:items-end">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Select
-                            value={selectedRole}
-                            onValueChange={(value) =>
-                              setRoleEdits((prev) => ({
-                                ...prev,
-                                [user.id]: value,
-                              }))
-                            }
-                            disabled={!canSetRole}
+                        {(canSetRole || canUpdateUser) && (
+                          <Button
+                            onClick={() => openEditDialog(user)}
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={deletingUserId === user.id}
                           >
-                            <SelectTrigger className="w-[140px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {rowRoleOptions.map((role) => (
-                                <SelectItem key={role} value={role}>
-                                  {role}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-
-                          {selectedRole === "korwil" && (
-                            <Select
-                              value={draft.korwilId}
-                              onValueChange={(value) =>
-                                setScopeEdits((prev) => ({
-                                  ...prev,
-                                  [user.id]: { ...draft, korwilId: value },
-                                }))
-                              }
-                              disabled={!canSetRole}
-                            >
-                              <SelectTrigger className="w-[220px]">
-                                <SelectValue placeholder="Pilih korwil" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {korwilOptions.map((korwil) => {
-                                  const isTakenByOther = isKorwilTakenByOtherUser(
-                                    korwil.id,
-                                    user.id,
-                                  );
-
-                                  return (
-                                    <SelectItem
-                                      key={korwil.id}
-                                      value={korwil.id}
-                                      disabled={isTakenByOther}
-                                    >
-                                      {korwil.name}
-                                      {isTakenByOther ? " (sudah dipakai)" : ""}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          )}
-
-                          {selectedRole === "korda" && (
-                            <Select
-                              value={draft.kordaId}
-                              onValueChange={(value) =>
-                                setScopeEdits((prev) => ({
-                                  ...prev,
-                                  [user.id]: { ...draft, kordaId: value },
-                                }))
-                              }
-                              disabled={!canSetRole}
-                            >
-                              <SelectTrigger className="w-[260px]">
-                                <SelectValue placeholder="Pilih korda" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {kordaOptions.map((korda) => {
-                                  const isTakenByOther = isKordaTakenByOtherUser(
-                                    korda.id,
-                                    user.id,
-                                  );
-
-                                  return (
-                                    <SelectItem
-                                      key={korda.id}
-                                      value={korda.id}
-                                      disabled={isTakenByOther}
-                                    >
-                                      {korda.name}
-                                      {korda.korwilName
-                                        ? ` (${korda.korwilName})`
-                                        : ""}
-                                      {isTakenByOther ? " (sudah dipakai)" : ""}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          )}
-
-                          {hasChanges && (
-                            <Button
-                              onClick={() => handleSaveUser(user)}
-                              disabled={!canSetRole || savingUserId === user.id}
-                              size="sm"
-                            >
-                              {savingUserId === user.id ? "Saving..." : "Save"}
-                            </Button>
-                          )}
-                        </div>
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                        )}
                         <div className="flex flex-wrap gap-2">
                           {user.banned ? (
                             <Button
@@ -1122,6 +1248,16 @@ export default function UserManagementPage() {
                             <Key className="h-3.5 w-3.5" />
                             Set Password
                           </Button>
+                          <Button
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={!canDelete || deletingUserId === user.id}
+                            variant="destructive"
+                            size="sm"
+                            className="gap-1.5"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingUserId === user.id ? "Deleting..." : "Delete"}
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1132,6 +1268,242 @@ export default function UserManagementPage() {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={Boolean(editingUser)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingUserId(null);
+            setError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Ubah profil, role, dan akses wilayah user.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingUser && (
+            <div className="space-y-4 pt-2">
+              {canUpdateUser && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-user-name">Nama</Label>
+                    <Input
+                      id="edit-user-name"
+                      value={editingProfile.name}
+                      onChange={(event) =>
+                        setProfileEdits((prev) => ({
+                          ...prev,
+                          [editingUser.id]: {
+                            ...editingProfile,
+                            name: event.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="Nama user"
+                      disabled={savingUserId === editingUser.id}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-user-username">Username</Label>
+                    <Input
+                      id="edit-user-username"
+                      value={editingProfile.username}
+                      onChange={(event) =>
+                        setProfileEdits((prev) => ({
+                          ...prev,
+                          [editingUser.id]: {
+                            ...editingProfile,
+                            username: event.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="username"
+                      autoCapitalize="none"
+                      disabled={savingUserId === editingUser.id}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Login:{" "}
+                      {editingProfile.username.trim()
+                        ? `@${normalizeUsername(editingProfile.username)}`
+                        : "username belum diatur"}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {canSetRole && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-user-role">Role</Label>
+                    <Select
+                      value={editingRole}
+                      onValueChange={(value) => {
+                        const currentScope = getScopeDraftForUser(editingUser);
+                        setRoleEdits((prev) => ({
+                          ...prev,
+                          [editingUser.id]: value,
+                        }));
+                        setScopeEdits((prev) => ({
+                          ...prev,
+                          [editingUser.id]: {
+                            ...currentScope,
+                            ...(value !== "korwil" ? { korwilId: "" } : {}),
+                            ...(value !== "korda" ? { kordaId: "" } : {}),
+                          },
+                        }));
+                      }}
+                      disabled={savingUserId === editingUser.id}
+                    >
+                      <SelectTrigger id="edit-user-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {editingRoleOptions.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {editingRole === "korwil" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-user-korwil">Akses Korwil</Label>
+                      <Select
+                        value={editingScope.korwilId}
+                        onValueChange={(value) =>
+                          setScopeEdits((prev) => ({
+                            ...prev,
+                            [editingUser.id]: { ...editingScope, korwilId: value },
+                          }))
+                        }
+                        disabled={savingUserId === editingUser.id}
+                      >
+                        <SelectTrigger id="edit-user-korwil">
+                          <SelectValue placeholder="Pilih korwil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {korwilOptions.map((korwil) => {
+                            const isTakenByOther = isKorwilTakenByOtherUser(
+                              korwil.id,
+                              editingUser.id,
+                            );
+
+                            return (
+                              <SelectItem
+                                key={korwil.id}
+                                value={korwil.id}
+                                disabled={isTakenByOther}
+                              >
+                                {korwil.name}
+                                {isTakenByOther ? " (sudah dipakai)" : ""}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {editingRole === "korda" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-user-korda">Akses Korda</Label>
+                      <Select
+                        value={editingScope.kordaId}
+                        onValueChange={(value) =>
+                          setScopeEdits((prev) => ({
+                            ...prev,
+                            [editingUser.id]: { ...editingScope, kordaId: value },
+                          }))
+                        }
+                        disabled={savingUserId === editingUser.id}
+                      >
+                        <SelectTrigger id="edit-user-korda">
+                          <SelectValue placeholder="Pilih korda" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {kordaOptions.map((korda) => {
+                            const isTakenByOther = isKordaTakenByOtherUser(
+                              korda.id,
+                              editingUser.id,
+                            );
+
+                            return (
+                              <SelectItem
+                                key={korda.id}
+                                value={korda.id}
+                                disabled={isTakenByOther}
+                              >
+                                {korda.name}
+                                {korda.korwilName ? ` (${korda.korwilName})` : ""}
+                                {isTakenByOther ? " (sudah dipakai)" : ""}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="flex items-center justify-between gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => void handleDeleteUser(editingUser)}
+                  disabled={
+                    !canDeleteEditingUser || deletingUserId === editingUser.id
+                  }
+                  className="gap-1.5"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deletingUserId === editingUser.id ? "Deleting..." : "Delete User"}
+                </Button>
+                <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingUserId(null)}
+                  disabled={
+                    savingUserId === editingUser.id || deletingUserId === editingUser.id
+                  }
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    !canSaveEditingUser ||
+                    savingUserId === editingUser.id ||
+                    deletingUserId === editingUser.id
+                  }
+                  onClick={async () => {
+                    const didSave = await handleSaveUser(editingUser);
+                    if (didSave) {
+                      setEditingUserId(null);
+                    }
+                  }}
+                >
+                  {savingUserId === editingUser.id ? "Saving..." : "Save Changes"}
+                </Button>
+                </div>
+              </div>
+              {!editingHasChanges && (
+                <p className="text-xs text-muted-foreground">
+                  Tidak ada perubahan untuk disimpan.
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <style jsx>{`
         @keyframes fadeIn {
