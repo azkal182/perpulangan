@@ -266,55 +266,67 @@ export default function RombonganPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
-        <div className="w-64">
-          <label className="text-sm font-medium mb-2 block">Event</label>
-          <Select value={selectedEventId} onValueChange={setSelectedEventId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih event" />
-            </SelectTrigger>
-            <SelectContent>
-              {events.map((event) => (
-                <SelectItem key={event.id} value={event.id}>
-                  {event.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="min-w-0 space-y-2">
+            <label className="block text-sm font-medium">Event</label>
+            <Select value={selectedEventId} onValueChange={setSelectedEventId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Pilih event" />
+              </SelectTrigger>
+              <SelectContent>
+                {events.map((event) => (
+                  <SelectItem key={event.id} value={event.id}>
+                    {event.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="w-64">
-          <label className="text-sm font-medium mb-2 block">Korwil (Opsional)</label>
-          <Select value={selectedKorwilId} onValueChange={(value) => setSelectedKorwilId(value === "all" ? undefined : value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Semua korwil" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Korwil</SelectItem>
-              {korwils.map((korwil) => (
-                <SelectItem key={korwil.id} value={korwil.id}>
-                  {korwil.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          <div className="min-w-0 space-y-2">
+            <label className="block text-sm font-medium">Korwil (Opsional)</label>
+            <Select
+              value={selectedKorwilId}
+              onValueChange={(value) =>
+                setSelectedKorwilId(value === "all" ? undefined : value)
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Semua korwil" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Korwil</SelectItem>
+                {korwils.map((korwil) => (
+                  <SelectItem key={korwil.id} value={korwil.id}>
+                    {korwil.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="w-64">
-          <label className="text-sm font-medium mb-2 block">Korda (Opsional)</label>
-          <Select value={selectedKordaId} onValueChange={(value) => setSelectedKordaId(value === "all" ? undefined : value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Semua korda" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Korda</SelectItem>
-              {kordas.map((korda) => (
-                <SelectItem key={korda.id} value={korda.id}>
-                  {korda.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="min-w-0 space-y-2">
+            <label className="block text-sm font-medium">Korda (Opsional)</label>
+            <Select
+              value={selectedKordaId}
+              onValueChange={(value) =>
+                setSelectedKordaId(value === "all" ? undefined : value)
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Semua korda" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Korda</SelectItem>
+                {kordas.map((korda) => (
+                  <SelectItem key={korda.id} value={korda.id}>
+                    {korda.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
