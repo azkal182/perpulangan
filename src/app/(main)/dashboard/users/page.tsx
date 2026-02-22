@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { admin, useSession } from "@/client/auth";
 import { roleOptions, type AppRole } from "@/lib/auth-access";
 import {
+  buildDummyEmailFromUsername,
+  normalizeUsername,
+  validateUsername,
+} from "@/lib/username-auth";
+import {
   Search,
   RefreshCw,
   UserPlus,
@@ -46,6 +51,7 @@ type ManagedUser = {
   id: string;
   name?: string | null;
   email?: string | null;
+  username?: string | null;
   role?: string | null;
   banned?: boolean | null;
   banReason?: string | null;
@@ -73,6 +79,10 @@ function emptyScope(): ScopeDraft {
   return { korwilId: "", kordaId: "" };
 }
 
+function getLoginIdentifier(user: ManagedUser): string {
+  return user.username ? `@${user.username}` : "Username belum diatur";
+}
+
 export default function UserManagementPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
@@ -92,7 +102,7 @@ export default function UserManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: "",
-    email: "",
+    username: "",
     password: "",
     role: "korda",
     korwilId: "",
@@ -172,8 +182,7 @@ export default function UserManagementPage() {
     setError(null);
     setIsLoading(true);
 
-    const query: Record<string, string | number> = { limit: 50 };
-    if (searchValue.trim()) query.searchValue = searchValue.trim();
+    const query: Record<string, string | number> = { limit: 500 };
 
     const res = await admin.listUsers({ query });
     if (res.error) {
@@ -198,9 +207,21 @@ export default function UserManagementPage() {
       ...(accessMap[u.id] ?? {}),
     }));
 
+    const searchTerm = searchValue.trim().toLowerCase();
+    const searchedUsers = searchTerm
+      ? merged.filter((user) => {
+          const searchableValues = [user.name, user.username, user.email];
+          return searchableValues.some(
+            (value) =>
+              typeof value === "string" &&
+              value.toLowerCase().includes(searchTerm),
+          );
+        })
+      : merged;
+
     const nextRoleEdits: Record<string, string> = {};
     const nextScopeEdits: Record<string, ScopeDraft> = {};
-    for (const user of merged) {
+    for (const user of searchedUsers) {
       nextRoleEdits[user.id] = user.role ?? "korda";
       nextScopeEdits[user.id] = {
         korwilId: user.korwilId ?? "",
@@ -208,18 +229,26 @@ export default function UserManagementPage() {
       };
     }
 
-    setUsers(merged);
-    setTotal(res.data?.total ?? null);
+    setUsers(searchedUsers);
+    setTotal(searchTerm ? searchedUsers.length : (res.data?.total ?? null));
     setRoleEdits(nextRoleEdits);
     setScopeEdits(nextScopeEdits);
     setIsLoading(false);
   }, [canList, searchValue, roleValue]);
 
   useEffect(() => {
-    if (session?.user && canList) {
+    if (!session?.user || !canList) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
       void loadAccessOptions();
       void loadUsers();
-    }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [session?.user, canList, loadAccessOptions, loadUsers]);
 
   function getUserScopeLabel(user: ManagedUser) {
@@ -255,6 +284,14 @@ export default function UserManagementPage() {
     setIsCreating(true);
 
     const createRole = toAppRole(createForm.role);
+    const normalizedUsername = normalizeUsername(createForm.username);
+    const usernameError = validateUsername(normalizedUsername);
+    if (usernameError) {
+      setError(usernameError);
+      setIsCreating(false);
+      return;
+    }
+
     const validateError = validateScope(createRole, {
       korwilId: createForm.korwilId,
       kordaId: createForm.kordaId,
@@ -268,9 +305,12 @@ export default function UserManagementPage() {
 
     const res = await admin.createUser({
       name: createForm.name,
-      email: createForm.email,
+      email: buildDummyEmailFromUsername(normalizedUsername),
       password: createForm.password || undefined,
       role: createRole,
+      data: {
+        username: normalizedUsername,
+      },
     });
 
     if (res.error) {
@@ -297,7 +337,7 @@ export default function UserManagementPage() {
 
     setCreateForm({
       name: "",
-      email: "",
+      username: "",
       password: "",
       role: "korda",
       korwilId: "",
@@ -481,20 +521,22 @@ export default function UserManagementPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
+                      <Label htmlFor="username">Username</Label>
                       <Input
-                        id="email"
-                        type="email"
-                        value={createForm.email}
+                        id="username"
+                        value={createForm.username}
                         onChange={(e) =>
                           setCreateForm((prev) => ({
                             ...prev,
-                            email: e.target.value,
+                            username: e.target.value,
                           }))
                         }
-                        placeholder="john@example.com"
+                        placeholder="john_doe"
                         required
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Email akan dibuat otomatis di backend.
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="password">Password (Optional)</Label>
@@ -684,7 +726,7 @@ export default function UserManagementPage() {
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && loadUsers()}
-                placeholder="Search by name or email..."
+                placeholder="Search by name or username..."
                 className="pl-10"
               />
             </div>
@@ -771,7 +813,9 @@ export default function UserManagementPage() {
                       <div className="flex-1">
                         <div className="flex items-start gap-3">
                           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 font-semibold text-primary-foreground">
-                            {user.name?.charAt(0).toUpperCase() || "?"}
+                            {user.name?.charAt(0).toUpperCase() ||
+                              user.username?.charAt(0).toUpperCase() ||
+                              "?"}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
@@ -786,7 +830,7 @@ export default function UserManagementPage() {
                               )}
                             </div>
                             <p className="mt-0.5 text-sm text-muted-foreground">
-                              {user.email}
+                              {getLoginIdentifier(user)}
                             </p>
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs font-medium">

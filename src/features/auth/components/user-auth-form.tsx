@@ -13,6 +13,12 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { logError } from '@/lib/logger-client'
 import { signIn } from '@/client/auth'
+import {
+  normalizeUsername,
+  USERNAME_ALLOWED_PATTERN,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+} from '@/lib/username-auth'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -26,9 +32,22 @@ import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/password-input'
 
 const formSchema = z.object({
-  email: z.email({
-    error: (iss) => (iss.input === '' ? 'Please enter your email' : undefined),
-  }),
+  username: z
+    .string()
+    .trim()
+    .min(1, 'Please enter your username')
+    .min(
+      USERNAME_MIN_LENGTH,
+      `Username must be at least ${USERNAME_MIN_LENGTH} characters long`,
+    )
+    .max(
+      USERNAME_MAX_LENGTH,
+      `Username must be at most ${USERNAME_MAX_LENGTH} characters long`,
+    )
+    .regex(
+      USERNAME_ALLOWED_PATTERN,
+      'Username can only contain letters, numbers, dots, and underscores',
+    ),
   password: z
     .string()
     .min(1, 'Please enter your password')
@@ -50,7 +69,7 @@ export function UserAuthForm({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
+      username: '',
       password: '',
     },
   })
@@ -58,13 +77,13 @@ export function UserAuthForm({
   async function onSubmit(data: z.infer<typeof formSchema>) {
     setIsLoading(true)
     try {
-      const res = await signIn.email({
-        email: data.email,
+      const res = await signIn.username({
+        username: normalizeUsername(data.username),
         password: data.password,
       })
 
       if (res?.error) {
-        toast.error(res.error.message || 'Email atau password salah.')
+        toast.error(res.error.message || 'Username atau password salah.')
         return
       }
 
@@ -88,12 +107,12 @@ export function UserAuthForm({
       >
         <FormField
           control={form.control}
-          name="email"
+          name="username"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input placeholder="name@example.com" {...field} />
+                <Input placeholder="john_doe" autoCapitalize="none" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -125,8 +144,6 @@ export function UserAuthForm({
           {isLoading ? <Loader2 className="animate-spin" /> : <LogIn />}
           Sign in
         </Button>
-
-
       </form>
     </Form>
   )
