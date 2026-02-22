@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Bus, Loader2, MoreVertical } from "lucide-react";
+import { Plus, Bus, Loader2, MoreVertical, FileDown, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -22,11 +22,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { getBuses, deleteBus, toggleBusActive, type BusWithDetails } from "../actions/bus.actions";
 import { getAllEvents, getAllKordas, getAllKorwils } from "../actions/helpers.actions";
+import { getBusAttendanceManifest } from "../actions/passenger.actions";
+import { buildBusAttendancePdf, openBusAttendancePdfInNewTab } from "../utils/bus-attendance-pdf";
 import { BusFormDialog } from "./BusFormDialog";
 import { BusPassengersDialog } from "./BusPassengersDialog";
 
@@ -44,6 +47,7 @@ export default function RombonganPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBus, setEditingBus] = useState<BusWithDetails | null>(null);
   const [managingBus, setManagingBus] = useState<BusWithDetails | null>(null);
+  const [attendanceLoadingKey, setAttendanceLoadingKey] = useState<string | null>(null);
 
   // Load initial data
   useEffect(() => {
@@ -113,6 +117,68 @@ export default function RombonganPage() {
     }
   }
 
+  async function handleAttendancePdf(
+    journey: "outbound" | "return",
+    mode: "preview" | "download",
+  ) {
+    if (!selectedEventId) {
+      alert("Pilih event terlebih dahulu.");
+      return;
+    }
+
+    const loadingKey = `${journey}-${mode}`;
+    const previewWindow = mode === "preview" ? window.open("", "_blank") : null;
+    if (mode === "preview" && !previewWindow) {
+      alert("Popup diblokir browser. Izinkan popup untuk membuka preview PDF.");
+      return;
+    }
+
+    setAttendanceLoadingKey(loadingKey);
+    try {
+      const manifest = await getBusAttendanceManifest({
+        eventId: selectedEventId,
+        journey,
+        korwilId: selectedKorwilId,
+        kordaId: selectedKordaId,
+      });
+
+      if (manifest.length === 0) {
+        previewWindow?.close();
+        alert("Tidak ada data bus untuk filter yang dipilih.");
+        return;
+      }
+
+      const eventName =
+        events.find((eventItem) => eventItem.id === selectedEventId)?.name ??
+        "Event";
+
+      const pdf = buildBusAttendancePdf({
+        eventName,
+        journey,
+        buses: manifest,
+      });
+
+      if (mode === "preview") {
+        openBusAttendancePdfInNewTab(pdf, previewWindow);
+        return;
+      }
+
+      const journeyKey = journey === "outbound" ? "keberangkatan" : "kepulangan";
+      const dateKey = new Date().toISOString().slice(0, 10);
+      pdf.save(`absensi-bus-${journeyKey}-${dateKey}.pdf`);
+    } catch (error) {
+      previewWindow?.close();
+      console.error("Failed to generate attendance PDF:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Gagal membuat dokumen absensi bus",
+      );
+    } finally {
+      setAttendanceLoadingKey(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -123,18 +189,80 @@ export default function RombonganPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Bus className="h-6 w-6" />
           <h1 className="text-2xl font-bold">Manajemen Rombongan Bus</h1>
         </div>
-        <Button onClick={() => {
-          setEditingBus(null);
-          setIsFormOpen(true);
-        }}>
-          <Plus className="mr-2 h-4 w-4" />
-          Tambah Bus
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={!!attendanceLoadingKey}
+                className="justify-start sm:justify-center"
+              >
+                {attendanceLoadingKey ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileDown className="mr-2 h-4 w-4" />
+                )}
+                {attendanceLoadingKey ? "Menyiapkan PDF..." : "Absensi Bus"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem
+                disabled={!!attendanceLoadingKey}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleAttendancePdf("outbound", "preview");
+                }}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Preview/Cetak Keberangkatan
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!!attendanceLoadingKey}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleAttendancePdf("outbound", "download");
+                }}
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Download PDF Keberangkatan
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={!!attendanceLoadingKey}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleAttendancePdf("return", "preview");
+                }}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Preview/Cetak Kepulangan
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!!attendanceLoadingKey}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleAttendancePdf("return", "download");
+                }}
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Download PDF Kepulangan
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button onClick={() => {
+            setEditingBus(null);
+            setIsFormOpen(true);
+          }}>
+            <Plus className="mr-2 h-4 w-4" />
+            Tambah Bus
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

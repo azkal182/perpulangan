@@ -92,7 +92,7 @@ export function AddPassengerSheet({
           <SheetTitle>Tambah Peserta — {journeyLabel}</SheetTitle>
           <SheetDescription>
             Pilih peserta untuk ditambahkan ke <strong>{busLabel}</strong>.
-            Hanya peserta yang belum di-assign ke bus lain yang ditampilkan.
+            Hanya peserta dengan korda yang sesuai bus dan belum di-assign ke bus lain yang ditampilkan.
           </SheetDescription>
         </SheetHeader>
 
