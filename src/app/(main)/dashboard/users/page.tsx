@@ -87,6 +87,7 @@ export default function UserManagementPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [allUsers, setAllUsers] = useState<ManagedUser[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +168,40 @@ export default function UserManagementPage() {
     return [];
   }, [roleValue]);
 
+  const assignedKorwilUserMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of allUsers) {
+      if (user.korwilId) {
+        map.set(user.korwilId, user.id);
+      }
+    }
+    return map;
+  }, [allUsers]);
+
+  const assignedKordaUserMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of allUsers) {
+      if (user.kordaId) {
+        map.set(user.kordaId, user.id);
+      }
+    }
+    return map;
+  }, [allUsers]);
+
+  function isKorwilTakenByOtherUser(korwilId: string, userId?: string): boolean {
+    const assignedUserId = assignedKorwilUserMap.get(korwilId);
+    if (!assignedUserId) return false;
+    if (userId && assignedUserId === userId) return false;
+    return true;
+  }
+
+  function isKordaTakenByOtherUser(kordaId: string, userId?: string): boolean {
+    const assignedUserId = assignedKordaUserMap.get(kordaId);
+    if (!assignedUserId) return false;
+    if (userId && assignedUserId === userId) return false;
+    return true;
+  }
+
   const loadAccessOptions = useCallback(async () => {
     const res = await getUserAccessOptions();
     if (!res.success) {
@@ -177,9 +212,11 @@ export default function UserManagementPage() {
     setKordaOptions(res.data.kordas);
   }, []);
 
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async (options?: { preserveError?: boolean }) => {
     if (!canList) return;
-    setError(null);
+    if (!options?.preserveError) {
+      setError(null);
+    }
     setIsLoading(true);
 
     const query: Record<string, string | number> = { limit: 500 };
@@ -188,6 +225,7 @@ export default function UserManagementPage() {
     if (res.error) {
       setError(res.error.message || "Failed to load users.");
       setUsers([]);
+      setAllUsers([]);
       setTotal(null);
       setIsLoading(false);
       return;
@@ -229,6 +267,7 @@ export default function UserManagementPage() {
       };
     }
 
+    setAllUsers(merged);
     setUsers(searchedUsers);
     setTotal(searchTerm ? searchedUsers.length : (res.data?.total ?? null));
     setRoleEdits(nextRoleEdits);
@@ -303,6 +342,26 @@ export default function UserManagementPage() {
       return;
     }
 
+    if (
+      createRole === "korwil" &&
+      createForm.korwilId &&
+      isKorwilTakenByOtherUser(createForm.korwilId)
+    ) {
+      setError("Korwil ini sudah terhubung ke user lain.");
+      setIsCreating(false);
+      return;
+    }
+
+    if (
+      createRole === "korda" &&
+      createForm.kordaId &&
+      isKordaTakenByOtherUser(createForm.kordaId)
+    ) {
+      setError("Korda ini sudah terhubung ke user lain.");
+      setIsCreating(false);
+      return;
+    }
+
     const res = await admin.createUser({
       name: createForm.name,
       email: buildDummyEmailFromUsername(normalizedUsername),
@@ -320,19 +379,33 @@ export default function UserManagementPage() {
     }
 
     const createdUserId = res.data?.user?.id;
-    if (createdUserId) {
-      const accessRes = await updateUserRegionalAccess({
-        userId: createdUserId,
-        role: createRole,
-        korwilId: createForm.korwilId || null,
-        kordaId: createForm.kordaId || null,
-      });
+    if (!createdUserId) {
+      setError("User gagal dibuat. ID user tidak ditemukan.");
+      setIsCreating(false);
+      return;
+    }
 
-      if (!accessRes.success) {
+    const accessRes = await updateUserRegionalAccess({
+      userId: createdUserId,
+      role: createRole,
+      korwilId: createForm.korwilId || null,
+      kordaId: createForm.kordaId || null,
+    });
+
+    if (!accessRes.success) {
+      const rollbackRes = await admin.removeUser({ userId: createdUserId });
+      if (rollbackRes.error) {
         setError(
-          `User berhasil dibuat, tetapi set akses wilayah gagal: ${accessRes.error}`,
+          `Gagal set akses wilayah: ${accessRes.error}. User sudah dibuat, tapi rollback hapus user gagal.`,
+        );
+      } else {
+        setError(
+          `Gagal set akses wilayah: ${accessRes.error}. User dibatalkan, silakan coba lagi.`,
         );
       }
+      setIsCreating(false);
+      await loadUsers({ preserveError: true });
+      return;
     }
 
     setCreateForm({
@@ -357,6 +430,24 @@ export default function UserManagementPage() {
     const validateError = validateScope(nextRole, draft);
     if (validateError) {
       setError(validateError);
+      return;
+    }
+
+    if (
+      nextRole === "korwil" &&
+      draft.korwilId &&
+      isKorwilTakenByOtherUser(draft.korwilId, user.id)
+    ) {
+      setError("Korwil ini sudah terhubung ke user lain.");
+      return;
+    }
+
+    if (
+      nextRole === "korda" &&
+      draft.kordaId &&
+      isKordaTakenByOtherUser(draft.kordaId, user.id)
+    ) {
+      setError("Korda ini sudah terhubung ke user lain.");
       return;
     }
 
@@ -592,11 +683,20 @@ export default function UserManagementPage() {
                             <SelectValue placeholder="Pilih korwil" />
                           </SelectTrigger>
                           <SelectContent>
-                            {korwilOptions.map((korwil) => (
-                              <SelectItem key={korwil.id} value={korwil.id}>
-                                {korwil.name}
-                              </SelectItem>
-                            ))}
+                            {korwilOptions.map((korwil) => {
+                              const isTaken = isKorwilTakenByOtherUser(korwil.id);
+
+                              return (
+                                <SelectItem
+                                  key={korwil.id}
+                                  value={korwil.id}
+                                  disabled={isTaken}
+                                >
+                                  {korwil.name}
+                                  {isTaken ? " (sudah dipakai)" : ""}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -615,12 +715,21 @@ export default function UserManagementPage() {
                             <SelectValue placeholder="Pilih korda" />
                           </SelectTrigger>
                           <SelectContent>
-                            {kordaOptions.map((korda) => (
-                              <SelectItem key={korda.id} value={korda.id}>
-                                {korda.name}
-                                {korda.korwilName ? ` (${korda.korwilName})` : ""}
-                              </SelectItem>
-                            ))}
+                            {kordaOptions.map((korda) => {
+                              const isTaken = isKordaTakenByOtherUser(korda.id);
+
+                              return (
+                                <SelectItem
+                                  key={korda.id}
+                                  value={korda.id}
+                                  disabled={isTaken}
+                                >
+                                  {korda.name}
+                                  {korda.korwilName ? ` (${korda.korwilName})` : ""}
+                                  {isTaken ? " (sudah dipakai)" : ""}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -731,12 +840,20 @@ export default function UserManagementPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={loadUsers} disabled={isLoading} className="gap-2">
+              <Button
+                onClick={() => {
+                  void loadUsers();
+                }}
+                disabled={isLoading}
+                className="gap-2"
+              >
                 <Search className="h-4 w-4" />
                 Search
               </Button>
               <Button
-                onClick={loadUsers}
+                onClick={() => {
+                  void loadUsers();
+                }}
                 disabled={isLoading}
                 variant="outline"
                 size="icon"
@@ -901,11 +1018,23 @@ export default function UserManagementPage() {
                                 <SelectValue placeholder="Pilih korwil" />
                               </SelectTrigger>
                               <SelectContent>
-                                {korwilOptions.map((korwil) => (
-                                  <SelectItem key={korwil.id} value={korwil.id}>
-                                    {korwil.name}
-                                  </SelectItem>
-                                ))}
+                                {korwilOptions.map((korwil) => {
+                                  const isTakenByOther = isKorwilTakenByOtherUser(
+                                    korwil.id,
+                                    user.id,
+                                  );
+
+                                  return (
+                                    <SelectItem
+                                      key={korwil.id}
+                                      value={korwil.id}
+                                      disabled={isTakenByOther}
+                                    >
+                                      {korwil.name}
+                                      {isTakenByOther ? " (sudah dipakai)" : ""}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                           )}
@@ -925,14 +1054,26 @@ export default function UserManagementPage() {
                                 <SelectValue placeholder="Pilih korda" />
                               </SelectTrigger>
                               <SelectContent>
-                                {kordaOptions.map((korda) => (
-                                  <SelectItem key={korda.id} value={korda.id}>
-                                    {korda.name}
-                                    {korda.korwilName
-                                      ? ` (${korda.korwilName})`
-                                      : ""}
-                                  </SelectItem>
-                                ))}
+                                {kordaOptions.map((korda) => {
+                                  const isTakenByOther = isKordaTakenByOtherUser(
+                                    korda.id,
+                                    user.id,
+                                  );
+
+                                  return (
+                                    <SelectItem
+                                      key={korda.id}
+                                      value={korda.id}
+                                      disabled={isTakenByOther}
+                                    >
+                                      {korda.name}
+                                      {korda.korwilName
+                                        ? ` (${korda.korwilName})`
+                                        : ""}
+                                      {isTakenByOther ? " (sudah dipakai)" : ""}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                           )}
