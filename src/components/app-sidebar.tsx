@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   User2,
   Bot,
   Settings,
   Bus,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -37,15 +38,42 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { navMain, managements, others } from "@/config/sidebar-data";
+import { signOut, useSession } from "@/client/auth";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+
+  const userName = session?.user?.name || "User";
+  const userEmail = session?.user?.email || "-";
+  const userImage = session?.user?.image || "";
+  const userInitial = userName.charAt(0).toUpperCase() || "U";
 
   // Helper to check if a url is active
   const isActive = (url: string) => {
     if (url === "/dashboard" && pathname === "/dashboard") return true;
     if (url !== "/dashboard" && pathname === url) return true;
     return false;
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    try {
+      const res = await signOut();
+      if (res?.error) {
+        setIsLoggingOut(false);
+        return;
+      }
+
+      router.replace("/sign-in");
+      router.refresh();
+    } catch {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -154,15 +182,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage
-                      src="https://github.com/shadcn.png"
-                      alt="User"
-                    />
-                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    <AvatarImage src={userImage} alt={userName} />
+                    <AvatarFallback className="rounded-lg">{userInitial}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">shadcn</span>
-                    <span className="truncate text-xs">m@example.com</span>
+                    <span className="truncate font-semibold">{userName}</span>
+                    <span className="truncate text-xs">{userEmail}</span>
                   </div>
                   <ChevronDown className="ml-auto size-4" />
                 </SidebarMenuButton>
@@ -176,15 +201,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage
-                        src="https://github.com/shadcn.png"
-                        alt="User"
-                      />
-                      <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                      <AvatarImage src={userImage} alt={userName} />
+                      <AvatarFallback className="rounded-lg">{userInitial}</AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">shadcn</span>
-                      <span className="truncate text-xs">m@example.com</span>
+                      <span className="truncate font-semibold">{userName}</span>
+                      <span className="truncate text-xs">{userEmail}</span>
                     </div>
                   </div>
                 </DropdownMenuLabel>
@@ -202,8 +224,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   AI Assistant
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  Log out
+                <DropdownMenuItem onClick={handleLogout} disabled={isLoggingOut}>
+                  {isLoggingOut ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Logging out...
+                    </>
+                  ) : (
+                    "Log out"
+                  )}
                   <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </DropdownMenuContent>

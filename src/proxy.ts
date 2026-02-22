@@ -1,17 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
-export async function proxy(request: NextRequest) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+const AUTH_PAGES = ["/sign-in", "/sign-up", "/login"];
 
-  // THIS IS NOT SECURE!
-  // This is the recommended approach to optimistically redirect users
-  // We recommend handling auth checks in each page/route
-  if (!session) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
+function isAuthPage(pathname: string): boolean {
+  return AUTH_PAGES.some((route) => pathname === route);
+}
+
+export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const authPage = isAuthPage(pathname);
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
+  const isAuthenticated = Boolean(session?.session && session?.user);
+
+  if (!isAuthenticated && !authPage) {
+    const signInUrl = new URL("/sign-in", request.url);
+    const callbackPath = `${pathname}${request.nextUrl.search}`;
+    if (callbackPath && callbackPath !== "/") {
+      signInUrl.searchParams.set("redirectTo", callbackPath);
+    }
+
+    return NextResponse.redirect(signInUrl);
+  }
+
+  if (isAuthenticated && authPage) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();
@@ -19,11 +34,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // match semua path, kecuali yang dimulai dengan:
-    // - api
-    // - sign-in (atau login)
-    // - _next (assets)
-    // - favicon.ico (opsional)
-    "/((?!api|sign-in|login|_next|favicon.ico).*)",
-  ], // Specify the routes the middleware applies to
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+  ],
 };
