@@ -162,8 +162,8 @@ export function calculateLayout(
   void PAPER_SIZES[paperSize]; // retained for potential future use
 
   if (printType === "luggage_card") {
-    // Landscape card: wider 98mm x 53mm to keep text compact and proportional
-    const cardWidth = 98;
+    // Landscape card: narrowed again to improve safe margins on A3 print
+    const cardWidth = 96;
     const cardHeight = 53;
 
     switch (paperSize) {
@@ -173,7 +173,7 @@ export function calculateLayout(
           rows: 5,
           cardWidth,
           cardHeight,
-          marginX: 7, // (210 - (98*2)) / 2 = (210 - 196) / 2 = 14 / 2 = 7
+          marginX: 9, // (210 - (96*2)) / 2 = (210 - 192) / 2 = 18 / 2 = 9
           marginY: 16, // (297 - (53*5)) / 2 = 16
           gapX: 0,
           gapY: 0,
@@ -184,7 +184,7 @@ export function calculateLayout(
           rows: 6,
           cardWidth,
           cardHeight,
-          marginX: 9.5, // (215 - (98*2)) / 2 = (215 - 196) / 2 = 19 / 2 = 9.5
+          marginX: 11.5, // (215 - (96*2)) / 2 = (215 - 192) / 2 = 23 / 2 = 11.5
           marginY: 6, // (330 - (53*6)) / 2 = 6
           gapX: 0,
           gapY: 0,
@@ -195,7 +195,7 @@ export function calculateLayout(
           rows: 7,
           cardWidth,
           cardHeight,
-          marginX: 1.5, // (297 - (98*3)) / 2 = (297 - 294) / 2 = 3 / 2 = 1.5
+          marginX: 4.5, // (297 - (96*3)) / 2 = (297 - 288) / 2 = 9 / 2 = 4.5
           marginY: 24.5, // (420 - (53*7)) / 2 = 24.5
           gapX: 0,
           gapY: 0,
@@ -203,7 +203,7 @@ export function calculateLayout(
     }
   } else {
     // Ticket: low-height landscape format to match content density
-    const cardWidth = 98;
+    const cardWidth = 96;
     const cardHeight = 20;
 
     switch (paperSize) {
@@ -213,7 +213,7 @@ export function calculateLayout(
           rows: 12,
           cardWidth,
           cardHeight,
-          marginX: 7,
+          marginX: 9,
           marginY: 6,
           gapX: 0,
           gapY: 0,
@@ -224,7 +224,7 @@ export function calculateLayout(
           rows: 15,
           cardWidth,
           cardHeight,
-          marginX: 9.5,
+          marginX: 11.5,
           marginY: 6,
           gapX: 0,
           gapY: 0,
@@ -235,7 +235,7 @@ export function calculateLayout(
           rows: 20,
           cardWidth,
           cardHeight,
-          marginX: 1.5,
+          marginX: 4.5,
           marginY: 4,
           gapX: 0,
           gapY: 0,
@@ -248,6 +248,7 @@ export interface PrintDataItem {
   id: string;
   studentName: string;
   studentNis: string | null;
+  fullAddress: string | null;
   studentGender: string;
   kordaName: string;
   dropPointName: string;

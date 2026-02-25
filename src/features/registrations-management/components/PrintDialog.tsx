@@ -660,9 +660,9 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
       ? "PUTRI"
       : "PUTRA";
   const kordaText = truncatePreviewText(item.kordaName, 16).toUpperCase();
-  const studentName = truncatePreviewText(item.studentName, 30);
-  const leftKorda = truncatePreviewText(item.kordaName, 18);
+  const studentName = truncatePreviewText(item.studentName, 30).toUpperCase();
   const studentNis = truncatePreviewText(item.studentNis, 20);
+  const fullAddress = truncatePreviewText(item.fullAddress, 24);
   const dropPoint = truncatePreviewText(item.dropPointName, 20);
   const busLabel = truncatePreviewText(item.busLabel, 20);
   const busBadgeWidth = Math.max(
@@ -692,17 +692,14 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
         {kordaText}
       </text>
 
-      <text x="490" y="165" fill={palette.text} textAnchor="middle" fontSize="31" fontWeight="700" letterSpacing="4">
-        NAMA PESERTA
-      </text>
-      <text x="490" y="206" fill="#111827" textAnchor="middle" fontSize="49" fontWeight="700">
+      <text x="490" y="190" fill="#111827" textAnchor="middle" fontSize="49" fontWeight="700">
         {studentName}
       </text>
 
-      <text x="28" y="255" fill="#6b7280" fontSize="31" fontWeight="700">KORDA</text>
-      <text x="28" y="297" fill={palette.text} fontSize="40" fontWeight="700">{leftKorda}</text>
-      <text x="28" y="412" fill="#6b7280" fontSize="31" fontWeight="700">NOMOR INDUK</text>
-      <text x="28" y="454" fill="#374151" fontSize="38" fontWeight="500">{studentNis}</text>
+      <text x="28" y="255" fill="#6b7280" fontSize="31" fontWeight="700">NIS</text>
+      <text x="28" y="297" fill="#374151" fontSize="38" fontWeight="500">{studentNis}</text>
+      <text x="28" y="412" fill="#6b7280" fontSize="31" fontWeight="700">ALAMAT</text>
+      <text x="28" y="454" fill="#1f2937" fontSize="31" fontWeight="700">{fullAddress}</text>
 
       <text x="518" y="255" fill="#6b7280" fontSize="31" fontWeight="700">DROP POINT</text>
       <text x="518" y="297" fill="#1f2937" fontSize="38" fontWeight="700">{dropPoint}</text>
@@ -725,7 +722,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
 function PreviewTicketCard({ item }: { item: PrintDataItem }) {
   const palette = getHexPalette(item.kordaName);
   const studentName = truncatePreviewText(item.studentName, 28);
-  const studentNis = truncatePreviewText(item.studentNis, 18);
+  const dropPoint = truncatePreviewText(item.dropPointName, 18);
   const korda = truncatePreviewText(item.kordaName, 18);
   const busLabel = truncatePreviewText(item.busLabel, 16);
   const busBadgeWidth = Math.max(
@@ -753,8 +750,8 @@ function PreviewTicketCard({ item }: { item: PrintDataItem }) {
 
       <text x="20" y="85" fill="#6b7280" fontSize="23" fontWeight="700">NAMA PESERTA</text>
       <text x="20" y="116" fill="#111827" fontSize="34" fontWeight="700">{studentName}</text>
-      <text x="20" y="154" fill="#6b7280" fontSize="23" fontWeight="700">NOMOR INDUK</text>
-      <text x="20" y="185" fill="#374151" fontSize="32" fontWeight="500">{studentNis}</text>
+      <text x="20" y="154" fill="#6b7280" fontSize="23" fontWeight="700">DROP POINT</text>
+      <text x="20" y="185" fill="#374151" fontSize="32" fontWeight="500">{dropPoint}</text>
 
       <text x="506" y="85" fill="#6b7280" fontSize="23" fontWeight="700">KORDA</text>
       <text x="506" y="116" fill="#1f2937" fontSize="34" fontWeight="700">{korda}</text>
@@ -972,21 +969,9 @@ function drawLuggageCardToPdf(
     y + headerHeight + dividerHeight + nameHeight,
   );
 
-  pdf.setTextColor(...palette.text);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text(
-    "NAMA PESERTA",
-    x + width / 2,
-    y + headerHeight + dividerHeight + 3,
-    {
-      align: "center",
-    },
-  );
-
   const studentName = fitSingleLineText(
     pdf,
-    item.studentName,
+    normalizeText(item.studentName).toUpperCase(),
     width - 8,
     11.6,
     8.4,
@@ -998,7 +983,7 @@ function drawLuggageCardToPdf(
   pdf.text(
     studentName.text,
     x + width / 2,
-    y + headerHeight + dividerHeight + 7,
+    y + headerHeight + dividerHeight + 6.3,
     {
       align: "center",
     },
@@ -1016,25 +1001,7 @@ function drawLuggageCardToPdf(
   pdf.setTextColor(...labelColor);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(7);
-  pdf.text("KORDA", leftColumnX, topLabelY);
-
-  const kordaValue = fitSingleLineText(
-    pdf,
-    item.kordaName,
-    columnWidth,
-    9.5,
-    7.6,
-    "bold",
-  );
-  pdf.setTextColor(...palette.text);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(kordaValue.fontSize);
-  pdf.text(kordaValue.text, leftColumnX, topValueY);
-
-  pdf.setTextColor(...labelColor);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("NOMOR INDUK", leftColumnX, bottomLabelY);
+  pdf.text("NIS", leftColumnX, topLabelY);
 
   const nisValue = fitSingleLineText(
     pdf,
@@ -1047,7 +1014,29 @@ function drawLuggageCardToPdf(
   pdf.setTextColor(55, 65, 81);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(nisValue.fontSize);
-  pdf.text(nisValue.text, leftColumnX, bottomValueY);
+  pdf.text(nisValue.text, leftColumnX, topValueY);
+
+  pdf.setTextColor(...labelColor);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7);
+  pdf.text("ALAMAT", leftColumnX, bottomLabelY);
+
+  const addressValue = fitMultilineText(
+    pdf,
+    item.fullAddress,
+    columnWidth,
+    2,
+    8.2,
+    6.6,
+    "normal",
+  );
+  pdf.setTextColor(31, 41, 55);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(addressValue.fontSize);
+  const addressLineHeight = Math.max(2.8, addressValue.fontSize * 0.38);
+  addressValue.lines.forEach((line, index) => {
+    pdf.text(line, leftColumnX, bottomValueY + index * addressLineHeight);
+  });
 
   pdf.setTextColor(...labelColor);
   pdf.setFont("helvetica", "bold");
@@ -1179,11 +1168,11 @@ function drawTicketToPdf(
   pdf.setTextColor(...labelColor);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(5.8);
-  pdf.text("NOMOR INDUK", leftColumnX, bottomLabelY);
+  pdf.text("DROP POINT", leftColumnX, bottomLabelY);
 
-  const studentNis = fitSingleLineText(
+  const dropPoint = fitSingleLineText(
     pdf,
-    item.studentNis,
+    item.dropPointName,
     columnWidth,
     7.1,
     5.9,
@@ -1191,8 +1180,8 @@ function drawTicketToPdf(
   );
   pdf.setTextColor(55, 65, 81);
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(studentNis.fontSize);
-  pdf.text(studentNis.text, leftColumnX, bottomValueY);
+  pdf.setFontSize(dropPoint.fontSize);
+  pdf.text(dropPoint.text, leftColumnX, bottomValueY);
 
   pdf.setTextColor(...labelColor);
   pdf.setFont("helvetica", "bold");
