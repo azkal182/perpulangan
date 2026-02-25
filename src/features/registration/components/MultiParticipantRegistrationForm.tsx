@@ -63,7 +63,7 @@ export function MultiParticipantRegistrationForm({
   
   const [selectedOutboundDropPointId, setSelectedOutboundDropPointId] = React.useState<string | null>(null);
   const [selectedReturnDropPointId, setSelectedReturnDropPointId] = React.useState<string | null>(null);
-  const [selectedPaymentStatus, setSelectedPaymentStatus] = React.useState<string>("");
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = React.useState<string>("paid_both");
   const [participants, setParticipants] = React.useState<ParticipantDraft[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -316,7 +316,10 @@ export function MultiParticipantRegistrationForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1">Pilih Korda *</Label>
-                <Select value={selectedOutboundKordaId || ""} onValueChange={setSelectedOutboundKordaId}>
+                <Select value={selectedOutboundKordaId || ""} onValueChange={(value)=>{
+                  setSelectedOutboundKordaId(value)
+                  setSelectedReturnKordaId(value)
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih korda pulang" />
                   </SelectTrigger>
@@ -334,7 +337,10 @@ export function MultiParticipantRegistrationForm({
                 <Label className="mb-1">Pilih Titik Turun *</Label>
                 <Select 
                   value={selectedOutboundDropPointId || ""} 
-                  onValueChange={setSelectedOutboundDropPointId}
+                  onValueChange={(value)=>{
+                    setSelectedOutboundDropPointId(value)
+                    setSelectedReturnDropPointId(value)
+                  }}
                   disabled={!selectedOutboundKordaId}
                 >
                   <SelectTrigger>
