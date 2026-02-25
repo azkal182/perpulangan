@@ -9,13 +9,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, FileDown } from "lucide-react";
+import { Search, X, FileDown, Loader2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Korda } from "@/features/master/types";
 import type { DropPoint } from "@/features/drop-points/types";
+import { getRegistrationsForExcelExportAction } from "../actions/export-excel.action";
+import { downloadRegistrationsExcel } from "../lib/registration-excel";
+import { toast } from "sonner";
 
 interface RegistrationFiltersProps {
+  eventId: string;
   kordas: Korda[];
   dropPoints: DropPoint[];
 }
@@ -23,7 +27,11 @@ interface RegistrationFiltersProps {
 type JourneyType = "all" | "both" | "return_only" | "outbound_only";
 type StatusFilter = "all" | "CONFIRMED" | "CANCELLED" | "PARTIAL_CANCEL" | "DRAFT";
 
-export function RegistrationFilters({ kordas, dropPoints }: RegistrationFiltersProps) {
+export function RegistrationFilters({
+  eventId,
+  kordas,
+  dropPoints,
+}: RegistrationFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -42,6 +50,7 @@ export function RegistrationFilters({ kordas, dropPoints }: RegistrationFiltersP
   );
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -81,6 +90,43 @@ export function RegistrationFilters({ kordas, dropPoints }: RegistrationFiltersP
     kordaId !== "all" ||
     dropPointId !== "all" ||
     search.trim() !== "";
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    try {
+      const result = await getRegistrationsForExcelExportAction({
+        eventId,
+        journeyType,
+        status,
+        kordaId: kordaId === "all" ? undefined : kordaId,
+        dropPointId: dropPointId === "all" ? undefined : dropPointId,
+        search: search.trim() || undefined,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || "Gagal menyiapkan data export");
+        return;
+      }
+
+      if (!result.data || !result.totalRows || result.totalRows === 0) {
+        toast.error("Tidak ada data untuk diexport");
+        return;
+      }
+
+      const datePart = new Date().toISOString().slice(0, 10);
+      const filename = `daftar_peserta_${datePart}.xls`;
+      downloadRegistrationsExcel(result.data, filename);
+
+      toast.success(
+        `Export berhasil: ${result.totalRows} data (${result.data.length} sheet korwil)`,
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error("Terjadi kesalahan saat export Excel");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -170,9 +216,23 @@ export function RegistrationFilters({ kordas, dropPoints }: RegistrationFiltersP
         </div>
 
         {/* Export Button */}
-        <Button variant="outline" className="w-full sm:w-auto">
-          <FileDown className="mr-2 h-4 w-4" />
-          Export Excel
+        <Button
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={handleExportExcel}
+          disabled={exportingExcel}
+        >
+          {exportingExcel ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            <>
+              <FileDown className="mr-2 h-4 w-4" />
+              Export Excel
+            </>
+          )}
         </Button>
       </div>
     </div>

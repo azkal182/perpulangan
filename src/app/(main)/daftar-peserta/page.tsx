@@ -116,7 +116,11 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <RegistrationFilters kordas={kordas} dropPoints={dropPoints} />
+              <RegistrationFilters
+                eventId={activeEvent.id}
+                kordas={kordas}
+                dropPoints={dropPoints}
+              />
             </CardContent>
           </Card>
 

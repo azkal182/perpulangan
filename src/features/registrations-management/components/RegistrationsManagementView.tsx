@@ -66,7 +66,11 @@ export function RegistrationsManagementView({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <RegistrationFilters kordas={kordas} dropPoints={dropPoints} />
+                <RegistrationFilters
+                  eventId={eventId}
+                  kordas={kordas}
+                  dropPoints={dropPoints}
+                />
               </CardContent>
             </Card>
 
