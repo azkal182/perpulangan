@@ -112,3 +112,9 @@ export type StudentsResponseDTO = {
     pagination: Pagination;
   };
 };
+
+export type SingleStudentResponseDTO = {
+  success: boolean;
+  data: StudentDTO | null;
+  message?: string | null;
+};

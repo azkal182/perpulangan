@@ -18,7 +18,7 @@ export type UpdateStudentInput = {
   ttl?: string;
   dormitory?: string;
   fullAddress?: string;
-  source: "DAFU" | "MUSA";
+  source: "DAFU" | "MUSA" | "SPBP";
   parrentPhone?: string;
   status: boolean;
   provinceId?: number;

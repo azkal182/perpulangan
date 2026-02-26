@@ -204,6 +204,7 @@ model SyncLog {
 enum StudentSource {
     DAFU
     MUSA
+    SPBP
 }
 
 enum EventStatus {

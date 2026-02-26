@@ -1,5 +1,9 @@
 import axios from "axios";
-import { StudentsResponseDTO } from "./students.dto";
+import {
+  SingleStudentResponseDTO,
+  StudentDTO,
+  StudentsResponseDTO,
+} from "./students.dto";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
@@ -36,4 +40,24 @@ export async function fetchStudents(
     params: Object.keys(query).length > 0 ? query : undefined,
   });
   return res.data;
+}
+
+export async function fetchStudentById(id: string): Promise<StudentDTO> {
+  const trimmedId = id.trim();
+  if (!trimmedId) {
+    throw new Error("ID anggota wajib diisi");
+  }
+
+  const res = await api.get<SingleStudentResponseDTO>(
+    `/api/anggota/${encodeURIComponent(trimmedId)}`,
+  );
+  const payload = res.data;
+
+  if (!payload?.success || !payload?.data) {
+    throw new Error(
+      payload?.message || `Data anggota ${trimmedId} tidak ditemukan`,
+    );
+  }
+
+  return payload.data;
 }

@@ -41,7 +41,7 @@ const EMPTY_FORM = {
   ttl: "",
   dormitory: "",
   fullAddress: "",
-  source: "" as "DAFU" | "MUSA" | "",
+  source: "" as "DAFU" | "MUSA" | "SPBP" | "",
   parrentPhone: "",
   status: true,
 };
@@ -58,8 +58,12 @@ export function AddManualStudentDialog({
   // Province & Regency
   const [provinces, setProvinces] = useState<ProvinceOption[]>([]);
   const [regencies, setRegencies] = useState<RegencyOption[]>([]);
-  const [selectedProvinceId, setSelectedProvinceId] = useState<number | null>(null);
-  const [selectedRegencyId, setSelectedRegencyId] = useState<number | null>(null);
+  const [selectedProvinceId, setSelectedProvinceId] = useState<number | null>(
+    null,
+  );
+  const [selectedRegencyId, setSelectedRegencyId] = useState<number | null>(
+    null,
+  );
   const [loadingProvinces, setLoadingProvinces] = useState(false);
   const [loadingRegencies, setLoadingRegencies] = useState(false);
 
@@ -86,7 +90,10 @@ export function AddManualStudentDialog({
       .finally(() => setLoadingRegencies(false));
   }, [selectedProvinceId]);
 
-  function handleChange(field: keyof typeof EMPTY_FORM, value: string | boolean) {
+  function handleChange(
+    field: keyof typeof EMPTY_FORM,
+    value: string | boolean,
+  ) {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError(null);
   }
@@ -115,7 +122,7 @@ export function AddManualStudentDialog({
         ttl: form.ttl || undefined,
         dormitory: form.dormitory || undefined,
         fullAddress: form.fullAddress || undefined,
-        source: form.source as "DAFU" | "MUSA",
+        source: form.source as "DAFU" | "MUSA" | "SPBP",
         parrentPhone: form.parrentPhone || undefined,
         status: form.status,
         provinceId: selectedProvinceId ?? undefined,
@@ -149,7 +156,8 @@ export function AddManualStudentDialog({
         <DialogHeader>
           <DialogTitle>Tambah Santri Manual</DialogTitle>
           <DialogDescription>
-            Data santri yang tidak berasal dari API (DAFU / MUSA). NIS dan ID API tidak diperlukan.
+            Data santri yang tidak berasal dari API (DAFU / MUSA / SPBP). NIS
+            dan ID API tidak diperlukan.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,7 +203,8 @@ export function AddManualStudentDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="DAFU">DAFU</SelectItem>
-                  <SelectItem value="MUSA">MUSA</SelectItem>
+                  <SelectItem value="DAFU">DAFU</SelectItem>
+                  <SelectItem value="MUSA">SPBP</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -24,6 +24,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getStudentsForPDFExport } from "../actions/export-pdf.action";
 import { generateStudentsPDF } from "../utils/pdf-generator";
 import { AddManualStudentDialog } from "./AddManualStudentDialog";
+import { ImportSingleStudentDialog } from "./ImportSingleStudentDialog";
 
 type StatusParam = "all" | "active" | "inactive";
 
@@ -64,7 +65,7 @@ export function SantriToolbarClient({
 }) {
   const [exportingPDF, setExportingPDF] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
-
+  const [importSingleOpen, setImportSingleOpen] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -287,7 +288,6 @@ export function SantriToolbarClient({
     }
   };
 
-
   return (
     <>
       <Alert className="flex items-center justify-between pr-2 [&>svg+div]:translate-y-0 border-none bg-emerald-600/10 text-emerald-500 dark:bg-emerald-600/15">
@@ -433,13 +433,22 @@ export function SantriToolbarClient({
             </Button>
 
             <Button
+              variant="outline"
+              className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
+              onClick={() => setImportSingleOpen(true)}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Import Single
+            </Button>
+
+            <Button
               asChild
               variant="outline"
               className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
             >
               <Link href="/santri/import">
                 <Download className="mr-2 h-4 w-4" />
-                Import (Preview)
+                Import Bulk (Preview)
               </Link>
             </Button>
 
@@ -457,6 +466,12 @@ export function SantriToolbarClient({
       <AddManualStudentDialog
         open={addStudentOpen}
         onOpenChange={setAddStudentOpen}
+      />
+
+      <ImportSingleStudentDialog
+        open={importSingleOpen}
+        onOpenChange={setImportSingleOpen}
+        onSuccess={() => router.refresh()}
       />
     </>
   );
