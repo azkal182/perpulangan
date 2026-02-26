@@ -44,6 +44,7 @@ type Props = {
   dropPoints: DropPoint[];
   defaultMode?: "both" | "return_only"; // Initial mode
   lockMode?: boolean; // If true, hide mode selector
+  enableUnsavedGuard?: boolean; // Prevent accidental navigation while draft exists
 };
 
 type ParticipantDraft = {
@@ -53,12 +54,168 @@ type ParticipantDraft = {
   paymentStatus: "unpaid" | "outbound_only" | "paid_both" | "paid_return";
 };
 
+const UNSAVED_WARNING_MESSAGE =
+  "Perubahan belum disimpan. Yakin ingin meninggalkan halaman ini?";
+
+function useUnsavedChangesGuard(params: {
+  enabled: boolean;
+  shouldBlock: boolean;
+  message: string;
+}) {
+  const { enabled, shouldBlock, message } = params;
+  const shouldBlockRef = React.useRef(shouldBlock);
+  const bypassRef = React.useRef(false);
+
+  React.useEffect(() => {
+    shouldBlockRef.current = shouldBlock;
+  }, [shouldBlock]);
+
+  const allowNextNavigation = React.useCallback(() => {
+    bypassRef.current = true;
+    shouldBlockRef.current = false;
+  }, []);
+
+  React.useEffect(() => {
+    if (!enabled || typeof window === "undefined") {
+      return;
+    }
+
+    const STATE_KEY = "__registration_unsaved_guard";
+    const state = (window.history.state as Record<string, unknown> | null) ?? {};
+
+    if (!state[STATE_KEY]) {
+      window.history.pushState(
+        {
+          ...state,
+          [STATE_KEY]: true,
+        },
+        "",
+        window.location.href,
+      );
+    }
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (bypassRef.current || !shouldBlockRef.current) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const onClickCapture = (event: MouseEvent) => {
+      if (
+        bypassRef.current ||
+        !shouldBlockRef.current ||
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target as Element | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+
+      if (!anchor) {
+        return;
+      }
+
+      if (
+        anchor.target === "_blank" ||
+        anchor.hasAttribute("download") ||
+        anchor.getAttribute("rel")?.includes("external")
+      ) {
+        return;
+      }
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("javascript:")) {
+        return;
+      }
+
+      let destination: URL;
+      try {
+        destination = new URL(anchor.href, window.location.href);
+      } catch {
+        return;
+      }
+
+      const current = new URL(window.location.href);
+      const isSameDestination =
+        destination.pathname === current.pathname &&
+        destination.search === current.search &&
+        destination.hash === current.hash;
+
+      if (isSameDestination) {
+        return;
+      }
+
+      const confirmed = window.confirm(message);
+      if (!confirmed) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      bypassRef.current = true;
+      shouldBlockRef.current = false;
+    };
+
+    const onPopState = () => {
+      if (bypassRef.current || !shouldBlockRef.current) {
+        window.removeEventListener("beforeunload", onBeforeUnload);
+        document.removeEventListener("click", onClickCapture, true);
+        window.removeEventListener("popstate", onPopState);
+        window.history.back();
+        return;
+      }
+
+      const confirmed = window.confirm(message);
+      if (!confirmed) {
+        window.history.pushState(
+          {
+            ...((window.history.state as Record<string, unknown> | null) ?? {}),
+            [STATE_KEY]: true,
+          },
+          "",
+          window.location.href,
+        );
+        return;
+      }
+
+      bypassRef.current = true;
+      shouldBlockRef.current = false;
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClickCapture, true);
+      window.removeEventListener("popstate", onPopState);
+      window.history.back();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClickCapture, true);
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClickCapture, true);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [enabled, message]);
+
+  return { allowNextNavigation };
+}
+
 export function MultiParticipantRegistrationForm({
   eventId,
   kordas,
   dropPoints,
   defaultMode = "both",
   lockMode = false,
+  enableUnsavedGuard = false,
 }: Props) {
   // Registration mode: 'both' or 'return_only'
   const [registrationMode, setRegistrationMode] = React.useState<
@@ -92,6 +249,38 @@ export function MultiParticipantRegistrationForm({
     [],
   );
   const [submitting, setSubmitting] = React.useState(false);
+
+  const hasDraftInput = React.useMemo(() => {
+    const hasSelectionDraft =
+      !!selectedKordaId ||
+      !!selectedStudentId ||
+      !!selectedStudent ||
+      !!selectedOutboundKordaId ||
+      !!selectedReturnKordaId ||
+      !!selectedOutboundDropPointId ||
+      !!selectedReturnDropPointId;
+
+    const hasModeChange = registrationMode !== defaultMode;
+
+    return participants.length > 0 || hasSelectionDraft || hasModeChange;
+  }, [
+    defaultMode,
+    participants.length,
+    registrationMode,
+    selectedKordaId,
+    selectedOutboundDropPointId,
+    selectedOutboundKordaId,
+    selectedReturnDropPointId,
+    selectedReturnKordaId,
+    selectedStudent,
+    selectedStudentId,
+  ]);
+
+  const { allowNextNavigation } = useUnsavedChangesGuard({
+    enabled: enableUnsavedGuard,
+    shouldBlock: hasDraftInput && !submitting,
+    message: UNSAVED_WARNING_MESSAGE,
+  });
 
   // When student is selected, auto-populate korda and drop points from their default korda
   React.useEffect(() => {
@@ -259,6 +448,7 @@ export function MultiParticipantRegistrationForm({
       } else {
         alert(`Berhasil mendaftarkan ${participants.length} peserta!`);
         setParticipants([]);
+        allowNextNavigation();
         window.location.reload();
       }
     } finally {

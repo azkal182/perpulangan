@@ -60,6 +60,7 @@ export default async function RegistrationPage() {
             dropPoints={dropPoints}
             defaultMode="both"
             lockMode={true}
+            enableUnsavedGuard
           />
         </div>
       </div>
