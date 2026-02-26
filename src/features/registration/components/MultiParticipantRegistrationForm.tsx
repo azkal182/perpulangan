@@ -30,7 +30,10 @@ import { Autocomplete } from "@/components/AutoComplete";
 import { Trash2, UserPlus } from "lucide-react";
 import type { Korda } from "../types";
 import type { DropPoint } from "@/features/drop-points/types";
-import { createRegistration } from "../actions/registration.action";
+import {
+  checkStudentAlreadyRegistered,
+  createRegistration,
+} from "../actions/registration.action";
 import {
   searchStudents,
   type StudentBasic,
@@ -249,6 +252,7 @@ export function MultiParticipantRegistrationForm({
     [],
   );
   const [submitting, setSubmitting] = React.useState(false);
+  const studentSelectionRequestRef = React.useRef(0);
 
   const hasDraftInput = React.useMemo(() => {
     const hasSelectionDraft =
@@ -341,6 +345,45 @@ export function MultiParticipantRegistrationForm({
   const selectedReturnDropPoint = React.useMemo(
     () => dropPoints.find((dp) => dp.id === selectedReturnDropPointId) || null,
     [dropPoints, selectedReturnDropPointId],
+  );
+
+  const handleStudentSelection = React.useCallback(
+    async (student: StudentBasic | null) => {
+      if (!student) {
+        setSelectedStudent(null);
+        return;
+      }
+
+      const requestId = ++studentSelectionRequestRef.current;
+      const checkResult = await checkStudentAlreadyRegistered({
+        eventId,
+        studentId: student.id,
+      });
+
+      if (requestId !== studentSelectionRequestRef.current) {
+        return;
+      }
+
+      if (!checkResult.success) {
+        setSelectedStudent(student);
+        toast.error(
+          checkResult.error || "Gagal memeriksa status registrasi santri",
+        );
+        return;
+      }
+
+      if (checkResult.registered) {
+        setSelectedStudentId(null);
+        setSelectedStudent(null);
+        toast.error(
+          `${student.name} sudah terdaftar di event ini pada Korda ${checkResult.kordaName || "-"}`,
+        );
+        return;
+      }
+
+      setSelectedStudent(student);
+    },
+    [eventId],
   );
 
   const handleAddParticipant = () => {
@@ -538,7 +581,9 @@ export function MultiParticipantRegistrationForm({
               }}
               value={selectedStudentId}
               onValueChange={setSelectedStudentId}
-              onSelectRaw={(student) => setSelectedStudent(student)}
+              onSelectRaw={(student) => {
+                void handleStudentSelection(student as StudentBasic | null);
+              }}
               keyField="id"
               getLabel={(student) => `${student.name} (${student.nis})`}
               placeholder="Cari siswa..."

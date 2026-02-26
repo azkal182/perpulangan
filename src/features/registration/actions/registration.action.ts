@@ -113,6 +113,68 @@ export async function createRegistration(data: RegistrationCreateData) {
   }
 }
 
+export async function checkStudentAlreadyRegistered(params: {
+  eventId: string;
+  studentId: string;
+}) {
+  try {
+    const scope = await getRegionalAccessScope();
+    const registration = await prisma.registration.findFirst({
+      where: andWhere(
+        {
+          eventId: params.eventId,
+          studentId: params.studentId,
+        },
+        registrationScopeWhere(scope),
+      ),
+      select: {
+        outboundKorda: { select: { name: true } },
+        returnKorda: { select: { name: true } },
+      },
+    });
+
+    if (!registration) {
+      return {
+        success: true,
+        registered: false,
+      };
+    }
+
+    const kordaNames = Array.from(
+      new Set(
+        [registration.outboundKorda?.name, registration.returnKorda?.name]
+          .filter((name): name is string => Boolean(name))
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0),
+      ),
+    );
+
+    return {
+      success: true,
+      registered: true,
+      kordaName: kordaNames.length > 0 ? kordaNames.join(" / ") : "-",
+    };
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return {
+        success: false,
+        registered: false,
+        error: error.message,
+      };
+    }
+
+    logger.error(
+      { err: error, params },
+      "checkStudentAlreadyRegistered action failed",
+    );
+    return {
+      success: false,
+      registered: false,
+      error: "Gagal memeriksa status registrasi santri",
+    };
+  }
+}
+
 export async function updateRegistration(
   id: string,
   data: RegistrationUpdateData
