@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,10 +31,61 @@ export function DeleteRegistrationDialog({
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const confirmationConfig = useMemo(() => {
+    if (!registration) {
+      return {
+        requires: "NIS",
+        expectedRaw: "",
+        expectedDisplay: "-",
+      } as const;
+    }
+
+    const nis = registration.student.nis?.trim() ?? "";
+    if (nis.length > 0) {
+      return {
+        requires: "NIS",
+        expectedRaw: nis,
+        expectedDisplay: nis,
+      } as const;
+    }
+
+    const name = registration.student.name.trim();
+    return {
+      requires: "NAMA",
+      expectedRaw: name,
+      expectedDisplay: name,
+    } as const;
+  }, [registration]);
+
+  const isConfirmValid = useMemo(() => {
+    if (!registration) {
+      return false;
+    }
+
+    const input = confirmText.trim();
+    if (confirmationConfig.requires === "NIS") {
+      return input === confirmationConfig.expectedRaw;
+    }
+
+    return (
+      input.localeCompare(confirmationConfig.expectedRaw, "id", {
+        sensitivity: "base",
+      }) === 0
+    );
+  }, [confirmText, confirmationConfig, registration]);
+
+  useEffect(() => {
+    if (!open) {
+      setConfirmText("");
+    }
+  }, [open]);
+
   const handleSubmit = async () => {
     if (!registration) return;
-    if (confirmText !== registration.student.nis) {
-      toast.error("NIS tidak cocok. Silakan cek kembali.");
+    if (!isConfirmValid) {
+      toast.error(
+        `${confirmationConfig.requires} tidak cocok. Silakan cek kembali.`,
+      );
       return;
     }
 
@@ -52,8 +103,7 @@ export function DeleteRegistrationDialog({
   };
 
   if (!registration) return null;
-
-  const isConfirmValid = confirmText === registration.student.nis;
+  const nisDisplay = registration.student.nis?.trim() || "-";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,7 +114,7 @@ export function DeleteRegistrationDialog({
             Hapus Registrasi Permanen
           </DialogTitle>
           <DialogDescription>
-            {registration.student.name} - {registration.student.nis}
+            {registration.student.name} - {nisDisplay}
           </DialogDescription>
         </DialogHeader>
 
@@ -91,7 +141,7 @@ export function DeleteRegistrationDialog({
           <div className="rounded-lg border p-3 bg-muted/50 space-y-1 text-sm">
             <div className="font-semibold">Data yang akan dihapus:</div>
             <div>• Siswa: {registration.student.name}</div>
-            <div>• NIS: {registration.student.nis}</div>
+            <div>• NIS: {nisDisplay}</div>
             {registration.outboundDropPoint && (
               <div>• Pulang: {registration.outboundKorda?.name} → {registration.outboundDropPoint.name}</div>
             )}
@@ -104,14 +154,23 @@ export function DeleteRegistrationDialog({
           {/* Confirmation Input */}
           <div className="space-y-2">
             <Label htmlFor="confirm">
-              Ketik NIS siswa <strong className="text-destructive">{registration.student.nis}</strong> untuk konfirmasi
+              Ketik {confirmationConfig.requires} siswa{" "}
+              <strong className="text-destructive">
+                {confirmationConfig.expectedDisplay}
+              </strong>{" "}
+              untuk konfirmasi
             </Label>
+            {confirmationConfig.requires === "NAMA" && (
+              <p className="text-xs text-muted-foreground">
+                Data ini tidak memiliki NIS, gunakan nama siswa untuk konfirmasi.
+              </p>
+            )}
             <Input
               id="confirm"
-              placeholder="Ketik NIS di sini..."
+              placeholder={`Ketik ${confirmationConfig.requires} di sini...`}
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
-              className="font-mono"
+              className={confirmationConfig.requires === "NIS" ? "font-mono" : undefined}
             />
           </div>
         </div>
