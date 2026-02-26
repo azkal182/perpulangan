@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,20 +31,24 @@ import { Trash2, UserPlus } from "lucide-react";
 import type { Korda } from "../types";
 import type { DropPoint } from "@/features/drop-points/types";
 import { createRegistration } from "../actions/registration.action";
-import { searchStudents, type StudentBasic } from "@/features/santri/actions/students.action";
+import {
+  searchStudents,
+  type StudentBasic,
+} from "@/features/santri/actions/students.action";
+import { toast } from "sonner";
 
 type Props = {
   eventId: string;
   eventName: string;
   kordas: Korda[];
   dropPoints: DropPoint[];
-  defaultMode?: 'both' | 'return_only';  // Initial mode
-  lockMode?: boolean;  // If true, hide mode selector
+  defaultMode?: "both" | "return_only"; // Initial mode
+  lockMode?: boolean; // If true, hide mode selector
 };
 
 type ParticipantDraft = {
   student: StudentBasic;
-  outboundDropPoint: DropPoint | null;  // Nullable for return-only
+  outboundDropPoint: DropPoint | null; // Nullable for return-only
   returnDropPoint: DropPoint;
   paymentStatus: "unpaid" | "outbound_only" | "paid_both" | "paid_return";
 };
@@ -47,37 +57,55 @@ export function MultiParticipantRegistrationForm({
   eventId,
   kordas,
   dropPoints,
-  defaultMode = 'both',
+  defaultMode = "both",
   lockMode = false,
 }: Props) {
   // Registration mode: 'both' or 'return_only'
-  const [registrationMode, setRegistrationMode] = React.useState<'both' | 'return_only'>(defaultMode);
-  
-  const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(null);
-  const [selectedStudentId, setSelectedStudentId] = React.useState<string | null>(null);
-  const [selectedStudent, setSelectedStudent] = React.useState<StudentBasic | null>(null);
-  
+  const [registrationMode, setRegistrationMode] = React.useState<
+    "both" | "return_only"
+  >(defaultMode);
+
+  const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(
+    null,
+  );
+  const [selectedStudentId, setSelectedStudentId] = React.useState<
+    string | null
+  >(null);
+  const [selectedStudent, setSelectedStudent] =
+    React.useState<StudentBasic | null>(null);
+
   // Separate korda for outbound and return
-  const [selectedOutboundKordaId, setSelectedOutboundKordaId] = React.useState<string | null>(null);
-  const [selectedReturnKordaId, setSelectedReturnKordaId] = React.useState<string | null>(null);
-  
-  const [selectedOutboundDropPointId, setSelectedOutboundDropPointId] = React.useState<string | null>(null);
-  const [selectedReturnDropPointId, setSelectedReturnDropPointId] = React.useState<string | null>(null);
-  const [selectedPaymentStatus, setSelectedPaymentStatus] = React.useState<string>("paid_both");
-  const [participants, setParticipants] = React.useState<ParticipantDraft[]>([]);
+  const [selectedOutboundKordaId, setSelectedOutboundKordaId] = React.useState<
+    string | null
+  >(null);
+  const [selectedReturnKordaId, setSelectedReturnKordaId] = React.useState<
+    string | null
+  >(null);
+
+  const [selectedOutboundDropPointId, setSelectedOutboundDropPointId] =
+    React.useState<string | null>(null);
+  const [selectedReturnDropPointId, setSelectedReturnDropPointId] =
+    React.useState<string | null>(null);
+  const [selectedPaymentStatus, setSelectedPaymentStatus] =
+    React.useState<string>("paid_both");
+  const [participants, setParticipants] = React.useState<ParticipantDraft[]>(
+    [],
+  );
   const [submitting, setSubmitting] = React.useState(false);
 
   // When student is selected, auto-populate korda and drop points from their default korda
   React.useEffect(() => {
     if (selectedStudent?.regency?.kordaId) {
       const studentKordaId = selectedStudent.regency.kordaId;
-      
+
       // Set both korda selectors to student's default korda
       setSelectedOutboundKordaId(studentKordaId);
       setSelectedReturnKordaId(studentKordaId);
-      
+
       // Find the first drop point from student's korda for both outbound and return
-      const studentDropPoints = dropPoints.filter(dp => dp.kordaId === studentKordaId);
+      const studentDropPoints = dropPoints.filter(
+        (dp) => dp.kordaId === studentKordaId,
+      );
       if (studentDropPoints.length > 0) {
         setSelectedOutboundDropPointId(studentDropPoints[0].id);
         setSelectedReturnDropPointId(studentDropPoints[0].id);
@@ -90,14 +118,14 @@ export function MultiParticipantRegistrationForm({
     setSelectedStudentId(null);
     setSelectedStudent(null);
   }, [selectedKordaId]);
-  
+
   // Reset outbound drop point when outbound korda changes
   React.useEffect(() => {
-    if (registrationMode === 'both') {
+    if (registrationMode === "both") {
       setSelectedOutboundDropPointId(null);
     }
   }, [selectedOutboundKordaId, registrationMode]);
-  
+
   // Reset return drop point when return korda changes
   React.useEffect(() => {
     setSelectedReturnDropPointId(null);
@@ -116,20 +144,25 @@ export function MultiParticipantRegistrationForm({
   }, [dropPoints, selectedReturnKordaId]);
 
   const selectedOutboundDropPoint = React.useMemo(
-    () => dropPoints.find((dp) => dp.id === selectedOutboundDropPointId) || null,
-    [dropPoints, selectedOutboundDropPointId]
+    () =>
+      dropPoints.find((dp) => dp.id === selectedOutboundDropPointId) || null,
+    [dropPoints, selectedOutboundDropPointId],
   );
 
   const selectedReturnDropPoint = React.useMemo(
     () => dropPoints.find((dp) => dp.id === selectedReturnDropPointId) || null,
-    [dropPoints, selectedReturnDropPointId]
+    [dropPoints, selectedReturnDropPointId],
   );
 
   const handleAddParticipant = () => {
     // Validation based on mode
     if (!selectedStudent) return;
-    if (registrationMode === 'both' && (!selectedOutboundDropPoint || !selectedReturnDropPoint)) return;
-    if (registrationMode === 'return_only' && !selectedReturnDropPoint) return;
+    if (
+      registrationMode === "both" &&
+      (!selectedOutboundDropPoint || !selectedReturnDropPoint)
+    )
+      return;
+    if (registrationMode === "return_only" && !selectedReturnDropPoint) return;
 
     // Validate payment status is selected
     if (!selectedPaymentStatus) {
@@ -147,12 +180,18 @@ export function MultiParticipantRegistrationForm({
       ...participants,
       {
         student: selectedStudent,
-        outboundDropPoint: registrationMode === 'both' ? selectedOutboundDropPoint! : null,
+        outboundDropPoint:
+          registrationMode === "both" ? selectedOutboundDropPoint! : null,
         returnDropPoint: selectedReturnDropPoint!,
-        paymentStatus: selectedPaymentStatus as "unpaid" | "outbound_only" | "paid_both" | "paid_return",
+        paymentStatus: selectedPaymentStatus as
+          | "unpaid"
+          | "outbound_only"
+          | "paid_both"
+          | "paid_return",
       },
     ]);
 
+    toast.success("Berhasil ditambahkan");
     // Reset selections
     setSelectedStudentId(null);
     setSelectedStudent(null);
@@ -160,11 +199,12 @@ export function MultiParticipantRegistrationForm({
     setSelectedReturnKordaId(null);
     setSelectedOutboundDropPointId(null);
     setSelectedReturnDropPointId(null);
-    setSelectedPaymentStatus("");
+    // setSelectedPaymentStatus("");
   };
 
   const handleRemoveParticipant = (studentId: string) => {
     setParticipants(participants.filter((p) => p.student.id !== studentId));
+    toast.info("Santri berhasil dihapus dari pendaftaran");
   };
 
   const totalPrice = React.useMemo(() => {
@@ -187,8 +227,12 @@ export function MultiParticipantRegistrationForm({
       // Submit each participant
       const results = await Promise.all(
         participants.map((p) => {
-          const outboundPaid = p.paymentStatus === "outbound_only" || p.paymentStatus === "paid_both";
-          const returnPaid = p.paymentStatus === "paid_both" || p.paymentStatus === "paid_return";
+          const outboundPaid =
+            p.paymentStatus === "outbound_only" ||
+            p.paymentStatus === "paid_both";
+          const returnPaid =
+            p.paymentStatus === "paid_both" ||
+            p.paymentStatus === "paid_return";
 
           return createRegistration({
             eventId,
@@ -197,19 +241,21 @@ export function MultiParticipantRegistrationForm({
             outboundDropPointId: p.outboundDropPoint?.id || null,
             returnKordaId: p.returnDropPoint.kordaId,
             returnDropPointId: p.returnDropPoint.id,
-            registrarName: "Admin",  // TODO: Get from authenticated user
-            registrarPhone: "-",      // TODO: Get from authenticated user
+            registrarName: "Admin", // TODO: Get from authenticated user
+            registrarPhone: "-", // TODO: Get from authenticated user
             kordaChanged: false,
             kordaChangeConfirmed: true,
             outboundPaid,
             returnPaid,
           });
-        })
+        }),
       );
 
       const failed = results.filter((r) => !r.success);
       if (failed.length > 0) {
-        alert(`Gagal mendaftarkan ${failed.length} peserta:\n${failed.map((r) => r.error).join("\n")}`);
+        alert(
+          `Gagal mendaftarkan ${failed.length} peserta:\n${failed.map((r) => r.error).join("\n")}`,
+        );
       } else {
         alert(`Berhasil mendaftarkan ${participants.length} peserta!`);
         setParticipants([]);
@@ -221,12 +267,11 @@ export function MultiParticipantRegistrationForm({
   };
 
   // Validation based on registration mode
-  const canAddParticipant = 
-    selectedStudent && 
-    (registrationMode === 'both' 
-      ? selectedOutboundDropPoint && selectedReturnDropPoint  // Both required
-      : selectedReturnDropPoint  // Only return required
-    ) && 
+  const canAddParticipant =
+    selectedStudent &&
+    (registrationMode === "both"
+      ? selectedOutboundDropPoint && selectedReturnDropPoint // Both required
+      : selectedReturnDropPoint) && // Only return required
     selectedPaymentStatus;
 
   return (
@@ -241,23 +286,31 @@ export function MultiParticipantRegistrationForm({
         <CardContent className="space-y-4">
           {/* Mode Selector */}
           {!lockMode && (
-          <div className="border-b pb-4">
-            <Label className="mb-2 block">Mode Registrasi</Label>
-            <RadioGroup value={registrationMode} onValueChange={(value) => setRegistrationMode(value as 'both' | 'return_only')}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="both" id="mode-both" />
-                <label htmlFor="mode-both" className="text-sm cursor-pointer">
-                  Pulang & Kembali (Normal)
-                </label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="return_only" id="mode-return" />
-                <label htmlFor="mode-return" className="text-sm cursor-pointer">
-                  Kembali Saja (Anak dijemput ortu, hanya ikut bus kembali)
-                </label>
-              </div>
-            </RadioGroup>
-          </div>
+            <div className="border-b pb-4">
+              <Label className="mb-2 block">Mode Registrasi</Label>
+              <RadioGroup
+                value={registrationMode}
+                onValueChange={(value) =>
+                  setRegistrationMode(value as "both" | "return_only")
+                }
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="both" id="mode-both" />
+                  <label htmlFor="mode-both" className="text-sm cursor-pointer">
+                    Pulang & Kembali (Normal)
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="return_only" id="mode-return" />
+                  <label
+                    htmlFor="mode-return"
+                    className="text-sm cursor-pointer"
+                  >
+                    Kembali Saja (Anak dijemput ortu, hanya ikut bus kembali)
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
           )}
 
           {/* Step 1: Select Korda (Optional) */}
@@ -274,7 +327,8 @@ export function MultiParticipantRegistrationForm({
               emptyText="Tidak ada korda"
             />
             <p className="text-sm text-muted-foreground mt-1">
-              Pilih Korda untuk filter titik turun, atau kosongkan untuk lihat semua
+              Pilih Korda untuk filter titik turun, atau kosongkan untuk lihat
+              semua
             </p>
           </div>
 
@@ -282,9 +336,10 @@ export function MultiParticipantRegistrationForm({
           <div>
             <Label className="mb-1">2. Cari & Pilih Siswa *</Label>
             <Autocomplete
-              key={selectedKordaId || 'all'} // Reset cache when Korda changes
+              key={selectedKordaId || "all"} // Reset cache when Korda changes
               async={{
-                loadOptions: (query) => searchStudents(query, selectedKordaId || undefined),
+                loadOptions: (query) =>
+                  searchStudents(query, selectedKordaId || undefined),
                 debounceMs: 300,
                 cache: {
                   enabled: true,
@@ -309,70 +364,86 @@ export function MultiParticipantRegistrationForm({
           </div>
 
           {/* Step 3: Perjalanan Pulang (Outbound) - Only for 'both' mode */}
-          {registrationMode === 'both' && (
-          <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
-            <h3 className="font-semibold text-sm">3. Perjalanan Pulang (Outbound)</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1">Pilih Korda *</Label>
-                <Select value={selectedOutboundKordaId || ""} onValueChange={(value)=>{
-                  setSelectedOutboundKordaId(value)
-                  setSelectedReturnKordaId(value)
-                }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih korda pulang" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {kordas.map((korda) => (
-                      <SelectItem key={korda.id} value={korda.id}>
-                        {korda.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {registrationMode === "both" && (
+            <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+              <h3 className="font-semibold text-sm">
+                3. Perjalanan Pulang (Outbound)
+              </h3>
 
-              <div>
-                <Label className="mb-1">Pilih Titik Turun *</Label>
-                <Select 
-                  value={selectedOutboundDropPointId || ""} 
-                  onValueChange={(value)=>{
-                    setSelectedOutboundDropPointId(value)
-                    setSelectedReturnDropPointId(value)
-                  }}
-                  disabled={!selectedOutboundKordaId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={selectedOutboundKordaId ? "Pilih titik turun" : "Pilih korda terlebih dahulu"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {outboundDropPoints.map((dp) => (
-                      <SelectItem key={dp.id} value={dp.id}>
-                        {dp.name} - Rp {dp.price.toLocaleString("id-ID")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedOutboundDropPoint && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Harga: Rp {selectedOutboundDropPoint.price.toLocaleString("id-ID")}
-                  </p>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1">Pilih Korda *</Label>
+                  <Select
+                    value={selectedOutboundKordaId || ""}
+                    onValueChange={(value) => {
+                      setSelectedOutboundKordaId(value);
+                      setSelectedReturnKordaId(value);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih korda pulang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {kordas.map((korda) => (
+                        <SelectItem key={korda.id} value={korda.id}>
+                          {korda.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="mb-1">Pilih Titik Turun *</Label>
+                  <Select
+                    value={selectedOutboundDropPointId || ""}
+                    onValueChange={(value) => {
+                      setSelectedOutboundDropPointId(value);
+                      setSelectedReturnDropPointId(value);
+                    }}
+                    disabled={!selectedOutboundKordaId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          selectedOutboundKordaId
+                            ? "Pilih titik turun"
+                            : "Pilih korda terlebih dahulu"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outboundDropPoints.map((dp) => (
+                        <SelectItem key={dp.id} value={dp.id}>
+                          {dp.name} - Rp {dp.price.toLocaleString("id-ID")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedOutboundDropPoint && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Harga: Rp{" "}
+                      {selectedOutboundDropPoint.price.toLocaleString("id-ID")}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-
           )}
 
           {/* Step 4: Perjalanan Kembali (Return) */}
           <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
-            <h3 className="font-semibold text-sm">4. Perjalanan Kembali (Return)</h3>
-            
+            <h3 className="font-semibold text-sm">
+              4. Perjalanan Kembali (Return)
+            </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1">Pilih Korda *</Label>
-                <Select value={selectedReturnKordaId || ""} onValueChange={setSelectedReturnKordaId}>
+                <Select
+                  value={selectedReturnKordaId || ""}
+                  onValueChange={setSelectedReturnKordaId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih korda kembali" />
                   </SelectTrigger>
@@ -388,13 +459,19 @@ export function MultiParticipantRegistrationForm({
 
               <div>
                 <Label className="mb-1">Pilih Titik Turun *</Label>
-                <Select 
-                  value={selectedReturnDropPointId || ""} 
+                <Select
+                  value={selectedReturnDropPointId || ""}
                   onValueChange={setSelectedReturnDropPointId}
                   disabled={!selectedReturnKordaId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={selectedReturnKordaId ? "Pilih titik turun" : "Pilih korda terlebih dahulu"} />
+                    <SelectValue
+                      placeholder={
+                        selectedReturnKordaId
+                          ? "Pilih titik turun"
+                          : "Pilih korda terlebih dahulu"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {returnDropPoints.map((dp) => (
@@ -406,7 +483,8 @@ export function MultiParticipantRegistrationForm({
                 </Select>
                 {selectedReturnDropPoint && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Harga: Rp {selectedReturnDropPoint.price.toLocaleString("id-ID")}
+                    Harga: Rp{" "}
+                    {selectedReturnDropPoint.price.toLocaleString("id-ID")}
                   </p>
                 )}
               </div>
@@ -416,35 +494,48 @@ export function MultiParticipantRegistrationForm({
           {/* Step 5: Payment Status */}
           <div>
             <Label className="mb-1">5. Status Pembayaran *</Label>
-            <Select value={selectedPaymentStatus} onValueChange={setSelectedPaymentStatus}>
-              <SelectTrigger className={!selectedPaymentStatus ? "text-muted-foreground" : ""}>
+            <Select
+              value={selectedPaymentStatus}
+              onValueChange={setSelectedPaymentStatus}
+            >
+              <SelectTrigger
+                className={
+                  !selectedPaymentStatus ? "text-muted-foreground" : ""
+                }
+              >
                 <SelectValue placeholder="Pilih status pembayaran" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unpaid">Belum Bayar</SelectItem>
-                {registrationMode === 'both' && (
+                {registrationMode === "both" && (
                   <>
-                    <SelectItem value="outbound_only">Sudah Bayar Pulang Saja</SelectItem>
-                    <SelectItem value="paid_both">Sudah Bayar Pulang-Pergi</SelectItem>
+                    <SelectItem value="outbound_only">
+                      Sudah Bayar Pulang Saja
+                    </SelectItem>
+                    <SelectItem value="paid_both">
+                      Sudah Bayar Pulang-Pergi
+                    </SelectItem>
                   </>
                 )}
-                {registrationMode === 'return_only' && (
-                  <SelectItem value="paid_return">Sudah Bayar Kembali</SelectItem>
+                {registrationMode === "return_only" && (
+                  <SelectItem value="paid_return">
+                    Sudah Bayar Kembali
+                  </SelectItem>
                 )}
               </SelectContent>
             </Select>
           </div>
 
-              {/* Add Button */}
-              <Button
-                type="button"
-                onClick={handleAddParticipant}
-                disabled={!canAddParticipant || submitting}
-                className="w-full"
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                Tambah ke Daftar
-              </Button>
+          {/* Add Button */}
+          <Button
+            type="button"
+            onClick={handleAddParticipant}
+            disabled={!canAddParticipant || submitting}
+            className="w-full"
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Tambah ke Daftar
+          </Button>
         </CardContent>
       </Card>
 
@@ -453,7 +544,9 @@ export function MultiParticipantRegistrationForm({
         <Card>
           <CardHeader>
             <CardTitle>Preview Peserta ({participants.length})</CardTitle>
-            <CardDescription>Daftar peserta yang akan didaftarkan</CardDescription>
+            <CardDescription>
+              Daftar peserta yang akan didaftarkan
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
@@ -472,18 +565,23 @@ export function MultiParticipantRegistrationForm({
                 <TableBody>
                   {participants.map((p) => {
                     const paymentLabel =
-                      p.paymentStatus === "paid_both" ? "Lunas PP" :
-                      p.paymentStatus === "outbound_only" ? "Pulang Saja" :
-                      p.paymentStatus === "paid_return" ? "Lunas Kembali" :
-                      "Belum Bayar";
-                    
+                      p.paymentStatus === "paid_both"
+                        ? "Lunas PP"
+                        : p.paymentStatus === "outbound_only"
+                          ? "Pulang Saja"
+                          : p.paymentStatus === "paid_return"
+                            ? "Lunas Kembali"
+                            : "Belum Bayar";
+
                     const outboundPrice = p.outboundDropPoint?.price || 0;
                     const returnPrice = p.returnDropPoint.price;
                     const totalPrice = outboundPrice + returnPrice;
 
                     return (
                       <TableRow key={p.student.id}>
-                        <TableCell className="font-medium">{p.student.name}</TableCell>
+                        <TableCell className="font-medium">
+                          {p.student.name}
+                        </TableCell>
                         <TableCell>{p.student.nis}</TableCell>
                         <TableCell>
                           <div className="text-sm">
@@ -491,11 +589,16 @@ export function MultiParticipantRegistrationForm({
                               <>
                                 {p.outboundDropPoint.name}
                                 <div className="text-xs text-muted-foreground">
-                                  Rp {p.outboundDropPoint.price.toLocaleString("id-ID")}
+                                  Rp{" "}
+                                  {p.outboundDropPoint.price.toLocaleString(
+                                    "id-ID",
+                                  )}
                                 </div>
                               </>
                             ) : (
-                              <span className="text-muted-foreground text-xs">-</span>
+                              <span className="text-muted-foreground text-xs">
+                                -
+                              </span>
                             )}
                           </div>
                         </TableCell>
@@ -503,7 +606,8 @@ export function MultiParticipantRegistrationForm({
                           <div className="text-sm">
                             {p.returnDropPoint.name}
                             <div className="text-xs text-muted-foreground">
-                              Rp {p.returnDropPoint.price.toLocaleString("id-ID")}
+                              Rp{" "}
+                              {p.returnDropPoint.price.toLocaleString("id-ID")}
                             </div>
                           </div>
                         </TableCell>
@@ -517,7 +621,9 @@ export function MultiParticipantRegistrationForm({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleRemoveParticipant(p.student.id)}
+                            onClick={() =>
+                              handleRemoveParticipant(p.student.id)
+                            }
                             disabled={submitting}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -545,7 +651,9 @@ export function MultiParticipantRegistrationForm({
               className="w-full mt-4"
               size="lg"
             >
-              {submitting ? "Mendaftarkan..." : `Daftar ${participants.length} Peserta`}
+              {submitting
+                ? "Mendaftarkan..."
+                : `Daftar ${participants.length} Peserta`}
             </Button>
           </CardContent>
         </Card>
