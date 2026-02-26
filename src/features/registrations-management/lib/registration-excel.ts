@@ -54,6 +54,180 @@ function mergedTitleCell(value: string, styleId = "SectionHeader"): string {
   return `<Cell ss:MergeAcross="5" ss:StyleID="${styleId}"><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`;
 }
 
+interface GenderTotals {
+  total: number;
+  putra: number;
+  putri: number;
+}
+
+function getRowsTotals(rows: RegistrationExportRow[]): GenderTotals {
+  const putra = rows.filter((row) => row.gender === "L").length;
+  const putri = rows.filter((row) => row.gender === "P").length;
+  return {
+    total: rows.length,
+    putra,
+    putri,
+  };
+}
+
+function getKorwilTotals(sheet: RegistrationExportKorwilSheet): GenderTotals {
+  return sheet.kordas.reduce<GenderTotals>(
+    (acc, korda) => {
+      const kordaTotals = getRowsTotals(korda.rows);
+      acc.total += kordaTotals.total;
+      acc.putra += kordaTotals.putra;
+      acc.putri += kordaTotals.putri;
+      return acc;
+    },
+    { total: 0, putra: 0, putri: 0 },
+  );
+}
+
+function buildSummaryWorksheetXml(
+  sheets: RegistrationExportKorwilSheet[],
+  sheetName: string,
+): string {
+  const rows: string[] = [];
+  const totalKorda = sheets.reduce((sum, sheet) => sum + sheet.kordas.length, 0);
+  const grandTotals = sheets.reduce<GenderTotals>(
+    (acc, sheet) => {
+      const sheetTotals = getKorwilTotals(sheet);
+      acc.total += sheetTotals.total;
+      acc.putra += sheetTotals.putra;
+      acc.putri += sheetTotals.putri;
+      return acc;
+    },
+    { total: 0, putra: 0, putri: 0 },
+  );
+
+  rows.push(
+    rowXml([mergedTitleCell("RINGKASAN EXPORT DAFTAR PESERTA", "Title")]),
+  );
+  rows.push(
+    rowXml([
+      mergedTitleCell(
+        `Dibuat: ${new Date().toLocaleString("id-ID", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })}`,
+        "Muted",
+      ),
+    ]),
+  );
+  rows.push("<Row/>");
+
+  rows.push(
+    rowXml([
+      stringCell("Jumlah Student", "Header"),
+      numberCell(grandTotals.total),
+      stringCell("Jumlah Putra", "Header"),
+      numberCell(grandTotals.putra),
+      stringCell("Jumlah Putri", "Header"),
+      numberCell(grandTotals.putri),
+    ]),
+  );
+  rows.push(
+    rowXml([
+      stringCell("Jumlah Korwil", "Header"),
+      numberCell(sheets.length),
+      stringCell("Jumlah Korda", "Header"),
+      numberCell(totalKorda),
+      stringCell("", "Text"),
+      stringCell("", "Text"),
+    ]),
+  );
+  rows.push("<Row/>");
+
+  rows.push(rowXml([mergedTitleCell("RINGKASAN PER KORWIL", "SectionHeader")]));
+  rows.push(
+    rowXml([
+      stringCell("No", "HeaderCenter"),
+      stringCell("Korwil", "Header"),
+      stringCell("Jumlah Korda", "HeaderCenter"),
+      stringCell("Total Student", "HeaderCenter"),
+      stringCell("Putra", "HeaderCenter"),
+      stringCell("Putri", "HeaderCenter"),
+    ]),
+  );
+
+  if (sheets.length === 0) {
+    rows.push(
+      rowXml([
+        mergedTitleCell("Tidak ada data outbound untuk diringkas", "Muted"),
+      ]),
+    );
+  } else {
+    sheets.forEach((sheet, index) => {
+      const sheetTotals = getKorwilTotals(sheet);
+      rows.push(
+        rowXml([
+          numberCell(index + 1, "TextCenter"),
+          stringCell(sheet.korwilName),
+          numberCell(sheet.kordas.length, "TextCenter"),
+          numberCell(sheetTotals.total, "TextCenter"),
+          numberCell(sheetTotals.putra, "TextCenter"),
+          numberCell(sheetTotals.putri, "TextCenter"),
+        ]),
+      );
+    });
+  }
+
+  rows.push("<Row/>");
+  rows.push(
+    rowXml([mergedTitleCell("RINGKASAN PER KORWIL - KORDA", "SectionHeader")]),
+  );
+  rows.push(
+    rowXml([
+      stringCell("No", "HeaderCenter"),
+      stringCell("Korwil", "Header"),
+      stringCell("Korda", "Header"),
+      stringCell("Total Student", "HeaderCenter"),
+      stringCell("Putra", "HeaderCenter"),
+      stringCell("Putri", "HeaderCenter"),
+    ]),
+  );
+
+  if (sheets.length === 0) {
+    rows.push(
+      rowXml([
+        mergedTitleCell("Tidak ada data outbound untuk diringkas", "Muted"),
+      ]),
+    );
+  } else {
+    let detailNo = 1;
+    sheets.forEach((sheet) => {
+      sheet.kordas.forEach((korda) => {
+        const kordaTotals = getRowsTotals(korda.rows);
+        rows.push(
+          rowXml([
+            numberCell(detailNo, "TextCenter"),
+            stringCell(sheet.korwilName),
+            stringCell(korda.kordaName),
+            numberCell(kordaTotals.total, "TextCenter"),
+            numberCell(kordaTotals.putra, "TextCenter"),
+            numberCell(kordaTotals.putri, "TextCenter"),
+          ]),
+        );
+        detailNo += 1;
+      });
+    });
+  }
+
+  return `
+    <Worksheet ss:Name="${xmlEscape(sheetName)}">
+      <Table>
+        <Column ss:AutoFitWidth="0" ss:Width="45"/>
+        <Column ss:AutoFitWidth="0" ss:Width="220"/>
+        <Column ss:AutoFitWidth="0" ss:Width="180"/>
+        <Column ss:AutoFitWidth="0" ss:Width="110"/>
+        <Column ss:AutoFitWidth="0" ss:Width="90"/>
+        <Column ss:AutoFitWidth="0" ss:Width="90"/>
+        ${rows.join("")}
+      </Table>
+    </Worksheet>
+  `;
+}
+
 export function buildRegistrationsExcelBlob(
   sheets: RegistrationExportKorwilSheet[],
 ): Blob {
@@ -73,9 +247,14 @@ export function buildRegistrationsExcelBlob(
     return candidate;
   };
 
-  const worksheetXml = sheets
+  const summaryWorksheetXml = buildSummaryWorksheetXml(
+    sheets,
+    getUniqueSheetName("Ringkasan", 0),
+  );
+
+  const detailWorksheetXml = sheets
     .map((sheet, sheetIndex) => {
-      const sheetName = getUniqueSheetName(sheet.korwilName, sheetIndex);
+      const sheetName = getUniqueSheetName(sheet.korwilName, sheetIndex + 1);
       const rows: string[] = [];
 
       rows.push(
@@ -143,6 +322,7 @@ export function buildRegistrationsExcelBlob(
       `;
     })
     .join("");
+  const worksheetXml = `${summaryWorksheetXml}${detailWorksheetXml}`;
 
   const xml = `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
