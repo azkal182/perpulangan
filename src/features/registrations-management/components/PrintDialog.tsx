@@ -662,7 +662,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
   const kordaText = truncatePreviewText(item.kordaName, 16).toUpperCase();
   const studentName = truncatePreviewText(item.studentName, 30).toUpperCase();
   const studentNis = truncatePreviewText(item.studentNis, 20);
-  const fullAddress = truncatePreviewText(item.fullAddress, 24);
+  const parentPhone = truncatePreviewText(item.parrentPhone, 24);
   const dropPoint = truncatePreviewText(item.dropPointName, 20);
   const busLabel = truncatePreviewText(item.busLabel, 20);
   const busBadgeWidth = Math.max(
@@ -698,8 +698,8 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
 
       <text x="28" y="255" fill="#6b7280" fontSize="31" fontWeight="700">NIS</text>
       <text x="28" y="297" fill="#374151" fontSize="38" fontWeight="500">{studentNis}</text>
-      <text x="28" y="412" fill="#6b7280" fontSize="31" fontWeight="700">ALAMAT</text>
-      <text x="28" y="454" fill="#1f2937" fontSize="31" fontWeight="700">{fullAddress}</text>
+      <text x="28" y="412" fill="#6b7280" fontSize="31" fontWeight="700">NO HP ORTU</text>
+      <text x="28" y="454" fill="#1f2937" fontSize="31" fontWeight="700">{parentPhone}</text>
 
       <text x="518" y="255" fill="#6b7280" fontSize="31" fontWeight="700">DROP POINT</text>
       <text x="518" y="297" fill="#1f2937" fontSize="38" fontWeight="700">{dropPoint}</text>
@@ -1019,11 +1019,11 @@ function drawLuggageCardToPdf(
   pdf.setTextColor(...labelColor);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(7);
-  pdf.text("ALAMAT", leftColumnX, bottomLabelY);
+  pdf.text("NO HP ORTU", leftColumnX, bottomLabelY);
 
-  const addressValue = fitMultilineText(
+  const parentPhoneValue = fitMultilineText(
     pdf,
-    item.fullAddress,
+    item.parrentPhone,
     columnWidth,
     2,
     8.2,
@@ -1032,9 +1032,9 @@ function drawLuggageCardToPdf(
   );
   pdf.setTextColor(31, 41, 55);
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(addressValue.fontSize);
-  const addressLineHeight = Math.max(2.8, addressValue.fontSize * 0.38);
-  addressValue.lines.forEach((line, index) => {
+  pdf.setFontSize(parentPhoneValue.fontSize);
+  const addressLineHeight = Math.max(2.8, parentPhoneValue.fontSize * 0.38);
+  parentPhoneValue.lines.forEach((line, index) => {
     pdf.text(line, leftColumnX, bottomValueY + index * addressLineHeight);
   });
 

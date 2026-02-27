@@ -68,7 +68,9 @@ function PassengerList({
     setRemoving(registrationId);
     try {
       await unassignFromBus(registrationId, journey);
-      setPassengers((prev) => prev.filter((p) => p.registrationId !== registrationId));
+      setPassengers((prev) =>
+        prev.filter((p) => p.registrationId !== registrationId),
+      );
       onPassengerChange();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Gagal menghapus peserta");
@@ -90,12 +92,15 @@ function PassengerList({
             {count} peserta
             {capacity > 0 && (
               <span className={isFull ? "text-destructive font-medium" : ""}>
-                {" "}/ {capacity} kapasitas
+                {" "}
+                / {capacity} kapasitas
               </span>
             )}
           </span>
           {isFull && (
-            <Badge variant="destructive" className="text-xs">Penuh</Badge>
+            <Badge variant="destructive" className="text-xs">
+              Penuh
+            </Badge>
           )}
         </div>
         <Button
@@ -115,7 +120,8 @@ function PassengerList({
         </div>
       ) : passengers.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Belum ada peserta. Klik &ldquo;Tambah Peserta&rdquo; untuk menambahkan.
+          Belum ada peserta. Klik &ldquo;Tambah Peserta&rdquo; untuk
+          menambahkan.
         </div>
       ) : (
         <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
@@ -130,7 +136,9 @@ function PassengerList({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{p.studentName}</span>
-                  <Badge variant="outline" className="text-xs">{p.studentNis}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {p.studentNis}
+                  </Badge>
                   <Badge variant="secondary" className="text-xs">
                     {p.studentGender === "L" ? "L" : "P"}
                   </Badge>
@@ -142,10 +150,14 @@ function PassengerList({
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3">
                   {p.kordaName && <span>Korda: {p.kordaName}</span>}
-                  {p.dropPointName && <span>Titik turun: {p.dropPointName}</span>}
+                  {p.dropPointName && (
+                    <span>Titik turun: {p.dropPointName}</span>
+                  )}
                   {p.journeyDate && (
                     <span>
-                      {format(new Date(p.journeyDate), "dd MMM yyyy", { locale: localeId })}
+                      {format(new Date(p.journeyDate), "dd MMM yyyy", {
+                        locale: localeId,
+                      })}
                     </span>
                   )}
                 </div>
@@ -196,22 +208,24 @@ export function BusPassengersDialog({
           <DialogTitle>Kelola Peserta — {bus.label}</DialogTitle>
           <DialogDescription>
             Assign peserta ke bus ini secara manual. Kapasitas:{" "}
-            <strong>{bus.capacity > 0 ? bus.capacity : "Tidak dibatasi"}</strong>
+            <strong>
+              {bus.capacity > 0 ? bus.capacity : "Tidak dibatasi"}
+            </strong>
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="outbound" className="mt-2">
+        <Tabs defaultValue="return" className="mt-2">
           <TabsList className="w-full">
-            <TabsTrigger value="outbound" className="flex-1">
-              Keberangkatan
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {bus._count.outboundRegistrations}
-              </Badge>
-            </TabsTrigger>
             <TabsTrigger value="return" className="flex-1">
               Kepulangan
               <Badge variant="secondary" className="ml-2 text-xs">
                 {bus._count.returnRegistrations}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="outbound" className="flex-1">
+              Keberangkatan
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {bus._count.outboundRegistrations}
               </Badge>
             </TabsTrigger>
           </TabsList>

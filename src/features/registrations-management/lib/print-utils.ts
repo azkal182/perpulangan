@@ -249,6 +249,7 @@ export interface PrintDataItem {
   studentName: string;
   studentNis: string | null;
   fullAddress: string | null;
+  parrentPhone: string | null;
   studentGender: string;
   kordaName: string;
   dropPointName: string;
