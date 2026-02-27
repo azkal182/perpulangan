@@ -16,6 +16,7 @@ interface ExportRegistrationsExcelParams {
   eventId: string;
   journeyType?: "both" | "return_only" | "outbound_only" | "all";
   status?: RegistrationStatus | "all";
+  gender?: "Laki-laki" | "Perempuan";
   kordaId?: string;
   dropPointId?: string;
   search?: string;
@@ -50,6 +51,7 @@ export async function getRegistrationsForExcelExportAction(
       eventId,
       journeyType = "all",
       status = "all",
+      gender,
       kordaId,
       dropPointId,
       search,
@@ -86,13 +88,25 @@ export async function getRegistrationsForExcelExportAction(
       where.outboundDropPointId = dropPointId;
     }
 
+    const studentConditions: Prisma.StudentWhereInput[] = [];
+
+    if (gender) {
+      studentConditions.push({ gender });
+    }
+
     if (search?.trim()) {
-      where.student = {
+      studentConditions.push({
         OR: [
           { name: { contains: search.trim(), mode: "insensitive" } },
           { nis: { contains: search.trim(), mode: "insensitive" } },
         ],
-      };
+      });
+    }
+
+    if (studentConditions.length === 1) {
+      where.student = studentConditions[0];
+    } else if (studentConditions.length > 1) {
+      where.student = { AND: studentConditions };
     }
 
     const finalWhere = andWhere(where, registrationScopeWhere(scope));

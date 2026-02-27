@@ -10,6 +10,7 @@ export interface RegistrationFilters {
   eventId: string;
   journeyType?: "both" | "return_only" | "outbound_only" | "all";
   status?: RegistrationStatus | "all";
+  gender?: "Laki-laki" | "Perempuan";
   outboundKordaId?: string;
   returnKordaId?: string;
   dropPointId?: string;
@@ -55,6 +56,7 @@ export async function getFilteredRegistrations(
     eventId,
     journeyType = "all",
     status = "all",
+    gender,
     outboundKordaId,
     returnKordaId,
     dropPointId,
@@ -113,14 +115,26 @@ export async function getFilteredRegistrations(
     );
   }
 
+  const studentConditions: Prisma.StudentWhereInput[] = [];
+
+  if (gender) {
+    studentConditions.push({ gender });
+  }
+
   // Student search (name or NIS)
   if (search?.trim()) {
-    where.student = {
+    studentConditions.push({
       OR: [
         { name: { contains: search.trim(), mode: "insensitive" } },
         { nis: { contains: search.trim(), mode: "insensitive" } },
       ],
-    };
+    });
+  }
+
+  if (studentConditions.length === 1) {
+    where.student = studentConditions[0];
+  } else if (studentConditions.length > 1) {
+    where.student = { AND: studentConditions };
   }
 
   const finalWhere = andWhere(where, registrationScopeWhere(scope));

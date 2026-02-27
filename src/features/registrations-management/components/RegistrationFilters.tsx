@@ -26,6 +26,14 @@ interface RegistrationFiltersProps {
 
 type JourneyType = "all" | "both" | "return_only" | "outbound_only";
 type StatusFilter = "all" | "CONFIRMED" | "CANCELLED" | "PARTIAL_CANCEL" | "DRAFT";
+type GenderFilter = "all" | "Laki-laki" | "Perempuan";
+
+function normalizeGenderFilter(value: string | null): GenderFilter {
+  if (value === "Laki-laki" || value === "Perempuan") {
+    return value;
+  }
+  return "all";
+}
 
 export function RegistrationFilters({
   eventId,
@@ -41,6 +49,9 @@ export function RegistrationFilters({
   );
   const [status, setStatus] = useState<StatusFilter>(
     (searchParams.get("status") as StatusFilter) || "all"
+  );
+  const [gender, setGender] = useState<GenderFilter>(
+    normalizeGenderFilter(searchParams.get("gender")),
   );
   const [kordaId, setKordaId] = useState(
     searchParams.get("kordaId") || "all"
@@ -64,6 +75,7 @@ export function RegistrationFilters({
     
     if (journeyType !== "all") params.set("journeyType", journeyType);
     if (status !== "all") params.set("status", status);
+    if (gender !== "all") params.set("gender", gender);
     if (kordaId !== "all") params.set("kordaId", kordaId);
     if (dropPointId !== "all") params.set("dropPointId", dropPointId);
     if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
@@ -73,11 +85,21 @@ export function RegistrationFilters({
     
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(newUrl, { scroll: false });
-  }, [journeyType, status, kordaId, dropPointId, debouncedSearch, pathname, router]);
+  }, [
+    journeyType,
+    status,
+    gender,
+    kordaId,
+    dropPointId,
+    debouncedSearch,
+    pathname,
+    router,
+  ]);
 
   const handleReset = () => {
     setJourneyType("all");
     setStatus("all");
+    setGender("all");
     setKordaId("all");
     setDropPointId("all");
     setSearch("");
@@ -87,6 +109,7 @@ export function RegistrationFilters({
   const hasActiveFilters = 
     journeyType !== "all" ||
     status !== "all" ||
+    gender !== "all" ||
     kordaId !== "all" ||
     dropPointId !== "all" ||
     search.trim() !== "";
@@ -98,6 +121,7 @@ export function RegistrationFilters({
         eventId,
         journeyType,
         status,
+        gender: gender === "all" ? undefined : gender,
         kordaId: kordaId === "all" ? undefined : kordaId,
         dropPointId: dropPointId === "all" ? undefined : dropPointId,
         search: search.trim() || undefined,
@@ -168,6 +192,18 @@ export function RegistrationFilters({
               <SelectItem value="CANCELLED">Cancelled</SelectItem>
               <SelectItem value="PARTIAL_CANCEL">Partial Cancel</SelectItem>
               <SelectItem value="DRAFT">Draft</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Gender */}
+          <Select value={gender} onValueChange={(v) => setGender(v as GenderFilter)}>
+            <SelectTrigger className="w-full sm:w-[160px]">
+              <SelectValue placeholder="Jenis Kelamin" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Gender</SelectItem>
+              <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+              <SelectItem value="Perempuan">Perempuan</SelectItem>
             </SelectContent>
           </Select>
 

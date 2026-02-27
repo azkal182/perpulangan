@@ -17,6 +17,7 @@ interface PageProps {
   searchParams?: Promise<{
     journeyType?: string;
     status?: string;
+    gender?: string;
     kordaId?: string;
     dropPointId?: string;
     search?: string;
@@ -47,6 +48,10 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const journeyType = params?.journeyType || "all";
   const status = params?.status || "all";
+  const gender =
+    params?.gender === "Laki-laki" || params?.gender === "Perempuan"
+      ? params.gender
+      : undefined;
   const kordaId = params?.kordaId || undefined;
   const dropPointId = params?.dropPointId || undefined;
   const search = params?.search || undefined;
@@ -62,6 +67,7 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
         eventId: activeEvent.id,
         journeyType: journeyType as "all" | "both" | "return_only" | "outbound_only",
         status: status as RegistrationStatus | "all",
+        gender,
         outboundKordaId: kordaId,
         returnKordaId: kordaId,
         dropPointId,
