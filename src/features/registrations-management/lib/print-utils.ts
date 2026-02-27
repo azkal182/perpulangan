@@ -162,8 +162,8 @@ export function calculateLayout(
   void PAPER_SIZES[paperSize]; // retained for potential future use
 
   if (printType === "luggage_card") {
-    // Landscape card: narrowed again to improve safe margins on A3 print
-    const cardWidth = 96;
+    // Landscape card: sedikit dipersempit agar area aman kiri/kanan lebih longgar saat print
+    const cardWidth = 95;
     const cardHeight = 53;
 
     switch (paperSize) {
@@ -173,7 +173,7 @@ export function calculateLayout(
           rows: 5,
           cardWidth,
           cardHeight,
-          marginX: 9, // (210 - (96*2)) / 2 = (210 - 192) / 2 = 18 / 2 = 9
+          marginX: 10, // (210 - (95*2)) / 2 = 10
           marginY: 16, // (297 - (53*5)) / 2 = 16
           gapX: 0,
           gapY: 0,
@@ -184,7 +184,7 @@ export function calculateLayout(
           rows: 6,
           cardWidth,
           cardHeight,
-          marginX: 11.5, // (215 - (96*2)) / 2 = (215 - 192) / 2 = 23 / 2 = 11.5
+          marginX: 12.5, // (215 - (95*2)) / 2 = 12.5
           marginY: 6, // (330 - (53*6)) / 2 = 6
           gapX: 0,
           gapY: 0,
@@ -195,7 +195,7 @@ export function calculateLayout(
           rows: 7,
           cardWidth,
           cardHeight,
-          marginX: 4.5, // (297 - (96*3)) / 2 = (297 - 288) / 2 = 9 / 2 = 4.5
+          marginX: 6, // (297 - (95*3)) / 2 = 6
           marginY: 24.5, // (420 - (53*7)) / 2 = 24.5
           gapX: 0,
           gapY: 0,
@@ -203,7 +203,7 @@ export function calculateLayout(
     }
   } else {
     // Ticket: low-height landscape format to match content density
-    const cardWidth = 96;
+    const cardWidth = 95;
     const cardHeight = 20;
 
     switch (paperSize) {
@@ -213,7 +213,7 @@ export function calculateLayout(
           rows: 12,
           cardWidth,
           cardHeight,
-          marginX: 9,
+          marginX: 10,
           marginY: 6,
           gapX: 0,
           gapY: 0,
@@ -224,7 +224,7 @@ export function calculateLayout(
           rows: 15,
           cardWidth,
           cardHeight,
-          marginX: 11.5,
+          marginX: 12.5,
           marginY: 6,
           gapX: 0,
           gapY: 0,
@@ -235,7 +235,7 @@ export function calculateLayout(
           rows: 20,
           cardWidth,
           cardHeight,
-          marginX: 4.5,
+          marginX: 6,
           marginY: 4,
           gapX: 0,
           gapY: 0,
