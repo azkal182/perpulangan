@@ -204,7 +204,7 @@ export function AddManualStudentDialog({
                 <SelectContent>
                   <SelectItem value="MUSA">MUSA</SelectItem>
                   <SelectItem value="DAFU">DAFU</SelectItem>
-                  <SelectItem value="MUSA">SPBP</SelectItem>
+                  <SelectItem value="SPBP">SPBP</SelectItem>
                 </SelectContent>
               </Select>
             </div>
