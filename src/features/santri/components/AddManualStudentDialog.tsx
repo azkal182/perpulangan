@@ -202,7 +202,7 @@ export function AddManualStudentDialog({
                   <SelectValue placeholder="Pilih..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DAFU">DAFU</SelectItem>
+                  <SelectItem value="MUSA">MUSA</SelectItem>
                   <SelectItem value="DAFU">DAFU</SelectItem>
                   <SelectItem value="MUSA">SPBP</SelectItem>
                 </SelectContent>
