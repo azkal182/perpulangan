@@ -42,6 +42,8 @@ export interface BusAttendancePassenger {
   studentName: string;
   studentNis: string | null;
   studentGender: string;
+  kabKota: string | null;
+  dropPointName: string | null;
 }
 
 export interface BusAttendanceManifest {
@@ -197,6 +199,17 @@ export async function getBusAttendanceManifest(params: {
                   name: true,
                   nis: true,
                   gender: true,
+                  regency: {
+                    select: {
+                      name: true,
+                      label: true,
+                    },
+                  },
+                },
+              },
+              outboundDropPoint: {
+                select: {
+                  name: true,
                 },
               },
             },
@@ -219,6 +232,11 @@ export async function getBusAttendanceManifest(params: {
           studentName: registration.student.name,
           studentNis: registration.student.nis,
           studentGender: registration.student.gender,
+          kabKota:
+            registration.student.regency?.label ??
+            registration.student.regency?.name ??
+            null,
+          dropPointName: registration.outboundDropPoint?.name ?? null,
         })),
       }));
     }
@@ -264,6 +282,17 @@ export async function getBusAttendanceManifest(params: {
                 name: true,
                 nis: true,
                 gender: true,
+                regency: {
+                  select: {
+                    name: true,
+                    label: true,
+                  },
+                },
+              },
+            },
+            returnDropPoint: {
+              select: {
+                name: true,
               },
             },
           },
@@ -286,6 +315,11 @@ export async function getBusAttendanceManifest(params: {
         studentName: registration.student.name,
         studentNis: registration.student.nis,
         studentGender: registration.student.gender,
+        kabKota:
+          registration.student.regency?.label ??
+          registration.student.regency?.name ??
+          null,
+        dropPointName: registration.returnDropPoint?.name ?? null,
       })),
     }));
   } catch (error) {

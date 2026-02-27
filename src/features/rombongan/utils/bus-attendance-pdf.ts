@@ -7,11 +7,11 @@ const PAGE_HEIGHT = 297;
 const PAGE_MARGIN = 10;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
-const CHECKLIST_COLUMNS = 14;
 const NO_COLUMN_WIDTH = 10;
-const CHECKLIST_COLUMN_WIDTH = 7;
-const NAME_COLUMN_WIDTH =
-  CONTENT_WIDTH - NO_COLUMN_WIDTH - CHECKLIST_COLUMNS * CHECKLIST_COLUMN_WIDTH;
+const NAME_COLUMN_WIDTH = 64;
+const KAB_KOTA_COLUMN_WIDTH = 58;
+const DROP_POINT_COLUMN_WIDTH =
+  CONTENT_WIDTH - NO_COLUMN_WIDTH - NAME_COLUMN_WIDTH - KAB_KOTA_COLUMN_WIDTH;
 
 type JourneyType = "outbound" | "return";
 
@@ -38,11 +38,9 @@ function buildColumnStyles() {
   const styles: Record<number, { cellWidth: number; halign?: "left" | "center" }> = {
     0: { cellWidth: NO_COLUMN_WIDTH, halign: "center" },
     1: { cellWidth: NAME_COLUMN_WIDTH, halign: "left" },
+    2: { cellWidth: KAB_KOTA_COLUMN_WIDTH, halign: "left" },
+    3: { cellWidth: DROP_POINT_COLUMN_WIDTH, halign: "left" },
   };
-
-  for (let i = 0; i < CHECKLIST_COLUMNS; i += 1) {
-    styles[i + 2] = { cellWidth: CHECKLIST_COLUMN_WIDTH, halign: "center" };
-  }
 
   return styles;
 }
@@ -61,7 +59,6 @@ export function buildBusAttendancePdf({
 
   const journeyLabel = getJourneyLabel(journey);
   const generatedAtLabel = formatGeneratedAt(generatedAt);
-  const checklistHeaders = Array.from({ length: CHECKLIST_COLUMNS }, () => "");
   const columnStyles = buildColumnStyles();
 
   buses.forEach((bus, busIndex) => {
@@ -115,10 +112,11 @@ export function buildBusAttendancePdf({
       return [
         passenger ? String(rowIndex + 1) : "",
         passenger?.studentName ?? "",
-        ...Array.from({ length: CHECKLIST_COLUMNS }, () => ""),
+        passenger?.kabKota ?? "",
+        passenger?.dropPointName ?? "",
       ];
     });
-    const tableHead = [["No", "Nama", ...checklistHeaders]] as unknown as never;
+    const tableHead = [["No", "Nama", "Kab/Kota", "Titik Turun"]] as unknown as never;
     const tableBody = body as unknown as never;
 
     autoTable(doc, {
