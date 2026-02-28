@@ -601,6 +601,11 @@ function normalizeText(value: string | null | undefined): string {
   return normalized && normalized.length > 0 ? normalized : "-";
 }
 
+function isPutriGender(value: string | null | undefined): boolean {
+  const gender = normalizeText(value).toUpperCase();
+  return gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN";
+}
+
 function buildPagesByKorda(
   data: PrintDataItem[],
   cardsPerPage: number,
@@ -654,11 +659,10 @@ function truncatePreviewText(
 
 function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
   const palette = getHexPalette(item.kordaName);
-  const gender = normalizeText(item.studentGender).toUpperCase();
-  const genderLabel =
-    gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN"
-      ? "PUTRI"
-      : "PUTRA";
+  const isPutri = isPutriGender(item.studentGender);
+  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
+  const floralScaleX = 980 / 800;
+  const floralScaleY = 530 / 600;
   const kordaText = truncatePreviewText(item.kordaName, 16).toUpperCase();
   const studentName = truncatePreviewText(item.studentName, 30).toUpperCase();
   const studentNis = truncatePreviewText(item.studentNis, 20);
@@ -682,6 +686,142 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
       <rect x="1" y="1" width="978" height="118" fill={palette.header} />
       <rect x="1" y="119" width="978" height="7" fill={palette.border} />
       <rect x="1" y="126" width="978" height="93" fill={palette.bg} />
+      {isPutri && (
+        <g opacity="0.16">
+          <defs>
+            <g id="wm-flower">
+              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} />
+              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(60)" />
+              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(120)" />
+              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(180)" />
+              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(240)" />
+              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(300)" />
+              <circle cx="0" cy="0" r="8" fill={palette.border} />
+              <circle cx="0" cy="0" r="4" fill={palette.text} />
+            </g>
+            <g id="wm-flower-lg">
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(45)" />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(90)" />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(135)" />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(180)" />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(225)" />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(270)" />
+              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(315)" />
+              <circle cx="0" cy="0" r="12" fill={palette.border} />
+              <circle cx="0" cy="0" r="6" fill={palette.text} />
+            </g>
+            <g id="wm-leaf">
+              <ellipse cx="0" cy="-12" rx="5" ry="12" fill={palette.header} />
+            </g>
+            <g id="wm-bud">
+              <ellipse cx="0" cy="-10" rx="6" ry="12" fill={palette.header} />
+              <line x1="0" y1="2" x2="0" y2="18" stroke={palette.text} strokeWidth="2" />
+              <ellipse
+                cx="-5"
+                cy="10"
+                rx="4"
+                ry="8"
+                fill={palette.header}
+                transform="rotate(-30 -5 10)"
+              />
+              <ellipse
+                cx="5"
+                cy="10"
+                rx="4"
+                ry="8"
+                fill={palette.header}
+                transform="rotate(30 5 10)"
+              />
+            </g>
+          </defs>
+
+          <g transform={`scale(${floralScaleX} ${floralScaleY})`}>
+            <g opacity="0.2">
+              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
+              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
+              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
+              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
+              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
+              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
+              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
+              <use href="#wm-flower-lg" transform="translate(90,50)" />
+              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
+              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
+              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
+              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
+            </g>
+
+            <g transform="translate(800,0) scale(-1,1)" opacity="0.2">
+              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
+              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
+              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
+              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
+              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
+              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
+              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
+              <use href="#wm-flower-lg" transform="translate(90,50)" />
+              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
+              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
+              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
+              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
+            </g>
+
+            <g transform="translate(0,600) scale(1,-1)" opacity="0.2">
+              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
+              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
+              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
+              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
+              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
+              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
+              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
+              <use href="#wm-flower-lg" transform="translate(90,50)" />
+              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
+              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
+              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
+              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
+            </g>
+
+            <g transform="translate(800,600) scale(-1,-1)" opacity="0.2">
+              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
+              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
+              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
+              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
+              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
+              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
+              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
+              <use href="#wm-flower-lg" transform="translate(90,50)" />
+              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
+              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
+              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
+              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
+            </g>
+
+            <g transform="translate(400, 300)" opacity="0.08">
+              <use href="#wm-flower-lg" transform="scale(2.1)" />
+              <use href="#wm-flower" transform="translate(90,0) scale(1.1)" />
+              <use href="#wm-flower" transform="translate(-90,0) scale(1.1)" />
+              <use href="#wm-flower" transform="translate(0,90) scale(1.1)" />
+              <use href="#wm-flower" transform="translate(0,-90) scale(1.1)" />
+            </g>
+
+            <path
+              d="M 140 35 Q 280 18 400 28 Q 520 18 660 35"
+              stroke={palette.text}
+              strokeWidth="1.5"
+              fill="none"
+              opacity="0.13"
+            />
+            <path
+              d="M 140 565 Q 280 582 400 572 Q 520 582 660 565"
+              stroke={palette.text}
+              strokeWidth="1.5"
+              fill="none"
+              opacity="0.13"
+            />
+          </g>
+        </g>
+      )}
       <line x1="1" y1="219" x2="979" y2="219" stroke="#d1d5db" strokeWidth="1.4" />
       <line x1="490" y1="219" x2="490" y2="529" stroke="#e5e7eb" strokeWidth="1.4" />
 
@@ -808,6 +948,403 @@ function hexToRgb(hex: string): PdfRgb {
   return [(parsed >> 16) & 255, (parsed >> 8) & 255, parsed & 255];
 }
 
+function blendWithWhite(color: PdfRgb, ratio: number): PdfRgb {
+  const safeRatio = Math.min(1, Math.max(0, ratio));
+  return color.map(
+    (channel) => Math.round(channel + (255 - channel) * safeRatio),
+  ) as PdfRgb;
+}
+
+function drawLeafWatermarkShape(
+  pdf: jsPDF,
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  rotationDeg: number,
+  fillColor: PdfRgb,
+  veinColor: PdfRgb,
+) {
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+  const rad = (rotationDeg * Math.PI) / 180;
+  const cosRad = Math.cos(rad);
+  const sinRad = Math.sin(rad);
+
+  const rotatePoint = (x: number, y: number) => ({
+    x: centerX + x * cosRad - y * sinRad,
+    y: centerY + x * sinRad + y * cosRad,
+  });
+
+  const basePoints = [
+    rotatePoint(0, -halfHeight),
+    rotatePoint(halfWidth * 0.72, -halfHeight * 0.35),
+    rotatePoint(halfWidth, 0),
+    rotatePoint(halfWidth * 0.72, halfHeight * 0.35),
+    rotatePoint(0, halfHeight),
+    rotatePoint(-halfWidth * 0.72, halfHeight * 0.35),
+    rotatePoint(-halfWidth, 0),
+    rotatePoint(-halfWidth * 0.72, -halfHeight * 0.35),
+  ];
+
+  pdf.setFillColor(...fillColor);
+  pdf.setDrawColor(...fillColor);
+  pdf.setLineWidth(0.05);
+  pdf.lines(
+    basePoints
+      .slice(1)
+      .map((point, index) => [
+        point.x - basePoints[index].x,
+        point.y - basePoints[index].y,
+      ]),
+    basePoints[0].x,
+    basePoints[0].y,
+    [1, 1],
+    "F",
+    true,
+  );
+
+  const veinTop = rotatePoint(0, -halfHeight * 0.7);
+  const veinBottom = rotatePoint(0, halfHeight * 0.7);
+  pdf.setDrawColor(...veinColor);
+  pdf.setLineWidth(0.12);
+  pdf.line(veinTop.x, veinTop.y, veinBottom.x, veinBottom.y);
+}
+
+function drawWatermarkPolyline(
+  pdf: jsPDF,
+  points: Array<{ x: number; y: number }>,
+  color: PdfRgb,
+  lineWidth: number,
+) {
+  if (points.length < 2) {
+    return;
+  }
+
+  pdf.setDrawColor(...color);
+  pdf.setLineWidth(lineWidth);
+  for (let i = 1; i < points.length; i += 1) {
+    pdf.line(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
+  }
+}
+
+function drawWatermarkQuadraticCurve(
+  pdf: jsPDF,
+  start: { x: number; y: number },
+  control: { x: number; y: number },
+  end: { x: number; y: number },
+  color: PdfRgb,
+  lineWidth: number,
+) {
+  const points: Array<{ x: number; y: number }> = [];
+  const segments = 14;
+  for (let index = 0; index <= segments; index += 1) {
+    const t = index / segments;
+    const oneMinusT = 1 - t;
+    points.push({
+      x:
+        oneMinusT * oneMinusT * start.x +
+        2 * oneMinusT * t * control.x +
+        t * t * end.x,
+      y:
+        oneMinusT * oneMinusT * start.y +
+        2 * oneMinusT * t * control.y +
+        t * t * end.y,
+    });
+  }
+  drawWatermarkPolyline(pdf, points, color, lineWidth);
+}
+
+function drawWatermarkFlower(
+  pdf: jsPDF,
+  centerX: number,
+  centerY: number,
+  petals: number,
+  petalDistance: number,
+  petalWidth: number,
+  petalHeight: number,
+  petalColor: PdfRgb,
+  centerColor: PdfRgb,
+) {
+  for (let index = 0; index < petals; index += 1) {
+    const angle = (360 / petals) * index;
+    const rad = (angle * Math.PI) / 180;
+    const petalX = centerX + Math.cos(rad) * petalDistance;
+    const petalY = centerY + Math.sin(rad) * petalDistance;
+    drawLeafWatermarkShape(
+      pdf,
+      petalX,
+      petalY,
+      petalWidth,
+      petalHeight,
+      angle,
+      petalColor,
+      petalColor,
+    );
+  }
+
+  pdf.setFillColor(...centerColor);
+  pdf.circle(centerX, centerY, Math.max(0.25, petalWidth * 0.35), "F");
+  pdf.setFillColor(...blendWithWhite(centerColor, 0.2));
+  pdf.circle(centerX, centerY, Math.max(0.15, petalWidth * 0.17), "F");
+}
+
+function drawWatermarkBud(
+  pdf: jsPDF,
+  centerX: number,
+  centerY: number,
+  size: number,
+  petalColor: PdfRgb,
+  stemColor: PdfRgb,
+) {
+  drawLeafWatermarkShape(
+    pdf,
+    centerX,
+    centerY - size * 0.2,
+    size * 0.7,
+    size * 1.15,
+    0,
+    petalColor,
+    petalColor,
+  );
+
+  pdf.setDrawColor(...stemColor);
+  pdf.setLineWidth(Math.max(0.07, size * 0.05));
+  pdf.line(
+    centerX,
+    centerY + size * 0.12,
+    centerX,
+    centerY + size * 0.7,
+  );
+
+  drawLeafWatermarkShape(
+    pdf,
+    centerX - size * 0.28,
+    centerY + size * 0.45,
+    size * 0.35,
+    size * 0.55,
+    -35,
+    petalColor,
+    petalColor,
+  );
+  drawLeafWatermarkShape(
+    pdf,
+    centerX + size * 0.28,
+    centerY + size * 0.45,
+    size * 0.35,
+    size * 0.55,
+    35,
+    petalColor,
+    petalColor,
+  );
+}
+
+function createReferenceMapper(
+  originX: number,
+  originY: number,
+  width: number,
+  height: number,
+  mirrorX = false,
+  mirrorY = false,
+) {
+  const scaleX = width / 800;
+  const scaleY = height / 600;
+  return (refX: number, refY: number) => ({
+    x: originX + (mirrorX ? 800 - refX : refX) * scaleX,
+    y: originY + (mirrorY ? 600 - refY : refY) * scaleY,
+    scaleX,
+    scaleY,
+  });
+}
+
+function drawCornerFloralCluster(
+  pdf: jsPDF,
+  mapRef: ReturnType<typeof createReferenceMapper>,
+  petalColor: PdfRgb,
+  centerColor: PdfRgb,
+  stemColor: PdfRgb,
+  leafColor: PdfRgb,
+) {
+  const p = (refX: number, refY: number) => mapRef(refX, refY);
+  const unit = Math.max(p(0, 0).scaleX, p(0, 0).scaleY);
+
+  drawWatermarkQuadraticCurve(
+    pdf,
+    p(20, 180),
+    p(60, 120),
+    p(90, 50),
+    stemColor,
+    Math.max(0.07, 3 * unit),
+  );
+  drawWatermarkQuadraticCurve(
+    pdf,
+    p(20, 180),
+    p(0, 120),
+    p(30, 60),
+    stemColor,
+    Math.max(0.06, 2.5 * unit),
+  );
+  drawWatermarkQuadraticCurve(
+    pdf,
+    p(40, 160),
+    p(80, 140),
+    p(120, 100),
+    stemColor,
+    Math.max(0.05, 2 * unit),
+  );
+
+  const leafBaseWidth = 10 * unit;
+  const leafBaseHeight = 24 * unit;
+  [
+    { x: 55, y: 115, r: -40 },
+    { x: 72, y: 88, r: -20 },
+    { x: 28, y: 130, r: 30 },
+    { x: 85, y: 130, r: -60 },
+  ].forEach((leaf) => {
+    const point = p(leaf.x, leaf.y);
+    drawLeafWatermarkShape(
+      pdf,
+      point.x,
+      point.y,
+      leafBaseWidth,
+      leafBaseHeight,
+      leaf.r,
+      leafColor,
+      blendWithWhite(leafColor, 0.28),
+    );
+  });
+
+  const flowerLarge = p(90, 50);
+  drawWatermarkFlower(
+    pdf,
+    flowerLarge.x,
+    flowerLarge.y,
+    8,
+    30 * unit,
+    13 * unit,
+    28 * unit,
+    petalColor,
+    centerColor,
+  );
+
+  [
+    { x: 30, y: 62, scale: 0.8 },
+    { x: 118, y: 100, scale: 0.7 },
+  ].forEach((flower) => {
+    const point = p(flower.x, flower.y);
+    drawWatermarkFlower(
+      pdf,
+      point.x,
+      point.y,
+      6,
+      22 * unit * flower.scale,
+      10 * unit * flower.scale,
+      22 * unit * flower.scale,
+      petalColor,
+      centerColor,
+    );
+  });
+
+  [
+    { x: 65, y: 72, scale: 0.75 },
+    { x: 48, y: 92, scale: 0.6 },
+  ].forEach((bud) => {
+    const point = p(bud.x, bud.y);
+    drawWatermarkBud(
+      pdf,
+      point.x,
+      point.y,
+      10 * unit * bud.scale,
+      petalColor,
+      stemColor,
+    );
+  });
+}
+
+function drawPutriFloralWatermarkPdf(
+  pdf: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  palette: PdfKordaPalette,
+) {
+  const petalColor = blendWithWhite(palette.header, 0.84);
+  const centerColor = blendWithWhite(palette.border, 0.72);
+  const stemColor = blendWithWhite(palette.text, 0.62);
+  const leafColor = blendWithWhite(palette.header, 0.78);
+
+  const topLeft = createReferenceMapper(x, y, width, height, false, false);
+  const topRight = createReferenceMapper(x, y, width, height, true, false);
+  const bottomLeft = createReferenceMapper(x, y, width, height, false, true);
+  const bottomRight = createReferenceMapper(x, y, width, height, true, true);
+
+  drawCornerFloralCluster(
+    pdf,
+    topLeft,
+    petalColor,
+    centerColor,
+    stemColor,
+    leafColor,
+  );
+  drawCornerFloralCluster(
+    pdf,
+    topRight,
+    petalColor,
+    centerColor,
+    stemColor,
+    leafColor,
+  );
+  drawCornerFloralCluster(
+    pdf,
+    bottomLeft,
+    petalColor,
+    centerColor,
+    stemColor,
+    leafColor,
+  );
+  drawCornerFloralCluster(
+    pdf,
+    bottomRight,
+    petalColor,
+    centerColor,
+    stemColor,
+    leafColor,
+  );
+
+  const center = createReferenceMapper(x, y, width, height, false, false);
+  const centerPoint = center(400, 300);
+  const unit = Math.max(width / 800, height / 600);
+  drawWatermarkFlower(
+    pdf,
+    centerPoint.x,
+    centerPoint.y,
+    8,
+    26 * unit,
+    14 * unit,
+    30 * unit,
+    blendWithWhite(petalColor, 0.08),
+    blendWithWhite(centerColor, 0.08),
+  );
+
+  const topCurve = [
+    center(140, 35),
+    center(280, 18),
+    center(400, 28),
+    center(520, 18),
+    center(660, 35),
+  ];
+  const bottomCurve = [
+    center(140, 565),
+    center(280, 582),
+    center(400, 572),
+    center(520, 582),
+    center(660, 565),
+  ];
+  drawWatermarkPolyline(pdf, topCurve, blendWithWhite(stemColor, 0.12), Math.max(0.05, 1.5 * unit));
+  drawWatermarkPolyline(pdf, bottomCurve, blendWithWhite(stemColor, 0.12), Math.max(0.05, 1.5 * unit));
+}
+
 function getPdfPalette(kordaName: string): PdfKordaPalette {
   const hexPalette = getHexPalette(kordaName);
 
@@ -911,11 +1448,8 @@ function drawLuggageCardToPdf(
   height: number,
 ) {
   const palette = getPdfPalette(item.kordaName);
-  const gender = normalizeText(item.studentGender).toUpperCase();
-  const genderLabel =
-    gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN"
-      ? "PUTRI"
-      : "PUTRA";
+  const isPutri = isPutriGender(item.studentGender);
+  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
 
   const headerHeight = 11.8;
   const dividerHeight = 0.7;
@@ -932,6 +1466,10 @@ function drawLuggageCardToPdf(
   pdf.setDrawColor(...palette.border);
   pdf.setLineWidth(0.25);
   pdf.rect(x, y, width, height, "S");
+
+  if (isPutri) {
+    drawPutriFloralWatermarkPdf(pdf, x, y, width, height, palette);
+  }
 
   pdf.setFillColor(...palette.header);
   pdf.rect(x, y, width, headerHeight, "F");
