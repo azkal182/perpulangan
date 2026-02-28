@@ -663,9 +663,35 @@ const TAILWIND_COLOR_HEX: Record<string, string> = {
   "lime-800": "#3f6212",
   "lime-900": "#365314",
   "yellow-50": "#fefce8",
+  "yellow-400": "#facc15",
   "yellow-500": "#eab308",
+  "yellow-800": "#854d0e",
+  "yellow-900": "#713f12",
   "rose-50": "#fff1f2",
+  "rose-400": "#fb7185",
   "rose-500": "#f43f5e",
+  "rose-800": "#9f1239",
+  "rose-900": "#881337",
+  "green-50": "#f0fdf4",
+  "green-400": "#4ade80",
+  "green-500": "#22c55e",
+  "green-800": "#166534",
+  "green-900": "#14532d",
+  "sky-50": "#f0f9ff",
+  "sky-400": "#38bdf8",
+  "sky-500": "#0ea5e9",
+  "sky-800": "#075985",
+  "sky-900": "#0c4a6e",
+  "violet-50": "#f5f3ff",
+  "violet-400": "#a78bfa",
+  "violet-500": "#8b5cf6",
+  "violet-800": "#5b21b6",
+  "violet-900": "#4c1d95",
+  "slate-50": "#f8fafc",
+  "slate-400": "#94a3b8",
+  "slate-500": "#64748b",
+  "slate-800": "#1e293b",
+  "slate-900": "#0f172a",
 };
 
 const TAILWIND_COLOR_KEYS = Object.keys(TAILWIND_COLOR_HEX).sort(
@@ -1013,14 +1039,108 @@ function resolveTailwindHex(cls: string, fallback: string): string {
   return fallback;
 }
 
+function resolveTailwindHexByKey(
+  key: string | null | undefined,
+  fallback: string,
+): string {
+  if (!key) {
+    return fallback;
+  }
+  return TAILWIND_COLOR_HEX[key] ?? fallback;
+}
+
+function extractGradientColorKey(
+  cls: string,
+  direction: "from" | "to",
+): string | null {
+  const match = cls.match(new RegExp(`${direction}-([a-z-]+-\\d+)`));
+  return match?.[1] ?? null;
+}
+
+function rgbToHex(color: PdfRgb): string {
+  return `#${color
+    .map((channel) => {
+      const safe = Math.min(255, Math.max(0, Math.round(channel)));
+      return safe.toString(16).padStart(2, "0");
+    })
+    .join("")}`;
+}
+
+function blendHexColors(start: string, end: string, ratio: number): string {
+  const safeRatio = Math.min(1, Math.max(0, ratio));
+  const startRgb = hexToRgb(start);
+  const endRgb = hexToRgb(end);
+  const blended: PdfRgb = [
+    startRgb[0] * (1 - safeRatio) + endRgb[0] * safeRatio,
+    startRgb[1] * (1 - safeRatio) + endRgb[1] * safeRatio,
+    startRgb[2] * (1 - safeRatio) + endRgb[2] * safeRatio,
+  ];
+  return rgbToHex(blended);
+}
+
+function hashText(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function applyToneVariance(
+  color: string,
+  seed: number,
+  bitShift: number,
+  maxRatio: number,
+  mode: "both" | "lighter" | "darker" = "both",
+): string {
+  const bucket = (seed >>> bitShift) % 201; // 0..200
+  const centeredRatio = ((bucket - 100) / 100) * maxRatio;
+  const signedRatio =
+    mode === "lighter"
+      ? Math.abs(centeredRatio)
+      : mode === "darker"
+        ? -Math.abs(centeredRatio)
+        : centeredRatio;
+
+  if (signedRatio >= 0) {
+    return blendHexColors(color, "#ffffff", signedRatio);
+  }
+  return blendHexColors(color, "#000000", Math.abs(signedRatio));
+}
+
 function getHexPalette(kordaName: string): HexKordaPalette {
   const kordaColor = getKordaColor(kordaName);
-  const gradientStartMatch = kordaColor.headerBg.match(/from-[a-z]+-\d+/);
-  const headerSource = gradientStartMatch?.[0] ?? kordaColor.headerBg;
-  const header = resolveTailwindHex(headerSource, "#3b82f6");
-  const bg = resolveTailwindHex(kordaColor.bg, "#eff6ff");
-  const border = resolveTailwindHex(kordaColor.border, "#3b82f6");
-  const text = resolveTailwindHex(kordaColor.text, "#1e40af");
+  const headerFromKey = extractGradientColorKey(kordaColor.headerBg, "from");
+  const headerToKey = extractGradientColorKey(kordaColor.headerBg, "to");
+  const headerFromHex = resolveTailwindHexByKey(
+    headerFromKey,
+    resolveTailwindHex(kordaColor.headerBg, "#3b82f6"),
+  );
+  const headerToHex = resolveTailwindHexByKey(headerToKey, headerFromHex);
+  const baseHeader =
+    headerFromKey && headerToKey
+      ? blendHexColors(headerFromHex, headerToHex, 0.5)
+      : headerFromHex;
+
+  const bgFromKey = extractGradientColorKey(kordaColor.bg, "from");
+  const bgToKey = extractGradientColorKey(kordaColor.bg, "to");
+  const bgFromHex = resolveTailwindHexByKey(
+    bgFromKey,
+    resolveTailwindHex(kordaColor.bg, "#eff6ff"),
+  );
+  const bgToHex = resolveTailwindHexByKey(bgToKey, bgFromHex);
+  const baseBg =
+    bgFromKey && bgToKey ? blendHexColors(bgFromHex, bgToHex, 0.5) : bgFromHex;
+
+  const baseBorder = resolveTailwindHex(kordaColor.border, "#3b82f6");
+  const baseText = resolveTailwindHex(kordaColor.text, "#1e40af");
+  const seed = hashText(normalizeText(kordaName).toLocaleLowerCase("id-ID"));
+
+  const header = applyToneVariance(baseHeader, seed, 0, 0.12, "both");
+  const bg = applyToneVariance(baseBg, seed, 7, 0.08, "lighter");
+  const border = applyToneVariance(baseBorder, seed, 13, 0.1, "both");
+  const text = applyToneVariance(baseText, seed, 19, 0.08, "darker");
 
   return { header, bg, border, text };
 }
