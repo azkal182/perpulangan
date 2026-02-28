@@ -18,8 +18,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, FileDown, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Loader2,
+  FileDown,
+  Eye,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { getPrintDataAction } from "../actions/print-actions";
 import type {
   PaperSize,
@@ -90,7 +104,7 @@ export function PrintWorkspace({
     "all" | "Laki-laki" | "Perempuan"
   >("all");
   const [nameFilter, setNameFilter] = useState("");
-  const [kordaFilter, setKordaFilter] = useState<string>("all");
+  const [kordaFilters, setKordaFilters] = useState<string[]>([]);
   const [dropPointFilter, setDropPointFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -106,6 +120,16 @@ export function PrintWorkspace({
     setShowPreview(false);
     setPreviewPageIndex(0);
   };
+
+  const selectedKordaNames = kordas
+    .filter((korda) => kordaFilters.includes(korda.id))
+    .map((korda) => korda.name);
+  const kordaFilterLabel =
+    selectedKordaNames.length === 0
+      ? "Semua"
+      : selectedKordaNames.length === 1
+        ? selectedKordaNames[0]
+        : `${selectedKordaNames.length} korda dipilih`;
 
   useEffect(() => {
     const target = previewViewportRef.current;
@@ -139,7 +163,7 @@ export function PrintWorkspace({
         eventId,
         gender: genderFilter === "all" ? undefined : genderFilter,
         studentName: nameFilter.trim() || undefined,
-        kordaId: kordaFilter === "all" ? undefined : kordaFilter,
+        kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
         dropPointId: dropPointFilter === "all" ? undefined : dropPointFilter,
       });
 
@@ -339,19 +363,52 @@ export function PrintWorkspace({
 
         <div className="space-y-2">
           <Label>Filter Korda</Label>
-          <Select value={kordaFilter} onValueChange={(v) => { setKordaFilter(v); resetPreview(); }}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua</SelectItem>
-              {kordas.map((k) => (
-                <SelectItem key={k.id} value={k.id}>
-                  {k.name}
-                </SelectItem>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-between font-normal"
+              >
+                <span className="truncate text-left">{kordaFilterLabel}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-80 w-[--radix-dropdown-menu-trigger-width] overflow-y-auto"
+            >
+              <DropdownMenuCheckboxItem
+                checked={kordaFilters.length === 0}
+                onSelect={(event) => event.preventDefault()}
+                onCheckedChange={() => {
+                  setKordaFilters([]);
+                  resetPreview();
+                }}
+              >
+                Semua
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              {kordas.map((korda) => (
+                <DropdownMenuCheckboxItem
+                  key={korda.id}
+                  checked={kordaFilters.includes(korda.id)}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={(checked) => {
+                    setKordaFilters((prev) => {
+                      if (checked === true) {
+                        return prev.includes(korda.id) ? prev : [...prev, korda.id];
+                      }
+                      return prev.filter((id) => id !== korda.id);
+                    });
+                    resetPreview();
+                  }}
+                >
+                  {korda.name}
+                </DropdownMenuCheckboxItem>
               ))}
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="space-y-2">

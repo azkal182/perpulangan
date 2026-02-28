@@ -15,6 +15,7 @@ export interface GetPrintDataParams {
   eventId: string;
   gender?: "Laki-laki" | "Perempuan";
   kordaId?: string;
+  kordaIds?: string[];
   dropPointId?: string;
   studentName?: string;
   journeyType?: "outbound" | "return" | "both";
@@ -25,7 +26,10 @@ export async function getPrintDataAction(
 ): Promise<{ success: boolean; data?: PrintDataItem[]; error?: string }> {
   try {
     const scope = await getRegionalAccessScope();
-    const { eventId, gender, kordaId, dropPointId, studentName } = params;
+    const { eventId, gender, kordaId, kordaIds, dropPointId, studentName } = params;
+    const selectedKordaIds = Array.from(
+      new Set([...(kordaIds ?? []), ...(kordaId ? [kordaId] : [])]),
+    ).filter((value): value is string => value.length > 0);
 
     // Build where clause - simplified, just need drop points
     const where: Prisma.RegistrationWhereInput = {
@@ -52,13 +56,20 @@ export async function getPrintDataAction(
     }
 
     // Korda filter (either outbound or return)
-    if (kordaId) {
-      await ensureKordaInScope(scope, kordaId);
+    if (selectedKordaIds.length > 0) {
+      await Promise.all(
+        selectedKordaIds.map((selectedKordaId) =>
+          ensureKordaInScope(scope, selectedKordaId),
+        ),
+      );
       const orConditions = where.OR || [];
       where.AND = [
         { OR: orConditions },
         {
-          OR: [{ outboundKordaId: kordaId }, { returnKordaId: kordaId }],
+          OR: [
+            { outboundKordaId: { in: selectedKordaIds } },
+            { returnKordaId: { in: selectedKordaIds } },
+          ],
         },
       ];
       delete where.OR;
