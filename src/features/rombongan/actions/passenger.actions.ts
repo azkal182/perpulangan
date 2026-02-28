@@ -55,6 +55,69 @@ export interface BusAttendanceManifest {
   passengers: BusAttendancePassenger[];
 }
 
+function normalizeSortValue(
+  value: string | null | undefined,
+  options?: { nullLast?: boolean },
+): string {
+  const normalized = value?.trim().toLocaleLowerCase("id-ID");
+  if (normalized && normalized.length > 0) {
+    return normalized;
+  }
+  return options?.nullLast === false ? "" : "\uffff";
+}
+
+function compareSortValue(
+  left: string | null | undefined,
+  right: string | null | undefined,
+  options?: { nullLast?: boolean },
+): number {
+  return normalizeSortValue(left, options).localeCompare(
+    normalizeSortValue(right, options),
+    "id",
+    { sensitivity: "base", numeric: true },
+  );
+}
+
+function sortBusAttendancePassengers(
+  passengers: BusAttendancePassenger[],
+): BusAttendancePassenger[] {
+  return [...passengers].sort((a, b) => {
+    const dropPointCompare = compareSortValue(a.dropPointName, b.dropPointName);
+    if (dropPointCompare !== 0) {
+      return dropPointCompare;
+    }
+
+    const nameCompare = compareSortValue(a.studentName, b.studentName, {
+      nullLast: false,
+    });
+    if (nameCompare !== 0) {
+      return nameCompare;
+    }
+
+    return compareSortValue(a.studentNis, b.studentNis);
+  });
+}
+
+function sortBusAttendanceManifest(
+  manifests: BusAttendanceManifest[],
+): BusAttendanceManifest[] {
+  return [...manifests].sort((a, b) => {
+    const korwilCompare = compareSortValue(a.korwilName, b.korwilName);
+    if (korwilCompare !== 0) {
+      return korwilCompare;
+    }
+
+    const kordaA = a.kordaNames[0] ?? null;
+    const kordaB = b.kordaNames[0] ?? null;
+    const kordaCompare = compareSortValue(kordaA, kordaB);
+    if (kordaCompare !== 0) {
+      return kordaCompare;
+    }
+
+    return compareSortValue(a.busLabel, b.busLabel, { nullLast: false });
+  });
+}
+
 /**
  * Get passengers already assigned to a bus for a specific journey
  */
@@ -221,24 +284,28 @@ export async function getBusAttendanceManifest(params: {
         orderBy: { label: "asc" },
       });
 
-      return buses.map((bus) => ({
+      const manifests = buses.map((bus) => ({
         busId: bus.id,
         busLabel: bus.label,
         busCapacity: bus.capacity,
         korwilName: bus.korwil?.name ?? null,
         kordaNames: bus.kordas.map((item) => item.korda.name),
-        passengers: bus.outboundRegistrations.map((registration) => ({
-          registrationId: registration.id,
-          studentName: registration.student.name,
-          studentNis: registration.student.nis,
-          studentGender: registration.student.gender,
-          kabKota:
-            registration.student.regency?.label ??
-            registration.student.regency?.name ??
-            null,
-          dropPointName: registration.outboundDropPoint?.name ?? null,
-        })),
+        passengers: sortBusAttendancePassengers(
+          bus.outboundRegistrations.map((registration) => ({
+            registrationId: registration.id,
+            studentName: registration.student.name,
+            studentNis: registration.student.nis,
+            studentGender: registration.student.gender,
+            kabKota:
+              registration.student.regency?.label ??
+              registration.student.regency?.name ??
+              null,
+            dropPointName: registration.outboundDropPoint?.name ?? null,
+          })),
+        ),
       }));
+
+      return sortBusAttendanceManifest(manifests);
     }
 
     const buses = await prisma.bus.findMany({
@@ -304,24 +371,28 @@ export async function getBusAttendanceManifest(params: {
       orderBy: { label: "asc" },
     });
 
-    return buses.map((bus) => ({
+    const manifests = buses.map((bus) => ({
       busId: bus.id,
       busLabel: bus.label,
       busCapacity: bus.capacity,
       korwilName: bus.korwil?.name ?? null,
       kordaNames: bus.kordas.map((item) => item.korda.name),
-      passengers: bus.returnRegistrations.map((registration) => ({
-        registrationId: registration.id,
-        studentName: registration.student.name,
-        studentNis: registration.student.nis,
-        studentGender: registration.student.gender,
-        kabKota:
-          registration.student.regency?.label ??
-          registration.student.regency?.name ??
-          null,
-        dropPointName: registration.returnDropPoint?.name ?? null,
-      })),
+      passengers: sortBusAttendancePassengers(
+        bus.returnRegistrations.map((registration) => ({
+          registrationId: registration.id,
+          studentName: registration.student.name,
+          studentNis: registration.student.nis,
+          studentGender: registration.student.gender,
+          kabKota:
+            registration.student.regency?.label ??
+            registration.student.regency?.name ??
+            null,
+          dropPointName: registration.returnDropPoint?.name ?? null,
+        })),
+      ),
     }));
+
+    return sortBusAttendanceManifest(manifests);
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       throw new Error(error.message);

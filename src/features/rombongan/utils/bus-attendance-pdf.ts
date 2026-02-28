@@ -2,8 +2,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { BusAttendanceManifest } from "../actions/passenger.actions";
 
-const PAGE_WIDTH = 210; // A4 portrait (mm)
-const PAGE_HEIGHT = 297;
+const PAGE_WIDTH = 215; // F4 portrait (mm)
+const PAGE_HEIGHT = 330;
 const PAGE_MARGIN = 10;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
@@ -54,7 +54,7 @@ export function buildBusAttendancePdf({
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
-    format: "a4",
+    format: [PAGE_WIDTH, PAGE_HEIGHT],
   });
 
   const journeyLabel = getJourneyLabel(journey);

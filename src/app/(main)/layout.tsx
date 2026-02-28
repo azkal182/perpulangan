@@ -15,7 +15,7 @@ export default function MainLayout({
         <MainHeader />
 
         {/* Main content */}
-        <div className="flex flex-1 flex-col gap-4 p-4 pb-24 md:pb-6 lg:gap-6 lg:p-6">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 pb-24 md:pb-6 lg:gap-6 lg:p-6">
           {children}
         </div>
         <MobileBottomNav />
