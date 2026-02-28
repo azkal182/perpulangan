@@ -93,6 +93,7 @@ export function PrintWorkspace({
   const [kordaFilter, setKordaFilter] = useState<string>("all");
   const [dropPointFilter, setDropPointFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [previewData, setPreviewData] = useState<PrintDataItem[] | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
@@ -170,10 +171,15 @@ export function PrintWorkspace({
       return;
     }
 
-    setLoading(true);
+    setGeneratingPdf(true);
     toast.loading("Generating PDF...");
 
     try {
+      // Beri kesempatan UI render state loading sebelum proses PDF berjalan.
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+
       const layout = calculateLayout(paperSize, printType);
       const paper = PAPER_SIZES[paperSize];
 
@@ -221,7 +227,7 @@ export function PrintWorkspace({
       toast.error("Gagal membuat PDF");
       console.error(error);
     } finally {
-      setLoading(false);
+      setGeneratingPdf(false);
     }
   };
 
@@ -465,14 +471,18 @@ export function PrintWorkspace({
 
       <div className="flex flex-wrap justify-end gap-2 pt-2">
         {showCloseButton && (
-          <Button variant="outline" onClick={() => onClose?.()}>
+          <Button
+            variant="outline"
+            onClick={() => onClose?.()}
+            disabled={generatingPdf}
+          >
             Batal
           </Button>
         )}
         <Button
           variant="secondary"
           onClick={handlePreview}
-          disabled={loading}
+          disabled={loading || generatingPdf}
         >
           {loading ? (
             <>
@@ -488,10 +498,19 @@ export function PrintWorkspace({
         </Button>
         <Button
           onClick={handleGeneratePDF}
-          disabled={!showPreview || loading}
+          disabled={!showPreview || loading || generatingPdf}
         >
-          <FileDown className="mr-2 h-4 w-4" />
-          Generate PDF
+          {generatingPdf ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Menyiapkan PDF...
+            </>
+          ) : (
+            <>
+              <FileDown className="mr-2 h-4 w-4" />
+              Generate PDF
+            </>
+          )}
         </Button>
       </div>
     </div>
@@ -606,11 +625,28 @@ function isPutriGender(value: string | null | undefined): boolean {
   return gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN";
 }
 
+function getGenderSortRank(value: string | null | undefined): number {
+  const gender = normalizeText(value).toUpperCase();
+  if (gender === "L" || gender === "PUTRA" || gender === "LAKI-LAKI") {
+    return 0;
+  }
+  if (gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN") {
+    return 1;
+  }
+  return 2;
+}
+
 function buildPagesByKorda(
   data: PrintDataItem[],
   cardsPerPage: number,
 ): PrintDataItem[][] {
   const sorted = [...data].sort((a, b) => {
+    const genderCompare =
+      getGenderSortRank(a.studentGender) - getGenderSortRank(b.studentGender);
+    if (genderCompare !== 0) {
+      return genderCompare;
+    }
+
     const kordaCompare = normalizeText(a.kordaName).localeCompare(
       normalizeText(b.kordaName),
       "id",
@@ -687,7 +723,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
       <rect x="1" y="119" width="978" height="7" fill={palette.border} />
       <rect x="1" y="126" width="978" height="93" fill={palette.bg} />
       {isPutri && (
-        <g opacity="0.16">
+        <g opacity="0.12">
           <defs>
             <g id="wm-flower">
               <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} />
@@ -737,7 +773,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
           </defs>
 
           <g transform={`scale(${floralScaleX} ${floralScaleY})`}>
-            <g opacity="0.2">
+            <g opacity="0.16">
               <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
               <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
               <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
@@ -752,7 +788,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
               <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
             </g>
 
-            <g transform="translate(800,0) scale(-1,1)" opacity="0.2">
+            <g transform="translate(800,0) scale(-1,1)" opacity="0.16">
               <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
               <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
               <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
@@ -767,7 +803,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
               <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
             </g>
 
-            <g transform="translate(0,600) scale(1,-1)" opacity="0.2">
+            <g transform="translate(0,600) scale(1,-1)" opacity="0.16">
               <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
               <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
               <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
@@ -782,7 +818,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
               <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
             </g>
 
-            <g transform="translate(800,600) scale(-1,-1)" opacity="0.2">
+            <g transform="translate(800,600) scale(-1,-1)" opacity="0.16">
               <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
               <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
               <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
@@ -797,7 +833,7 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
               <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
             </g>
 
-            <g transform="translate(400, 300)" opacity="0.08">
+            <g transform="translate(400, 300)" opacity="0.05">
               <use href="#wm-flower-lg" transform="scale(2.1)" />
               <use href="#wm-flower" transform="translate(90,0) scale(1.1)" />
               <use href="#wm-flower" transform="translate(-90,0) scale(1.1)" />
@@ -810,14 +846,14 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
               stroke={palette.text}
               strokeWidth="1.5"
               fill="none"
-              opacity="0.13"
+              opacity="0.09"
             />
             <path
               d="M 140 565 Q 280 582 400 572 Q 520 582 660 565"
               stroke={palette.text}
               strokeWidth="1.5"
               fill="none"
-              opacity="0.13"
+              opacity="0.09"
             />
           </g>
         </g>
@@ -1037,7 +1073,7 @@ function drawWatermarkQuadraticCurve(
   lineWidth: number,
 ) {
   const points: Array<{ x: number; y: number }> = [];
-  const segments = 14;
+  const segments = 10;
   for (let index = 0; index <= segments; index += 1) {
     const t = index / segments;
     const oneMinusT = 1 - t;
@@ -1269,10 +1305,10 @@ function drawPutriFloralWatermarkPdf(
   height: number,
   palette: PdfKordaPalette,
 ) {
-  const petalColor = blendWithWhite(palette.header, 0.84);
-  const centerColor = blendWithWhite(palette.border, 0.72);
-  const stemColor = blendWithWhite(palette.text, 0.62);
-  const leafColor = blendWithWhite(palette.header, 0.78);
+  const petalColor = blendWithWhite(palette.header, 0.9);
+  const centerColor = blendWithWhite(palette.border, 0.84);
+  const stemColor = blendWithWhite(palette.text, 0.78);
+  const leafColor = blendWithWhite(palette.header, 0.88);
 
   const topLeft = createReferenceMapper(x, y, width, height, false, false);
   const topRight = createReferenceMapper(x, y, width, height, true, false);
@@ -1323,8 +1359,8 @@ function drawPutriFloralWatermarkPdf(
     26 * unit,
     14 * unit,
     30 * unit,
-    blendWithWhite(petalColor, 0.08),
-    blendWithWhite(centerColor, 0.08),
+    blendWithWhite(petalColor, 0.35),
+    blendWithWhite(centerColor, 0.35),
   );
 
   const topCurve = [
@@ -1341,8 +1377,8 @@ function drawPutriFloralWatermarkPdf(
     center(520, 582),
     center(660, 565),
   ];
-  drawWatermarkPolyline(pdf, topCurve, blendWithWhite(stemColor, 0.12), Math.max(0.05, 1.5 * unit));
-  drawWatermarkPolyline(pdf, bottomCurve, blendWithWhite(stemColor, 0.12), Math.max(0.05, 1.5 * unit));
+  drawWatermarkPolyline(pdf, topCurve, blendWithWhite(stemColor, 0.35), Math.max(0.05, 1.2 * unit));
+  drawWatermarkPolyline(pdf, bottomCurve, blendWithWhite(stemColor, 0.35), Math.max(0.05, 1.2 * unit));
 }
 
 function getPdfPalette(kordaName: string): PdfKordaPalette {
