@@ -190,10 +190,58 @@ export const KORDA_COLORS = [
   },
 ];
 
+function normalizeKordaName(value: string): string {
+  return value
+    .toLocaleLowerCase("id-ID")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+// Fixed color mapping for known korda names.
+// If a name is not listed here, color is generated automatically by hash fallback.
+const FIXED_KORDA_COLOR_INDEX: Record<string, number> = {
+  "banten": 10,
+  "iksas bandung": 13,
+  "iksas pusaka": 31,
+  "jabodetabek": 37,
+  "kumaci": 6,
+  "blora": 1,
+  "demak": 9,
+  "jepara": 20,
+  "kudus": 4,
+  "pati": 24,
+  "purwodadi": 29,
+  "semarang": 15,
+  "solo raya": 22,
+  "yogyakarta": 30,
+  "kendal": 40,
+  "magelang wonosobo temanggung": 38,
+  "pekalongan batang": 26,
+  "pemalang": 33,
+  "tegal brebes": 35,
+  "jawa timur 1": 11,
+  "jawa timur 2": 32,
+  "kalimantan": 42,
+  "lombok": 18,
+  "sumatera": 27,
+};
+
 export function getKordaColor(kordaName: string = "") {
+  const normalizedKordaName = normalizeKordaName(kordaName);
+  const fixedColorIndex = FIXED_KORDA_COLOR_INDEX[normalizedKordaName];
+  if (
+    typeof fixedColorIndex === "number" &&
+    fixedColorIndex >= 0 &&
+    fixedColorIndex < KORDA_COLORS.length
+  ) {
+    return KORDA_COLORS[fixedColorIndex];
+  }
+
+  const hashSource = normalizedKordaName || kordaName;
   let hash = 0;
-  for (let i = 0; i < kordaName.length; i++) {
-    hash = kordaName.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < hashSource.length; i++) {
+    hash = hashSource.charCodeAt(i) + ((hash << 5) - hash);
   }
   const index = Math.abs(hash) % KORDA_COLORS.length;
   return KORDA_COLORS[index];
