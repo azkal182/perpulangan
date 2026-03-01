@@ -117,6 +117,11 @@ export function RegistrationsTable({
                           <div className="text-muted-foreground">
                             {reg.outboundDropPoint?.name}
                           </div>
+                          {reg.outboundBus?.label && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Bus: {reg.outboundBus.label}
+                            </div>
+                          )}
                           {reg.outboundPaid && (
                             <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700">
                               <CheckCircle2 className="mr-1 h-3 w-3" />
@@ -135,6 +140,11 @@ export function RegistrationsTable({
                           <div className="text-muted-foreground">
                             {reg.returnDropPoint?.name}
                           </div>
+                          {reg.returnBus?.label && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Bus: {reg.returnBus.label}
+                            </div>
+                          )}
                           {reg.returnPaid && (
                             <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700">
                               <CheckCircle2 className="mr-1 h-3 w-3" />
@@ -211,6 +221,9 @@ export function RegistrationsTable({
                       <div className="text-muted-foreground space-y-1">
                         <div>{reg.outboundKorda.name}</div>
                         <div className="text-xs">{reg.outboundDropPoint?.name}</div>
+                        {reg.outboundBus?.label && (
+                          <div className="text-xs">Bus: {reg.outboundBus.label}</div>
+                        )}
                         {reg.outboundPaid && (
                           <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
                             Bayar
@@ -228,6 +241,9 @@ export function RegistrationsTable({
                       <div className="text-muted-foreground space-y-1">
                         <div>{reg.returnKorda.name}</div>
                         <div className="text-xs">{reg.returnDropPoint?.name}</div>
+                        {reg.returnBus?.label && (
+                          <div className="text-xs">Bus: {reg.returnBus.label}</div>
+                        )}
                         {reg.returnPaid && (
                           <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
                             Bayar

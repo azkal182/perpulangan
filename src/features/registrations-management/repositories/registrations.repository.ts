@@ -30,10 +30,12 @@ export interface RegistrationWithDetails {
   };
   outboundKorda: { id: string; name: string } | null;
   outboundDropPoint: { id: string; name: string; price: number } | null;
+  outboundBus: { id: string; label: string } | null;
   outboundDate: Date | null;
   outboundPaid: boolean;
   returnKorda: { id: string; name: string } | null;
   returnDropPoint: { id: string; name: string; price: number } | null;
+  returnBus: { id: string; label: string } | null;
   returnDate: Date | null;
   returnPaid: boolean;
   status: RegistrationStatus;
@@ -159,11 +161,17 @@ export async function getFilteredRegistrations(
         outboundDropPoint: {
           select: { id: true, name: true, price: true },
         },
+        outboundBus: {
+          select: { id: true, label: true },
+        },
         returnKorda: {
           select: { id: true, name: true },
         },
         returnDropPoint: {
           select: { id: true, name: true, price: true },
+        },
+        returnBus: {
+          select: { id: true, label: true },
         },
       },
       orderBy: { createdAt: "desc" },
