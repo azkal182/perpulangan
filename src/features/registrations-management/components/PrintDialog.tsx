@@ -98,6 +98,9 @@ export function PrintWorkspace({
   showCloseButton = false,
   className,
 }: PrintWorkspaceProps) {
+  const [journeyFilter, setJourneyFilter] = useState<
+    "all" | "outbound" | "return"
+  >("all");
   const [printType, setPrintType] = useState<PrintType>("luggage_card");
   const [paperSize, setPaperSize] = useState<PaperSize>("A4");
   const [genderFilter, setGenderFilter] = useState<
@@ -161,6 +164,7 @@ export function PrintWorkspace({
     try {
       const result = await getPrintDataAction({
         eventId,
+        journeyType: journeyFilter === "all" ? undefined : journeyFilter,
         gender: genderFilter === "all" ? undefined : genderFilter,
         studentName: nameFilter.trim() || undefined,
         kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
@@ -327,7 +331,7 @@ export function PrintWorkspace({
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="space-y-2">
           <Label htmlFor="student-name-filter">Filter Nama</Label>
           <Input
@@ -357,6 +361,26 @@ export function PrintWorkspace({
               <SelectItem value="all">Semua</SelectItem>
               <SelectItem value="Laki-laki">Laki-laki</SelectItem>
               <SelectItem value="Perempuan">Perempuan</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Filter Perjalanan</Label>
+          <Select
+            value={journeyFilter}
+            onValueChange={(value: "all" | "outbound" | "return") => {
+              setJourneyFilter(value);
+              resetPreview();
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua perjalanan</SelectItem>
+              <SelectItem value="outbound">Keberangkatan</SelectItem>
+              <SelectItem value="return">Kepulangan</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -703,6 +727,11 @@ function normalizeText(value: string | null | undefined): string {
   return normalized && normalized.length > 0 ? normalized : "-";
 }
 
+function normalizeBusSortValue(value: string | null | undefined): string {
+  const normalized = value?.toString().trim();
+  return normalized && normalized !== "-" ? normalized : "\uffff";
+}
+
 function isPutriGender(value: string | null | undefined): boolean {
   const gender = normalizeText(value).toUpperCase();
   return gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN";
@@ -723,31 +752,8 @@ function buildPagesByKorda(
   data: PrintDataItem[],
   cardsPerPage: number,
 ): PrintDataItem[][] {
-  const sorted = [...data].sort((a, b) => {
-    const genderCompare =
-      getGenderSortRank(a.studentGender) - getGenderSortRank(b.studentGender);
-    if (genderCompare !== 0) {
-      return genderCompare;
-    }
-
-    const kordaCompare = normalizeText(a.kordaName).localeCompare(
-      normalizeText(b.kordaName),
-      "id",
-      { sensitivity: "base" },
-    );
-    if (kordaCompare !== 0) {
-      return kordaCompare;
-    }
-
-    return normalizeText(a.studentName).localeCompare(
-      normalizeText(b.studentName),
-      "id",
-      { sensitivity: "base" },
-    );
-  });
-
   const grouped = new Map<string, PrintDataItem[]>();
-  sorted.forEach((item) => {
+  data.forEach((item) => {
     const key = normalizeText(item.kordaName);
     if (!grouped.has(key)) {
       grouped.set(key, []);
@@ -755,10 +761,38 @@ function buildPagesByKorda(
     grouped.get(key)?.push(item);
   });
 
+  const sortedGroupEntries = Array.from(grouped.entries()).sort(([left], [right]) =>
+    left.localeCompare(right, "id", { sensitivity: "base" }),
+  );
+
   const pages: PrintDataItem[][] = [];
-  grouped.forEach((items) => {
-    for (let index = 0; index < items.length; index += cardsPerPage) {
-      pages.push(items.slice(index, index + cardsPerPage));
+  sortedGroupEntries.forEach(([, items]) => {
+    const sortedItems = [...items].sort((a, b) => {
+      const busCompare = normalizeBusSortValue(a.busLabel).localeCompare(
+        normalizeBusSortValue(b.busLabel),
+        "id",
+        { sensitivity: "base", numeric: true },
+      );
+      if (busCompare !== 0) {
+        return busCompare;
+      }
+
+      const nameCompare = normalizeText(a.studentName).localeCompare(
+        normalizeText(b.studentName),
+        "id",
+        { sensitivity: "base", numeric: true },
+      );
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
+
+      return (
+        getGenderSortRank(a.studentGender) - getGenderSortRank(b.studentGender)
+      );
+    });
+
+    for (let index = 0; index < sortedItems.length; index += cardsPerPage) {
+      pages.push(sortedItems.slice(index, index + cardsPerPage));
     }
   });
 

@@ -26,7 +26,15 @@ export async function getPrintDataAction(
 ): Promise<{ success: boolean; data?: PrintDataItem[]; error?: string }> {
   try {
     const scope = await getRegionalAccessScope();
-    const { eventId, gender, kordaId, kordaIds, dropPointId, studentName } = params;
+    const {
+      eventId,
+      gender,
+      journeyType,
+      kordaId,
+      kordaIds,
+      dropPointId,
+      studentName,
+    } = params;
     const selectedKordaIds = Array.from(
       new Set([...(kordaIds ?? []), ...(kordaId ? [kordaId] : [])]),
     ).filter((value): value is string => value.length > 0);
@@ -75,8 +83,6 @@ export async function getPrintDataAction(
       delete where.OR;
     }
 
-    const finalWhere = andWhere(where, registrationScopeWhere(scope));
-
     // Drop point filter (either outbound or return)
     if (dropPointId) {
       const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
@@ -97,6 +103,48 @@ export async function getPrintDataAction(
       ];
       delete where.OR;
     }
+
+    const outboundJourneyExists: Prisma.RegistrationWhereInput = {
+      OR: [
+        { outboundDropPointId: { not: null } },
+        { outboundKordaId: { not: null } },
+        { outboundBusId: { not: null } },
+        { outboundDate: { not: null } },
+      ],
+    };
+    const returnJourneyExists: Prisma.RegistrationWhereInput = {
+      OR: [
+        { returnDropPointId: { not: null } },
+        { returnKordaId: { not: null } },
+        { returnBusId: { not: null } },
+        { returnDate: { not: null } },
+      ],
+    };
+
+    if (journeyType === "outbound") {
+      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
+        ? Array.isArray(where.AND)
+          ? where.AND
+          : [where.AND]
+        : [];
+      where.AND = [...existingConditions, outboundJourneyExists];
+    } else if (journeyType === "return") {
+      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
+        ? Array.isArray(where.AND)
+          ? where.AND
+          : [where.AND]
+        : [];
+      where.AND = [...existingConditions, returnJourneyExists];
+    } else if (journeyType === "both") {
+      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
+        ? Array.isArray(where.AND)
+          ? where.AND
+          : [where.AND]
+        : [];
+      where.AND = [...existingConditions, outboundJourneyExists, returnJourneyExists];
+    }
+
+    const finalWhere = andWhere(where, registrationScopeWhere(scope));
 
     const registrations = await prisma.registration.findMany({
       where: finalWhere,
@@ -135,46 +183,107 @@ export async function getPrintDataAction(
             name: true,
           },
         },
+        outboundBus: {
+          select: {
+            id: true,
+            label: true,
+          },
+        },
+        returnBus: {
+          select: {
+            id: true,
+            label: true,
+          },
+        },
       },
       orderBy: [{ student: { name: "asc" } }],
     });
 
-    // Transform data and get bus labels
-    const printData: PrintDataItem[] = await Promise.all(
-      registrations.map(async (reg) => {
-        // Prioritize return journey if exists, otherwise outbound
-        const korda = reg.returnKorda || reg.outboundKorda;
-        const dropPoint = reg.returnDropPoint || reg.outboundDropPoint;
-
-        // Get bus for this korda
-        let busLabel: string | null = null;
-        if (korda) {
-          const busKorda = await prisma.busKorda.findFirst({
-            where: { kordaId: korda.id },
-            include: {
-              bus: {
-                select: {
-                  label: true,
-                },
-              },
-            },
-          });
-          busLabel = busKorda?.bus?.label || null;
+    const printData: PrintDataItem[] = registrations.map((reg) => {
+      const chooseJourneySide = (): "outbound" | "return" => {
+        if (journeyType === "outbound") {
+          return "outbound";
+        }
+        if (journeyType === "return") {
+          return "return";
         }
 
-        return {
-          id: reg.id,
-          studentName: reg.student.name,
-          studentNis: reg.student.nis,
-          fullAddress: reg.student.fullAddress,
-          parrentPhone: reg.student.parrentPhone,
-          studentGender: reg.student.gender,
-          kordaName: korda?.name || "-",
-          dropPointName: dropPoint?.name || "-",
-          busLabel,
-        };
-      }),
-    );
+        if (dropPointId) {
+          const outboundMatch = reg.outboundDropPoint?.id === dropPointId;
+          const returnMatch = reg.returnDropPoint?.id === dropPointId;
+          if (outboundMatch !== returnMatch) {
+            return outboundMatch ? "outbound" : "return";
+          }
+        }
+
+        if (selectedKordaIds.length > 0) {
+          const outboundMatch =
+            !!reg.outboundKorda?.id &&
+            selectedKordaIds.includes(reg.outboundKorda.id);
+          const returnMatch =
+            !!reg.returnKorda?.id && selectedKordaIds.includes(reg.returnKorda.id);
+          if (outboundMatch !== returnMatch) {
+            return outboundMatch ? "outbound" : "return";
+          }
+        }
+
+        const outboundHasBus = Boolean(reg.outboundBus?.id || reg.outboundBus?.label);
+        const returnHasBus = Boolean(reg.returnBus?.id || reg.returnBus?.label);
+        if (outboundHasBus !== returnHasBus) {
+          return outboundHasBus ? "outbound" : "return";
+        }
+
+        if (reg.returnDate || reg.returnKorda || reg.returnDropPoint) {
+          return "return";
+        }
+        return "outbound";
+      };
+
+      const preferredSide = chooseJourneySide();
+      const preferredData =
+        preferredSide === "return"
+          ? {
+              korda: reg.returnKorda,
+              dropPoint: reg.returnDropPoint,
+              busLabel: reg.returnBus?.label ?? null,
+            }
+          : {
+              korda: reg.outboundKorda,
+              dropPoint: reg.outboundDropPoint,
+              busLabel: reg.outboundBus?.label ?? null,
+            };
+      const fallbackData =
+        preferredSide === "return"
+          ? {
+              korda: reg.outboundKorda,
+              dropPoint: reg.outboundDropPoint,
+              busLabel: reg.outboundBus?.label ?? null,
+            }
+          : {
+              korda: reg.returnKorda,
+              dropPoint: reg.returnDropPoint,
+              busLabel: reg.returnBus?.label ?? null,
+            };
+
+      const hasPreferredData =
+        !!preferredData.korda || !!preferredData.dropPoint || !!preferredData.busLabel;
+      const isFixedJourney =
+        journeyType === "outbound" || journeyType === "return";
+      const resolvedData =
+        hasPreferredData || isFixedJourney ? preferredData : fallbackData;
+
+      return {
+        id: reg.id,
+        studentName: reg.student.name,
+        studentNis: reg.student.nis,
+        fullAddress: reg.student.fullAddress,
+        parrentPhone: reg.student.parrentPhone,
+        studentGender: reg.student.gender,
+        kordaName: resolvedData.korda?.name || "-",
+        dropPointName: resolvedData.dropPoint?.name || "-",
+        busLabel: resolvedData.busLabel,
+      };
+    });
 
     // console.log(`✅ Returning ${printData.length} print items`);
 
