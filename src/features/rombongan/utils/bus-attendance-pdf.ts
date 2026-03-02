@@ -8,10 +8,18 @@ const PAGE_MARGIN = 10;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
 const NO_COLUMN_WIDTH = 10;
-const NAME_COLUMN_WIDTH = 64;
-const KAB_KOTA_COLUMN_WIDTH = 58;
-const DROP_POINT_COLUMN_WIDTH =
-  CONTENT_WIDTH - NO_COLUMN_WIDTH - NAME_COLUMN_WIDTH - KAB_KOTA_COLUMN_WIDTH;
+const NAME_COLUMN_WIDTH = 60;
+const KAB_KOTA_COLUMN_WIDTH = 42;
+const CHECKLIST_ONE_COLUMN_WIDTH = 14;
+const CHECKLIST_TWO_COLUMN_WIDTH = 14;
+const ABSEN_COLUMN_WIDTH = 13;
+const DROP_POINT_COLUMN_WIDTH = CONTENT_WIDTH
+  - NO_COLUMN_WIDTH
+  - NAME_COLUMN_WIDTH
+  - KAB_KOTA_COLUMN_WIDTH
+  - CHECKLIST_ONE_COLUMN_WIDTH
+  - CHECKLIST_TWO_COLUMN_WIDTH
+  - ABSEN_COLUMN_WIDTH;
 
 type JourneyType = "outbound" | "return";
 
@@ -40,6 +48,9 @@ function buildColumnStyles() {
     1: { cellWidth: NAME_COLUMN_WIDTH, halign: "left" },
     2: { cellWidth: KAB_KOTA_COLUMN_WIDTH, halign: "left" },
     3: { cellWidth: DROP_POINT_COLUMN_WIDTH, halign: "left" },
+    4: { cellWidth: CHECKLIST_ONE_COLUMN_WIDTH, halign: "center" },
+    5: { cellWidth: CHECKLIST_TWO_COLUMN_WIDTH, halign: "center" },
+    6: { cellWidth: ABSEN_COLUMN_WIDTH, halign: "center" },
   };
 
   return styles;
@@ -114,9 +125,21 @@ export function buildBusAttendancePdf({
         passenger?.studentName ?? "",
         passenger?.kabKota ?? "",
         passenger?.dropPointName ?? "",
+        "",
+        "",
+        "",
       ];
     });
-    const tableHead = [["No", "Nama", "Kab/Kota", "Titik Turun"]] as unknown as never;
+    const tableHead = [
+      [
+        "No",
+        "Nama",
+        "Kab/Kota",
+        "Titik Turun",
+        { content: "Ceklis", colSpan: 2 },
+        "Absen",
+      ],
+    ] as unknown as never;
     const tableBody = body as unknown as never;
 
     autoTable(doc, {
@@ -140,7 +163,7 @@ export function buildBusAttendancePdf({
         textColor: 20,
         fontStyle: "bold",
         halign: "center",
-        minCellHeight: 14,
+        minCellHeight: 10,
         lineColor: [0, 0, 0],
         lineWidth: 0.25,
       },
