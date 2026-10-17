@@ -1,6 +1,5 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, Users } from "lucide-react";
 
@@ -10,8 +9,6 @@ interface CardEventProps {
   status: string;
   statusVariant?: "default" | "secondary" | "outline" | "destructive";
   santri: string;
-  payment: string;
-  progress?: number;
   actions?: React.ReactNode;
 }
 
@@ -21,8 +18,6 @@ const CardEvent = ({
   status,
   statusVariant = "secondary",
   santri,
-  payment,
-  progress = 0,
   actions,
 }: CardEventProps) => {
   return (
@@ -47,14 +42,9 @@ const CardEvent = ({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Users size={16} />
-              <p className="text-muted-foreground">Santri</p>
+              <p className="text-muted-foreground">Pendaftar</p>
             </div>
-            <p className="text-muted-foreground">{santri} Santri</p>
-          </div>
-          <Progress value={progress} />
-          <div className="flex items-center justify-between">
-            <p className="text-muted-foreground">Pembayaran</p>
-            <p className="text-muted-foreground">{payment}</p>
+            <p className="text-muted-foreground">{santri} Pendaftar</p>
           </div>
         </div>
       </CardContent>

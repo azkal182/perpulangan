@@ -31,17 +31,22 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { navMain, managements, others } from "@/config/sidebar-data";
-import { signOut, useSession } from "@/client/auth";
+import { signOut } from "@/client/auth";
+import type { AppRole } from "@/lib/auth-access";
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type SidebarUser = { name: string; email: string; image: string };
+
+export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof Sidebar> & { role: AppRole; user: SidebarUser }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [isHydrated, setIsHydrated] = React.useState(false);
 
-  const userName = session?.user?.name || "User";
-  const userEmail = session?.user?.email || "-";
-  const userImage = session?.user?.image || "";
+  React.useEffect(() => setIsHydrated(true), []);
+
+  const userName = isHydrated ? user.name : "User";
+  const userEmail = isHydrated ? user.email : "-";
+  const userImage = isHydrated ? user.image : "";
   const userInitial = userName.charAt(0).toUpperCase() || "U";
 
   // Helper to check if a url is active
@@ -119,7 +124,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {managements.map((item) => (
+              {managements.filter((item) => item.url !== "/keuangan" || role === "admin").map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

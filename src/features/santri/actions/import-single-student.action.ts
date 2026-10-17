@@ -69,6 +69,7 @@ function toNormalizedStudent(student: ReturnType<typeof mapStudent>): StudentNor
     districtId: student.districtId ?? null,
     villageId: student.villageId ?? null,
     fullAddress: student.fullAddress ?? "",
+    sourceAddress: student.sourceAddress,
   };
 }
 

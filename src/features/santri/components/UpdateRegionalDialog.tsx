@@ -40,6 +40,7 @@ export function UpdateRegionalDialog({
   currentProvinceId,
   currentRegencyId,
   currentDistrictId,
+  sourceAddress,
   provinces = [],
   regencies = [],
 }: {
@@ -51,6 +52,7 @@ export function UpdateRegionalDialog({
   currentProvinceId?: number | null;
   currentRegencyId?: number | null;
   currentDistrictId?: number | null;
+  sourceAddress?: Record<string, unknown> | null;
   provinces?: RegionalData[];
   regencies?: RegionalData[];
 }) {
@@ -152,6 +154,14 @@ export function UpdateRegionalDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {sourceAddress && (
+            <details className="rounded-md border p-3">
+              <summary className="cursor-pointer text-sm font-medium">Acuan alamat dari API</summary>
+              <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs">
+                {JSON.stringify(sourceAddress, null, 2)}
+              </pre>
+            </details>
+          )}
           {/* Province */}
           <div className="grid gap-2">
             <Label>Provinsi</Label>

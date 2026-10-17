@@ -34,6 +34,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   getBuses,
   deleteBus,
   toggleBusActive,
@@ -52,7 +62,18 @@ import {
 import { BusFormDialog } from "./BusFormDialog";
 import { BusPassengersDialog } from "./BusPassengersDialog";
 
-export default function RombonganPage() {
+function assignedCount(bus: BusWithDetails, direction: "OUTBOUND" | "RETURN") {
+  return bus.journeyAssignments.filter((item) => item.journey.status === "REGISTERED" && item.journey.direction === direction).length;
+}
+
+function assignmentsNeedingReview(bus: BusWithDetails) {
+  const busKordaIds = new Set(bus.kordas.map((item) => item.kordaId));
+  return bus.journeyAssignments.filter((item) =>
+    item.journey.status !== "REGISTERED" || !busKordaIds.has(item.journey.destinationKordaId),
+  ).length;
+}
+
+export default function RombonganPage({ canManageBuses }: { canManageBuses: boolean }) {
   const [buses, setBuses] = useState<BusWithDetails[]>([]);
   const [events, setEvents] = useState<Array<{ id: string; name: string }>>([]);
   const [kordas, setKordas] = useState<Array<{ id: string; name: string }>>([]);
@@ -72,6 +93,9 @@ export default function RombonganPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBus, setEditingBus] = useState<BusWithDetails | null>(null);
   const [managingBus, setManagingBus] = useState<BusWithDetails | null>(null);
+  const [busPendingDelete, setBusPendingDelete] = useState<BusWithDetails | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingBus, setDeletingBus] = useState(false);
   const [attendanceLoadingKey, setAttendanceLoadingKey] = useState<
     string | null
   >(null);
@@ -133,14 +157,18 @@ export default function RombonganPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Yakin ingin menghapus bus ini?")) return;
-
+  async function handleDelete() {
+    if (!busPendingDelete) return;
+    setDeletingBus(true);
+    setDeleteError(null);
     try {
-      await deleteBus(id);
+      await deleteBus(busPendingDelete.id);
+      setBusPendingDelete(null);
       await loadBuses();
-    } catch {
-      alert("Gagal menghapus bus");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Gagal menghapus bus");
+    } finally {
+      setDeletingBus(false);
     }
   }
 
@@ -285,7 +313,7 @@ export default function RombonganPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button
+          {canManageBuses && <Button
             onClick={() => {
               setEditingBus(null);
               setIsFormOpen(true);
@@ -294,7 +322,7 @@ export default function RombonganPage() {
           >
             <Plus className="mr-2 h-4 w-4" />
             Tambah Bus
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -375,8 +403,9 @@ export default function RombonganPage() {
           </div>
         ) : (
           buses.map((bus) => {
-            const totalRegistrations =
-              bus._count.outboundRegistrations + bus._count.returnRegistrations;
+            const outboundAssigned = assignedCount(bus, "OUTBOUND");
+            const returnAssigned = assignedCount(bus, "RETURN");
+            const reviewCount = assignmentsNeedingReview(bus);
             return (
               <div
                 key={bus.id}
@@ -395,6 +424,7 @@ export default function RombonganPage() {
                     {bus.isActive ? "Aktif" : "Nonaktif"}
                   </Badge>
                 </div>
+                {reviewCount > 0 && <div className="mt-2"><Badge variant="outline" className="border-amber-300 text-amber-800">{reviewCount} penempatan perlu ditinjau</Badge></div>}
 
                 <div className="mt-3 space-y-3 text-xs">
                   <div>
@@ -420,13 +450,9 @@ export default function RombonganPage() {
                         Kapasitas
                       </p>
                       <p className="text-sm font-medium">
-                        {totalRegistrations}
-                        {bus.capacity > 0 ? ` / ${bus.capacity}` : ""}
+                        {outboundAssigned} pulang · {returnAssigned} kembali
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        ↑{bus._count.outboundRegistrations} ↓
-                        {bus._count.returnRegistrations}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Kapasitas tiap perjalanan: {bus.capacity} kursi</p>
                     </div>
                     <div className="rounded-md bg-muted/40 p-2">
                       <p className="text-[11px] text-muted-foreground">
@@ -451,14 +477,14 @@ export default function RombonganPage() {
                   >
                     Peserta
                   </Button>
-                  <Button
+                  {canManageBuses && <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleToggleActive(bus.id)}
                   >
                     {bus.isActive ? "Nonaktifkan" : "Aktifkan"}
-                  </Button>
-                  <Button
+                  </Button>}
+                  {canManageBuses && <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
@@ -467,14 +493,17 @@ export default function RombonganPage() {
                     }}
                   >
                     Edit
-                  </Button>
-                  <Button
+                  </Button>}
+                  {canManageBuses && <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => handleDelete(bus.id)}
+                                  onClick={() => {
+                                    setDeleteError(null);
+                                    setBusPendingDelete(bus);
+                                  }}
                   >
                     Hapus
-                  </Button>
+                  </Button>}
                 </div>
               </div>
             );
@@ -503,8 +532,7 @@ export default function RombonganPage() {
                   colSpan={7}
                   className="py-8 text-center text-muted-foreground"
                 >
-                  Belum ada bus. Klik &ldquo;Tambah Bus&rdquo; untuk
-                  menambahkan.
+                  {canManageBuses ? <>Belum ada bus. Klik &ldquo;Tambah Bus&rdquo; untuk menambahkan.</> : "Belum ada bus dalam cakupan Anda."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -527,20 +555,10 @@ export default function RombonganPage() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      <span className="font-medium">
-                        {bus._count.outboundRegistrations +
-                          bus._count.returnRegistrations}
-                      </span>
-                      {bus.capacity > 0 && (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          / {bus.capacity}
-                        </span>
-                      )}
+                      <span className="font-medium">{assignedCount(bus, "OUTBOUND")} pulang · {assignedCount(bus, "RETURN")} kembali</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      ↑{bus._count.outboundRegistrations} ↓
-                      {bus._count.returnRegistrations}
+                      Kapasitas tiap perjalanan: {bus.capacity} kursi
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
@@ -556,9 +574,15 @@ export default function RombonganPage() {
                     <Badge variant={bus.isActive ? "default" : "secondary"}>
                       {bus.isActive ? "Aktif" : "Nonaktif"}
                     </Badge>
+                    {assignmentsNeedingReview(bus) > 0 && (
+                      <Badge variant="outline" className="ml-2 border-amber-300 text-amber-800">
+                        {assignmentsNeedingReview(bus)} perlu ditinjau
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end">
+                      {!canManageBuses ? <Button variant="outline" size="sm" onClick={() => setManagingBus(bus)}>Peserta</Button> :
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -600,13 +624,14 @@ export default function RombonganPage() {
                             variant="destructive"
                             onSelect={(event) => {
                               event.preventDefault();
-                              handleDelete(bus.id);
+                              setDeleteError(null);
+                              setBusPendingDelete(bus);
                             }}
                           >
                             Hapus
                           </DropdownMenuItem>
                         </DropdownMenuContent>
-                      </DropdownMenu>
+                      </DropdownMenu>}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -624,16 +649,40 @@ export default function RombonganPage() {
         onSuccess={loadBuses}
       />
 
-      {managingBus && (
-        <BusPassengersDialog
+      {managingBus && <BusPassengersDialog
           open={!!managingBus}
           onOpenChange={(open) => {
             if (!open) setManagingBus(null);
           }}
           bus={managingBus}
           onPassengerChange={loadBuses}
-        />
-      )}
+      />}
+      <AlertDialog
+        open={busPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingBus) {
+            setBusPendingDelete(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus armada ini?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {busPendingDelete?.label} akan dihapus. Armada yang masih memiliki
+              peserta tidak dapat dihapus.
+              {deleteError && <span className="mt-2 block text-destructive">{deleteError}</span>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingBus}>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={(event) => { event.preventDefault(); void handleDelete(); }} disabled={deletingBus}>
+              {deletingBus ? "Menghapus..." : "Hapus armada"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

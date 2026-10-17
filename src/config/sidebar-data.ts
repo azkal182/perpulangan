@@ -1,11 +1,11 @@
 import {
   AudioWaveform,
   Banknote,
+  ChartNoAxesCombined,
   Bus,
   Calendar,
   ClipboardCheck,
   ClipboardCopy,
-  ClipboardMinus,
   Command,
   Database,
   GalleryVerticalEnd,
@@ -13,7 +13,6 @@ import {
   MapPin,
   Navigation,
   Printer,
-  Settings,
   User2,
   Users,
   Users2,
@@ -55,6 +54,11 @@ export const navMain = [
     title: "Santri",
     url: "/santri",
     icon: User2,
+  },
+  {
+    title: "Peserta Eksternal",
+    url: "/peserta-eksternal",
+    icon: Users2,
   },
   {
     title: "Tracking",
@@ -105,6 +109,21 @@ export const managements = [
   {
     title: "Pembayaran",
     url: "/pembayaran",
+    icon: Banknote,
+  },
+  {
+    title: "Laporan",
+    url: "/laporan",
+    icon: ChartNoAxesCombined,
+  },
+  {
+    title: "Keuangan Pusat",
+    url: "/keuangan",
+    icon: Banknote,
+  },
+  {
+    title: "Refund",
+    url: "/refund",
     icon: Banknote,
   },
 ];

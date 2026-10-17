@@ -23,6 +23,7 @@ interface SantriRowActionsProps {
     provinceId: number | null;
     regencyId: number | null;
     districtId: number | null;
+    sourceAddress?: Record<string, unknown> | null;
   };
   provinces: Array<{ id: number; code: string; name: string }>;
   regencies: Array<{ id: number; code: string; name: string; label?: string | null; provinceId: number }>;
@@ -67,6 +68,7 @@ export function SantriRowActions({ student, provinces, regencies }: SantriRowAct
             currentProvinceId={student.provinceId}
             currentRegencyId={student.regencyId}
             currentDistrictId={student.districtId}
+            sourceAddress={student.sourceAddress ?? null}
             provinces={provinces}
             regencies={regencies}
           />

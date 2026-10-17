@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { admin, useSession } from "@/client/auth";
 import { roleOptions, type AppRole } from "@/lib/auth-access";
 import {
@@ -44,6 +45,7 @@ import {
 import {
   getUserAccessOptions,
   getUsersRegionalAccess,
+  setManagedUserPassword,
   updateUserRegionalAccess,
   type KorwilAccessOption,
   type KordaAccessOption,
@@ -671,9 +673,12 @@ export default function UserManagementPage() {
     if (!newPassword) return;
 
     setError(null);
-    const res = await admin.setUserPassword({ userId, newPassword });
-    if (res.error) {
-      setError(res.error.message || "Failed to set password.");
+    const res = await setManagedUserPassword({ userId, newPassword });
+    if (!res.success) {
+      setError(res.error);
+    } else {
+      setError(null);
+      toast.success("Password user berhasil disimpan.");
     }
   }
 

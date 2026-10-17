@@ -8,6 +8,7 @@ import {
   andWhere,
   ensureKordaInScope,
   getRegionalAccessScope,
+  requireAdmin,
   studentScopeWhere,
 } from "@/server/access-scope";
 
@@ -31,6 +32,7 @@ export async function updateStudentRegional(
 ): Promise<UpdateRegionalResult> {
   try {
     const scope = await getRegionalAccessScope();
+    requireAdmin(scope);
     const { studentId, provinceId, regencyId, districtId } = input;
 
     // Validate input
@@ -51,20 +53,34 @@ export async function updateStudentRegional(
     if (regencyId) {
       const regency = await prisma.regency.findUnique({
         where: { id: regencyId },
-        select: { kordaId: true },
+        select: { kordaId: true, provinceId: true },
       });
 
       if (!regency) {
         return { success: false, error: "Regency not found" };
       }
 
-      if (regency.kordaId) {
-        await ensureKordaInScope(scope, regency.kordaId);
-      } else if (scope.role !== "admin") {
+      if (!provinceId || regency.provinceId !== provinceId) {
+        return { success: false, error: "Kabupaten/kota tidak sesuai dengan provinsi yang dipilih" };
+      }
+
+      if (!regency.kordaId) {
         return {
           success: false,
-          error: "Regency belum terhubung ke korda yang dapat diakses",
+          error: "Kabupaten/kota ini belum dipetakan ke Korda. Minta admin memperbaiki pemetaan di Master sebelum menyimpan data santri.",
         };
+      }
+      await ensureKordaInScope(scope, regency.kordaId);
+    }
+
+    if (!regencyId || !provinceId) {
+      return { success: false, error: "Provinsi dan kabupaten/kota wajib dipilih agar data dapat digunakan untuk registrasi" };
+    }
+
+    if (districtId) {
+      const district = await prisma.district.findUnique({ where: { id: districtId }, select: { regencyId: true } });
+      if (!district || district.regencyId !== regencyId) {
+        return { success: false, error: "Kecamatan tidak sesuai dengan kabupaten/kota yang dipilih" };
       }
     }
 
@@ -77,6 +93,10 @@ export async function updateStudentRegional(
         districtId, // Updated optional district
         // Reset village when updating province/regency/district
         villageId: null,
+        regionalStatus: "VERIFIED",
+        regionalReviewNote: null,
+        regionalReviewedAt: new Date(),
+        regionalReviewedByUserId: scope.userId,
       },
     });
 

@@ -22,13 +22,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SantriPageSizeSelect } from "@/features/santri/components/SantriPageSizeSelect.client";
 
 type StudentStatus = "Aktif" | "Non Aktif";
@@ -61,7 +55,8 @@ export async function SantriTableCard({
   status = "all",
   korwilId = "all",
   kordaId = "all",
-  incompleteRegional = false,
+  missingCity = false,
+  unlinkedKorda = false,
 }: {
   page?: number;
   pageSize?: number;
@@ -70,7 +65,8 @@ export async function SantriTableCard({
   status?: string; // "all" | "active" | "inactive"
   korwilId?: string;
   kordaId?: string;
-  incompleteRegional?: boolean;
+  missingCity?: boolean;
+  unlinkedKorda?: boolean;
 }) {
   const effectiveKordaId = korwilId === "all" ? "all" : (kordaId ?? "all");
   
@@ -82,7 +78,8 @@ export async function SantriTableCard({
       status,
       korwilId,
       effectiveKordaId,
-      incompleteRegional,
+      missingCity,
+      unlinkedKorda,
     ),
     getProvinces(),
     getRegencies(),
@@ -124,6 +121,8 @@ export async function SantriTableCard({
     if (effectiveKordaId && effectiveKordaId !== "all") {
       params.set("kordaId", effectiveKordaId);
     }
+    if (missingCity) params.set("missingCity", "true");
+    if (unlinkedKorda) params.set("unlinkedKorda", "true");
     return `${basePath}?${params.toString()}`;
   };
 
@@ -192,7 +191,12 @@ export async function SantriTableCard({
 
                     <TableCell className="text-right">
                       <SantriRowActions 
-                        student={s} 
+                        student={{
+                          ...s,
+                          sourceAddress: s.sourceAddress && typeof s.sourceAddress === "object" && !Array.isArray(s.sourceAddress)
+                            ? s.sourceAddress as Record<string, unknown>
+                            : null,
+                        }}
                         provinces={provinces} 
                         regencies={regencies} 
                       />
@@ -239,6 +243,7 @@ export async function SantriTableCard({
               <Link
                 href={hrefPage(Math.max(1, clampedPage - 1))}
                 scroll={false}
+                prefetch={false}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Link>
@@ -260,7 +265,7 @@ export async function SantriTableCard({
                   size="icon"
                   aria-label={`Halaman ${p}`}
                 >
-                  <Link href={hrefPage(p)} scroll={false}>
+                  <Link href={hrefPage(p)} scroll={false} prefetch={false}>
                     {p}
                   </Link>
                 </Button>
@@ -277,6 +282,7 @@ export async function SantriTableCard({
               <Link
                 href={hrefPage(Math.min(totalPages, clampedPage + 1))}
                 scroll={false}
+                prefetch={false}
               >
                 <ChevronRight className="h-4 w-4" />
               </Link>

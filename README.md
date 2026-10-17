@@ -135,8 +135,7 @@ NEXT_PUBLIC_LOG_LEVEL=info   # client-side
 Tambahkan ke `.env` lalu jalankan:
 
 ```env
-ADMIN_SEED_EMAIL=admin@local.test
-ADMIN_SEED_NAME=Admin
+ADMIN_SEED_USERNAME=azkal
 ADMIN_SEED_PASSWORD=your-strong-password
 ```
 
@@ -147,3 +146,17 @@ pnpm seed:admin
 # Docker
 pnpm docker:seed
 ```
+
+## Seeder Data Demo Registrasi & Keuangan
+
+Seeder khusus ini membuat event demo bertanda `[DEMO SEED]`, registrasi dari santri aktif yang sudah memiliki pemetaan Korda valid, 20 profil peserta eksternal, perjalanan Pulang/Kembali atau satu arah, titik turun, bus, alokasi pembayaran keluarga, Saldo Lain, refund, dan beberapa tanda lunas lama untuk rekonsiliasi. Data yang sudah ada tidak dihapus; seeder dapat dijalankan ulang.
+
+```bash
+# Default: hingga 120 santri
+pnpm seed:demo
+
+# Ubah jumlah santri (maksimum 2000)
+DEMO_SEED_STUDENT_COUNT=300 pnpm seed:demo
+```
+
+Seeder memilih user admin sebagai pencatat. Jika ada beberapa admin, pilih eksplisit melalui `DEMO_SEED_ACTOR_USER_ID`. Secara default, seeder hanya menerima database dengan nama mengandung `dev`; untuk database development lokal yang namanya tidak mengandung `dev`, set `DEMO_SEED_ALLOW_NON_DEV=true` secara sadar sebelum menjalankan. Bukti transfer tidak dibuat palsu; unggah bukti lewat aplikasi untuk menguji integrasi storage.

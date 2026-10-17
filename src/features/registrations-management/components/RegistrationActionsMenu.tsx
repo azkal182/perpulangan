@@ -24,9 +24,7 @@ interface RegistrationActionsMenuProps {
 export function RegistrationActionsMenu({
   registration,
   onViewDetail,
-  onUpdatePayment,
   onCancel,
-  onRefund,
   onDelete,
 }: RegistrationActionsMenuProps) {
   const [open, setOpen] = useState(false);
@@ -56,7 +54,7 @@ export function RegistrationActionsMenu({
           Lihat Detail
         </DropdownMenuItem>
         
-        <DropdownMenuItem onClick={() => handleAction(onUpdatePayment)}>
+        <DropdownMenuItem onClick={() => handleAction(() => { window.location.href = "/pembayaran"; })}>
           <DollarSign className="mr-2 h-4 w-4" />
           Update Pembayaran
         </DropdownMenuItem>
@@ -72,7 +70,7 @@ export function RegistrationActionsMenu({
         </DropdownMenuItem>
         
         <DropdownMenuItem
-          onClick={() => handleAction(onRefund)}
+          onClick={() => handleAction(() => { window.location.href = "/pembayaran"; })}
           disabled={!hasPaidJourneys}
         >
           <RefreshCw className="mr-2 h-4 w-4" />

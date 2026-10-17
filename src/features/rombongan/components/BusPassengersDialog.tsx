@@ -12,6 +12,16 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 import {
@@ -45,6 +55,7 @@ function PassengerList({
   const [passengers, setPassengers] = useState<BusPassenger[]>([]);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
 
   const loadPassengers = useCallback(async () => {
@@ -64,13 +75,13 @@ function PassengerList({
   }, [loadPassengers]);
 
   async function handleRemove(registrationId: string) {
-    if (!confirm("Hapus peserta ini dari bus?")) return;
     setRemoving(registrationId);
     try {
       await unassignFromBus(registrationId, journey);
       setPassengers((prev) =>
         prev.filter((p) => p.registrationId !== registrationId),
       );
+      setConfirmingRemoval(null);
       onPassengerChange();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Gagal menghapus peserta");
@@ -80,7 +91,8 @@ function PassengerList({
   }
 
   const count = passengers.length;
-  const isFull = capacity > 0 && count >= capacity;
+  const capacityMissing = capacity < 1;
+  const isFull = !capacityMissing && count >= capacity;
 
   return (
     <div className="space-y-4">
@@ -102,11 +114,12 @@ function PassengerList({
               Penuh
             </Badge>
           )}
+          {capacityMissing && <Badge variant="destructive" className="text-xs">Kapasitas belum diatur</Badge>}
         </div>
         <Button
           size="sm"
           onClick={() => setAddSheetOpen(true)}
-          disabled={isFull}
+          disabled={isFull || capacityMissing}
         >
           <UserPlus className="mr-2 h-4 w-4" />
           Tambah Peserta
@@ -140,8 +153,13 @@ function PassengerList({
                     {p.studentNis}
                   </Badge>
                   <Badge variant="secondary" className="text-xs">
-                    {p.studentGender === "L" ? "L" : "P"}
+                  {p.studentGender === "L" ? "L" : "P"}
                   </Badge>
+                  {p.assignmentChanged && (
+                    <Badge variant="outline" className="text-amber-700 border-amber-300">
+                      Penempatan diubah{p.previousBusLabel ? ` dari ${p.previousBusLabel}` : ""}
+                    </Badge>
+                  )}
                   {p.paid && (
                     <Badge className="text-xs bg-green-100 text-green-700 border-green-200">
                       Lunas
@@ -161,13 +179,24 @@ function PassengerList({
                     </span>
                   )}
                 </div>
+                {p.assignmentHistory.length > 1 && (
+                  <div className="mt-1 text-xs text-amber-700">
+                    Riwayat penempatan: {p.assignmentHistory.slice(0, 3).map((item, historyIndex) => (
+                      <span key={`${item.createdAt.toISOString()}-${historyIndex}`}>
+                        {historyIndex > 0 ? " · " : ""}
+                        {item.action === "UNASSIGNED" ? `dilepas dari ${item.fromBusLabel ?? "bus"}` : `${item.fromBusLabel ? `${item.fromBusLabel} → ` : ""}${item.toBusLabel ?? "bus"}`}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <Button
                 size="icon"
                 variant="ghost"
                 className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => handleRemove(p.registrationId)}
+                onClick={() => setConfirmingRemoval(p.registrationId)}
                 disabled={removing === p.registrationId}
+                aria-label={`Lepas ${p.studentName} dari bus`}
               >
                 {removing === p.registrationId ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -191,6 +220,33 @@ function PassengerList({
           onPassengerChange();
         }}
       />
+      <AlertDialog
+        open={confirmingRemoval !== null}
+        onOpenChange={(open) => {
+          if (!open && removing === null) setConfirmingRemoval(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Lepas peserta dari bus?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Peserta akan kembali ke daftar yang belum ditempatkan. Riwayat perubahan tetap tersimpan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing !== null}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removing !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (confirmingRemoval) void handleRemove(confirmingRemoval);
+              }}
+            >
+              {removing ? "Melepas…" : "Lepas peserta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -209,7 +265,7 @@ export function BusPassengersDialog({
           <DialogDescription>
             Assign peserta ke bus ini secara manual. Kapasitas:{" "}
             <strong>
-              {bus.capacity > 0 ? bus.capacity : "Tidak dibatasi"}
+              {bus.capacity > 0 ? `${bus.capacity} kursi` : "Belum ditetapkan"}
             </strong>
           </DialogDescription>
         </DialogHeader>

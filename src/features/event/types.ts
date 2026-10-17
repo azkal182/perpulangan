@@ -14,14 +14,3 @@ export type EventItem = {
     registrations: number;
   };
 };
-
-export type EventWithPayment = EventItem & {
-  payment: {
-    totalDue: number;
-    totalPaid: number;
-    outboundDue: number;
-    outboundPaid: number;
-    returnDue: number;
-    returnPaid: number;
-  };
-};

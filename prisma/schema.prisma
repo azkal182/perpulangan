@@ -5,404 +5,750 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-    provider = "prisma-client"
-    output   = "../src/generated/prisma"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-    provider = "postgresql"
+  provider = "postgresql"
 }
 
 model User {
-    id            String    @id
-    name          String
-    email         String
-    emailVerified Boolean   @default(false)
-    image         String?
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
-    sessions      Session[]
-    accounts      Account[]
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
 
-    username        String?
-    displayUsername String?
-    role            String    @default("korda")
-    banned          Boolean   @default(false)
-    banReason       String?
-    banExpires      DateTime?
-    kordapic        Korda?    @relation("KordaPIC")
-    korwilpic       Korwil?   @relation("KorwilPIC")
+  username        String?
+  displayUsername String?
+  role            String    @default("korda")
+  banned          Boolean   @default(false)
+  banReason       String?
+  banExpires      DateTime?
+  kordapic        Korda?    @relation("KordaPIC")
+  korwilpic       Korwil?   @relation("KorwilPIC")
 
-    @@unique([email])
-    @@unique([username])
-    @@map("user")
+  @@unique([email])
+  @@unique([username])
+  @@map("user")
 }
 
 model Session {
-    id             String   @id
-    expiresAt      DateTime
-    token          String
-    createdAt      DateTime @default(now())
-    updatedAt      DateTime @updatedAt
-    ipAddress      String?
-    userAgent      String?
-    impersonatedBy String?
-    userId         String
-    user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  impersonatedBy String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@unique([token])
-    @@index([userId])
-    @@map("session")
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
 }
 
 model Account {
-    id                    String    @id
-    accountId             String
-    providerId            String
-    userId                String
-    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    accessToken           String?
-    refreshToken          String?
-    idToken               String?
-    accessTokenExpiresAt  DateTime?
-    refreshTokenExpiresAt DateTime?
-    scope                 String?
-    password              String?
-    createdAt             DateTime  @default(now())
-    updatedAt             DateTime  @updatedAt
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-    @@index([userId])
-    @@map("account")
+  @@index([userId])
+  @@map("account")
 }
 
 model Verification {
-    id         String   @id
-    identifier String
-    value      String
-    expiresAt  DateTime
-    createdAt  DateTime @default(now())
-    updatedAt  DateTime @updatedAt
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-    @@index([identifier])
-    @@map("verification")
+  @@index([identifier])
+  @@map("verification")
 }
 
 model Student {
-    id     String  @id @default(uuid())
-    idApi  String? @unique
-    nis    String? @unique
-    name   String
-    gender String
+  id     String  @id @default(uuid())
+  idApi  String? @unique
+  nis    String? @unique
+  name   String
+  gender String
 
-    fromApi Boolean        @default(true)
-    source  StudentSource?
+  fromApi Boolean        @default(true)
+  source  StudentSource?
 
-    status Boolean
-    ttl    String?
+  status Boolean
+  ttl    String?
 
-    photoUrl String?
+  photoUrl String?
 
-    parrentPhone String?
-    dormitory    String?
+  parrentPhone String?
+  dormitory    String?
 
-    fullAddress String?
-    // village     String?
-    province    Province? @relation(fields: [provinceId], references: [id])
-    provinceId  Int?
-    regency     Regency?  @relation(fields: [regencyId], references: [id])
-    regencyId   Int?
-    district    District? @relation(fields: [districtId], references: [id])
-    districtId  Int?
-    village     Village?  @relation(fields: [villageId], references: [id])
-    villageId   Int?
+  fullAddress              String?
+  sourceAddress            Json?
+  regionalStatus           RegionalDataStatus @default(NEEDS_REVIEW)
+  regionalReviewNote       String?
+  regionalReviewedAt       DateTime?
+  regionalReviewedByUserId String?
+  // village     String?
+  province                 Province?          @relation(fields: [provinceId], references: [id])
+  provinceId               Int?
+  regency                  Regency?           @relation(fields: [regencyId], references: [id])
+  regencyId                Int?
+  district                 District?          @relation(fields: [districtId], references: [id])
+  districtId               Int?
+  village                  Village?           @relation(fields: [villageId], references: [id])
+  villageId                Int?
 
-    registrations Registration[]
+  registrations Registration[]
 
-    @@index([status])
-    @@index([name])
-    @@index([regencyId])
-    @@index([dormitory])
-    @@index([fromApi])
-    @@index([source])
+  @@index([status])
+  @@index([name])
+  @@index([regencyId])
+  @@index([dormitory])
+  @@index([fromApi])
+  @@index([source])
+  @@index([regionalStatus])
+}
+
+enum RegionalDataStatus {
+  NEEDS_REVIEW
+  AUTO_MAPPED
+  VERIFIED
+}
+
+enum ExternalParticipantStatus {
+  DRAFT
+  COMPLETE
+}
+
+model ExternalParticipant {
+  id                   String                    @id @default(uuid())
+  name                 String
+  gender               String?
+  phone                String?
+  guardianName         String?
+  guardianRelationship String?
+  address              String?
+  originKordaId        String?
+  originKorda          Korda?                    @relation("ExternalOriginKorda", fields: [originKordaId], references: [id], onDelete: SetNull)
+  intendedKordaId      String
+  intendedKorda        Korda                     @relation("ExternalIntendedKorda", fields: [intendedKordaId], references: [id], onDelete: Cascade)
+  status               ExternalParticipantStatus @default(DRAFT)
+  createdByUserId      String
+  updatedByUserId      String
+  registrations        Registration[]
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@index([intendedKordaId, status])
+  @@index([originKordaId])
+  @@index([name])
 }
 
 model Province {
-    id   Int    @id @default(autoincrement())
-    name String
-    code String
+  id   Int    @id @default(autoincrement())
+  name String
+  code String
 
-    regencies Regency[]
-    Student   Student[]
+  regencies Regency[]
+  Student   Student[]
 
-    @@index([name])
+  @@index([name])
 }
 
 model Regency {
-    id        Int        @id @default(autoincrement())
-    name      String
-    label     String?
-    type      String?
-    code      String
-    fullCode  String
-    districts District[]
+  id        Int        @id @default(autoincrement())
+  name      String
+  label     String?
+  type      String?
+  code      String
+  fullCode  String
+  districts District[]
 
-    provinceId Int
-    province   Province @relation(fields: [provinceId], references: [id])
-    kordaId    String?
-    korda      Korda?   @relation(fields: [kordaId], references: [id], onDelete: SetNull)
+  provinceId Int
+  province   Province @relation(fields: [provinceId], references: [id])
+  kordaId    String?
+  korda      Korda?   @relation(fields: [kordaId], references: [id], onDelete: SetNull)
 
-    Student Student[]
+  Student Student[]
 
-    @@index([provinceId])
-    @@index([kordaId])
-    @@index([name])
-    @@index([label])
+  @@index([provinceId])
+  @@index([kordaId])
+  @@index([name])
+  @@index([label])
 }
 
 model District {
-    id       Int       @id @default(autoincrement())
-    name     String
-    code     String
-    fullCode String
-    villages Village[]
+  id       Int       @id @default(autoincrement())
+  name     String
+  code     String
+  fullCode String
+  villages Village[]
 
-    regencyId Int
-    regency   Regency   @relation(fields: [regencyId], references: [id])
-    Student   Student[]
+  regencyId Int
+  regency   Regency   @relation(fields: [regencyId], references: [id])
+  Student   Student[]
 
-    @@index([regencyId])
-    @@index([name])
+  @@index([regencyId])
+  @@index([name])
 }
 
 model Village {
-    id         Int    @id @default(autoincrement())
-    name       String
-    code       String
-    fullCode   String
-    postalCode String
+  id         Int    @id @default(autoincrement())
+  name       String
+  code       String
+  fullCode   String
+  postalCode String
 
-    districtId Int
-    district   District  @relation(fields: [districtId], references: [id])
-    students   Student[]
+  districtId Int
+  district   District  @relation(fields: [districtId], references: [id])
+  students   Student[]
 
-    @@index([districtId])
-    @@index([name])
+  @@index([districtId])
+  @@index([name])
 }
 
 model SyncLog {
-    id          String    @id @default(uuid())
-    key         String    @unique // contoh: "students"
-    lastSyncAt  DateTime?
-    lastStatus  String? // "success" | "failed"
-    lastSummary Json? // simpan ringkasan import (inserted/updated/failed, dll)
-    updatedAt   DateTime  @updatedAt
-    createdAt   DateTime  @default(now())
+  id          String    @id @default(uuid())
+  key         String    @unique // contoh: "students"
+  lastSyncAt  DateTime?
+  lastStatus  String? // "success" | "failed"
+  lastSummary Json? // simpan ringkasan import (inserted/updated/failed, dll)
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
 
-    @@index([key])
+  @@index([key])
 }
 
 enum StudentSource {
-    DAFU
-    MUSA
-    SPBP
+  DAFU
+  MUSA
+  SPBP
 }
 
 enum EventStatus {
-    DRAFT
-    ACTIVE
-    COMPLETED
+  DRAFT
+  ACTIVE
+  COMPLETED
 }
 
 model Event {
-    id        String      @id @default(uuid())
-    name      String
-    startDate DateTime
-    endDate   DateTime
-    status    EventStatus @default(DRAFT)
-    createdAt DateTime    @default(now())
-    updatedAt DateTime    @updatedAt
+  id        String      @id @default(uuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    EventStatus @default(DRAFT)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
-    registrations Registration[]
-    buses         Bus[]
+  registrations Registration[]
+  buses         Bus[]
+  payments      Payment[]
 
-    // Tracker API sync status
-    trackerEventId String?   @unique // Event ID from tracker API
-    trackerSyncAt  DateTime? // Last sync timestamp
+  // Tracker API sync status
+  trackerEventId String?   @unique // Event ID from tracker API
+  trackerSyncAt  DateTime? // Last sync timestamp
 
-    @@index([status])
-    @@index([startDate])
+  @@index([status])
+  @@index([startDate])
 }
 
 model Korwil {
-    id   String @id @default(uuid())
-    name String
+  id   String @id @default(uuid())
+  name String
 
-    // Placeholder sebelum punya user
-    picName  String?
-    picPhone String?
+  // Placeholder sebelum punya user
+  picName  String?
+  picPhone String?
 
-    picUserId String? @unique
-    picUser   User?   @relation("KorwilPIC", fields: [picUserId], references: [id], onDelete: SetNull)
+  picUserId String? @unique
+  picUser   User?   @relation("KorwilPIC", fields: [picUserId], references: [id], onDelete: SetNull)
 
-    kordas Korda[]
-    buses  Bus[]
+  kordas Korda[]
+  buses  Bus[]
 
-    updatedAt DateTime @updatedAt
-    createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 model Korda {
-    id   String @id @default(uuid())
-    name String
+  id   String @id @default(uuid())
+  name String
 
-    picName  String?
-    picPhone String?
+  picName  String?
+  picPhone String?
 
-    picUserId String? @unique
-    picUser   User?   @relation("KordaPIC", fields: [picUserId], references: [id], onDelete: SetNull)
+  picUserId String? @unique
+  picUser   User?   @relation("KordaPIC", fields: [picUserId], references: [id], onDelete: SetNull)
 
-    korwilId   String?
-    korwil     Korwil?     @relation(fields: [korwilId], references: [id], onDelete: SetNull)
-    regencies  Regency[]
-    dropPoints DropPoint[]
+  korwilId   String?
+  korwil     Korwil?     @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+  regencies  Regency[]
+  dropPoints DropPoint[]
 
-    outboundRegistrations Registration[] @relation("OutboundKorda")
-    returnRegistrations   Registration[] @relation("ReturnKorda")
-    busKordas             BusKorda[]
+  outboundRegistrations        Registration[]         @relation("OutboundKorda")
+  returnRegistrations          Registration[]         @relation("ReturnKorda")
+  destinationJourneys          Journey[]
+  balanceAllocations           PaymentAllocation[]
+  busKordas                    BusKorda[]
+  externalOriginParticipants   ExternalParticipant[]  @relation("ExternalOriginKorda")
+  externalIntendedParticipants ExternalParticipant[]  @relation("ExternalIntendedKorda")
+  balanceEntries               KordaBalanceEntry[]    @relation("BalanceOwner")
+  treasuryDisbursements        TreasuryDisbursement[]
 
-    updatedAt DateTime @updatedAt
-    createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 model Bus {
-    id       String @id @default(uuid())
-    label    String // e.g., "Bus 01 - Agra Mas + Kumaci"
-    capacity Int    @default(0) // Kapasitas maksimal penumpang
+  id       String @id @default(uuid())
+  label    String // e.g., "Bus 01 - Agra Mas + Kumaci"
+  capacity Int    @default(0) // Kapasitas maksimal penumpang
 
-    // Tracker integration
-    trackerId String? @unique // ID from tracker API
+  // Tracker integration
+  trackerId String? @unique // ID from tracker API
 
-    // Many-to-many: 1 bus bisa untuk banyak korda
-    kordas BusKorda[]
+  // Many-to-many: 1 bus bisa untuk banyak korda
+  kordas BusKorda[]
 
-    // Optional: grouping by Korwil
-    korwilId String?
-    korwil   Korwil? @relation(fields: [korwilId], references: [id], onDelete: SetNull)
+  // Optional: grouping by Korwil
+  korwilId String?
+  korwil   Korwil? @relation(fields: [korwilId], references: [id], onDelete: SetNull)
 
-    eventId String
-    event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-    isActive Boolean @default(true)
+  isActive Boolean @default(true)
 
-    // Passengers assigned to this bus
-    outboundRegistrations Registration[] @relation("OutboundBus")
-    returnRegistrations   Registration[] @relation("ReturnBus")
+  // Passengers assigned to this bus
+  outboundRegistrations Registration[]         @relation("OutboundBus")
+  returnRegistrations   Registration[]         @relation("ReturnBus")
+  journeyAssignments    JourneyBusAssignment[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([eventId])
-    @@index([korwilId])
-    @@index([trackerId])
+  @@index([eventId])
+  @@index([korwilId])
+  @@index([trackerId])
 }
 
 model BusKorda {
-    id String @id @default(uuid())
+  id String @id @default(uuid())
 
-    busId String
-    bus   Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+  busId String
+  bus   Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
 
-    kordaId String
-    korda   Korda  @relation(fields: [kordaId], references: [id], onDelete: Cascade)
+  kordaId String
+  korda   Korda  @relation(fields: [kordaId], references: [id], onDelete: Cascade)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@unique([busId, kordaId])
-    @@index([busId])
-    @@index([kordaId])
+  @@unique([busId, kordaId])
+  @@index([busId])
+  @@index([kordaId])
 }
 
 model DropPoint {
-    id    String @id @default(uuid())
-    name  String
-    price Int    @default(0)
+  id    String @id @default(uuid())
+  name  String
+  price Int    @default(0)
 
-    kordaId String
-    korda   Korda  @relation(fields: [kordaId], references: [id])
+  kordaId String
+  korda   Korda  @relation(fields: [kordaId], references: [id])
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    outboundRegistrations Registration[] @relation("OutboundDropPoint")
-    returnRegistrations   Registration[] @relation("ReturnDropPoint")
+  outboundRegistrations Registration[] @relation("OutboundDropPoint")
+  returnRegistrations   Registration[] @relation("ReturnDropPoint")
+  journeys              Journey[]
 
-    @@index([kordaId])
+  @@index([kordaId])
 }
 
 enum RegistrationStatus {
-    DRAFT
-    CONFIRMED
-    CANCELLED
-    PARTIAL_CANCEL // When only return journey is cancelled
+  DRAFT
+  CONFIRMED
+  CANCELLED
+  PARTIAL_CANCEL // When only return journey is cancelled
 }
 
 model Registration {
-    id String @id @default(uuid())
+  id String @id @default(uuid())
 
-    // Event relation
-    eventId String
-    event   Event  @relation(fields: [eventId], references: [id])
+  // Event relation
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
 
-    // Student relation
-    studentId String
-    student   Student @relation(fields: [studentId], references: [id])
+  // Student relation
+  studentId                    String?
+  student                      Student?                      @relation(fields: [studentId], references: [id])
+  externalParticipantId        String?
+  externalParticipant          ExternalParticipant?          @relation(fields: [externalParticipantId], references: [id], onDelete: Restrict)
+  journeys                     Journey[]
+  legacyPaymentReconciliations LegacyPaymentReconciliation[]
 
-    // Outbound Journey (Pulang ke rumah) - OPTIONAL for return-only registration
-    outboundKordaId     String?
-    outboundKorda       Korda?     @relation("OutboundKorda", fields: [outboundKordaId], references: [id])
-    outboundDropPointId String?
-    outboundDropPoint   DropPoint? @relation("OutboundDropPoint", fields: [outboundDropPointId], references: [id])
-    outboundDate        DateTime?
-    outboundPaid        Boolean    @default(false)
-    outboundBusId       String? // Manual bus assignment for outbound
-    outboundBus         Bus?       @relation("OutboundBus", fields: [outboundBusId], references: [id], onDelete: SetNull)
+  // Registration provenance and origin snapshot; destination access is stored on each Journey.
+  originKordaId           String?
+  originKordaNameSnapshot String?
+  registrarUserId         String?
 
-    // Return Journey (Kembali ke pondok) - OPTIONAL when cancelled
-    returnKordaId     String?
-    returnKorda       Korda?     @relation("ReturnKorda", fields: [returnKordaId], references: [id])
-    returnDropPointId String?
-    returnDropPoint   DropPoint? @relation("ReturnDropPoint", fields: [returnDropPointId], references: [id])
-    returnDate        DateTime?
-    returnPaid        Boolean    @default(false)
-    returnBusId       String? // Manual bus assignment for return
-    returnBus         Bus?       @relation("ReturnBus", fields: [returnBusId], references: [id], onDelete: SetNull)
+  // Outbound Journey (Pulang ke rumah) - OPTIONAL for return-only registration
+  outboundKordaId     String?
+  outboundKorda       Korda?     @relation("OutboundKorda", fields: [outboundKordaId], references: [id])
+  outboundDropPointId String?
+  outboundDropPoint   DropPoint? @relation("OutboundDropPoint", fields: [outboundDropPointId], references: [id])
+  outboundDate        DateTime?
+  outboundPaid        Boolean    @default(false)
+  outboundBusId       String? // Manual bus assignment for outbound
+  outboundBus         Bus?       @relation("OutboundBus", fields: [outboundBusId], references: [id], onDelete: SetNull)
 
-    // Status
-    status RegistrationStatus @default(CONFIRMED)
+  // Return Journey (Kembali ke pondok) - OPTIONAL when cancelled
+  returnKordaId     String?
+  returnKorda       Korda?     @relation("ReturnKorda", fields: [returnKordaId], references: [id])
+  returnDropPointId String?
+  returnDropPoint   DropPoint? @relation("ReturnDropPoint", fields: [returnDropPointId], references: [id])
+  returnDate        DateTime?
+  returnPaid        Boolean    @default(false)
+  returnBusId       String? // Manual bus assignment for return
+  returnBus         Bus?       @relation("ReturnBus", fields: [returnBusId], references: [id], onDelete: SetNull)
 
-    // Flags
-    kordaChanged         Boolean @default(false) // True if different from student's original Korda
-    kordaChangeConfirmed Boolean @default(false) // Confirmation for Korda change
+  // Status
+  status RegistrationStatus @default(CONFIRMED)
 
-    // Cancellation & Refund tracking
-    cancelledAt  DateTime?
-    cancelReason String?
-    refundAmount Int?      @default(0)
+  // Flags
+  kordaChanged         Boolean @default(false) // True if different from student's original Korda
+  kordaChangeConfirmed Boolean @default(false) // Confirmation for Korda change
 
-    // Registration info
-    registrarName  String
-    registrarPhone String
-    notes          String?
+  // Cancellation & Refund tracking
+  cancelledAt  DateTime?
+  cancelReason String?
+  refundAmount Int?      @default(0)
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  // Registration info
+  registrarName  String
+  registrarPhone String
+  notes          String?
 
-    @@unique([eventId, studentId]) // One registration per student per event
-    @@index([eventId])
-    @@index([studentId])
-    @@index([status])
-    @@index([outboundKordaId])
-    @@index([returnKordaId])
-    @@index([outboundBusId])
-    @@index([returnBusId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, studentId]) // One registration per santri per event
+  @@unique([eventId, externalParticipantId]) // One registration per external participant per event
+  @@index([eventId])
+  @@index([studentId])
+  @@index([status])
+  @@index([outboundKordaId])
+  @@index([returnKordaId])
+  @@index([outboundBusId])
+  @@index([returnBusId])
+}
+
+enum JourneyDirection {
+  OUTBOUND
+  RETURN
+}
+
+enum JourneyStatus {
+  REGISTERED
+  CANCELLED
+}
+
+model Journey {
+  id                           String                @id @default(uuid())
+  registrationId               String
+  registration                 Registration          @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  direction                    JourneyDirection
+  destinationKordaId           String
+  destinationKorda             Korda                 @relation(fields: [destinationKordaId], references: [id], onDelete: Restrict)
+  destinationKordaNameSnapshot String
+  dropPointId                  String?
+  dropPoint                    DropPoint?            @relation(fields: [dropPointId], references: [id], onDelete: SetNull)
+  locationNameSnapshot         String
+  travelDate                   DateTime?
+  tariffSnapshot               Int?
+  status                       JourneyStatus         @default(REGISTERED)
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  paymentAllocations           PaymentAllocation[]
+  busAssignment                JourneyBusAssignment?
+
+  @@unique([registrationId, direction])
+  @@index([destinationKordaId, direction, travelDate])
+  @@index([dropPointId])
+}
+
+// Current fleet placement is stored per travel direction, independently from
+// the participant's parent registration. A null busId preserves an explicit
+// removal and its change marker for operational review.
+model JourneyBusAssignment {
+  id                       String                        @id @default(uuid())
+  journeyId                String                        @unique
+  journey                  Journey                       @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  busId                    String?
+  bus                      Bus?                          @relation(fields: [busId], references: [id], onDelete: SetNull)
+  previousBusLabelSnapshot String?
+  changedAt                DateTime?
+  changedByUserId          String?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+  history                  JourneyBusAssignmentHistory[]
+
+  @@index([busId])
+}
+
+enum JourneyBusAssignmentAction {
+  ASSIGNED
+  REASSIGNED
+  UNASSIGNED
+}
+
+model JourneyBusAssignmentHistory {
+  id                   String                     @id @default(uuid())
+  assignmentId         String
+  assignment           JourneyBusAssignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  action               JourneyBusAssignmentAction
+  fromBusLabelSnapshot String?
+  toBusLabelSnapshot   String?
+  actorUserId          String?
+  createdAt            DateTime                   @default(now())
+
+  @@index([assignmentId, createdAt])
+}
+
+enum PaymentAllocationType {
+  JOURNEY
+  BALANCE
+}
+
+enum BalanceEntryType {
+  CREDIT
+  REFUND
+  CORRECTION
+}
+
+enum RefundMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum LegacyPaymentStatus {
+  OPEN
+  RECONCILED
+}
+
+// An immutable receipt of money from one payer. A family transfer can cover
+// many journeys and shares one evidence file.
+model Payment {
+  id              String                @id @default(uuid())
+  eventId         String
+  event           Event                 @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  payerName       String
+  amount          Int
+  method          String
+  paidAt          DateTime
+  noteSnapshot    String
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  allocations     PaymentAllocation[]
+  evidence        EvidenceFile?
+  auditEntries    FinancialAuditEntry[]
+
+  @@index([eventId, paidAt])
+}
+
+// Positive allocation rows attach money to a journey obligation or to a
+// destination-Korda-owned Saldo Lain bucket. Rows are never edited in place.
+model PaymentAllocation {
+  id                           String                @id @default(uuid())
+  paymentId                    String
+  payment                      Payment               @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  type                         PaymentAllocationType
+  journeyId                    String?
+  journey                      Journey?              @relation(fields: [journeyId], references: [id], onDelete: Restrict)
+  balanceOwnerKordaId          String?
+  balanceOwnerKorda            Korda?                @relation(fields: [balanceOwnerKordaId], references: [id], onDelete: Restrict)
+  participantNameSnapshot      String
+  originKordaNameSnapshot      String?
+  destinationKordaNameSnapshot String
+  payerNameSnapshot            String
+  amount                       Int
+  createdByUserId              String
+  createdAt                    DateTime              @default(now())
+  refunds                      Refund[]
+  corrections                  FinancialCorrection[]
+  balanceEntries               KordaBalanceEntry[]
+
+  @@index([journeyId])
+  @@index([balanceOwnerKordaId, createdAt])
+}
+
+// Append-only credit/refund ledger. Current balance is the sum of entries.
+model KordaBalanceEntry {
+  id                           String                @id @default(uuid())
+  ownerKordaId                 String
+  ownerKorda                   Korda                 @relation("BalanceOwner", fields: [ownerKordaId], references: [id], onDelete: Restrict)
+  originKordaNameSnapshot      String?
+  destinationKordaNameSnapshot String
+  participantNameSnapshot      String
+  payerNameSnapshot            String?
+  sourcePaymentAllocationId    String?
+  sourcePaymentAllocation      PaymentAllocation?    @relation(fields: [sourcePaymentAllocationId], references: [id], onDelete: Restrict)
+  sourceRefundId               String?               @unique
+  sourceRefund                 Refund?               @relation(fields: [sourceRefundId], references: [id], onDelete: Restrict)
+  refundsFromSource            Refund[]              @relation("RefundSource")
+  correctionsFromSource        FinancialCorrection[] @relation("CorrectionSource")
+  sourceCorrectionId           String?               @unique
+  sourceCorrection             FinancialCorrection?  @relation("CorrectionLedger", fields: [sourceCorrectionId], references: [id], onDelete: Restrict)
+  entryType                    BalanceEntryType
+  amount                       Int
+  reason                       String?
+  createdByUserId              String
+  createdAt                    DateTime              @default(now())
+
+  @@index([ownerKordaId, createdAt])
+}
+
+// Refunds refer to either one journey allocation or one balance credit.
+model Refund {
+  id                   String                @id @default(uuid())
+  paymentAllocationId  String?
+  paymentAllocation    PaymentAllocation?    @relation(fields: [paymentAllocationId], references: [id], onDelete: Restrict)
+  balanceSourceEntryId String?
+  balanceSourceEntry   KordaBalanceEntry?    @relation("RefundSource", fields: [balanceSourceEntryId], references: [id], onDelete: Restrict)
+  amount               Int
+  reason               String
+  method               RefundMethod
+  refundedAt           DateTime
+  createdByUserId      String
+  createdAt            DateTime              @default(now())
+  evidence             EvidenceFile?
+  auditEntries         FinancialAuditEntry[]
+  balanceDebit         KordaBalanceEntry?
+
+  @@index([paymentAllocationId, refundedAt])
+}
+
+// Append-only reversal of an erroneous allocation or balance credit.
+// Refund remains reserved for money actually returned to a payer.
+model FinancialCorrection {
+  id                   String                @id @default(uuid())
+  paymentAllocationId  String?
+  paymentAllocation    PaymentAllocation?    @relation(fields: [paymentAllocationId], references: [id], onDelete: Restrict)
+  balanceSourceEntryId String?
+  balanceSourceEntry   KordaBalanceEntry?    @relation("CorrectionSource", fields: [balanceSourceEntryId], references: [id], onDelete: Restrict)
+  amount               Int
+  reason               String
+  correctedAt          DateTime
+  createdByUserId      String
+  createdAt            DateTime              @default(now())
+  eventId              String?
+  kordaScopeId         String?
+  balanceDebit         KordaBalanceEntry?    @relation("CorrectionLedger")
+  auditEntries         FinancialAuditEntry[]
+  evidenceFile         EvidenceFile?
+
+  @@index([paymentAllocationId, correctedAt])
+  @@index([balanceSourceEntryId, correctedAt])
+}
+
+model EvidenceFile {
+  id               String               @id @default(uuid())
+  storageKey       String               @unique
+  originalName     String
+  mimeType         String
+  sizeBytes        Int
+  sha256           String
+  uploadedByUserId String
+  createdAt        DateTime             @default(now())
+  purgedAt         DateTime?
+  paymentId        String?              @unique
+  payment          Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refundId         String?              @unique
+  refund           Refund?              @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  correctionId     String?              @unique
+  correction       FinancialCorrection? @relation(fields: [correctionId], references: [id], onDelete: Restrict)
+}
+
+model FinancialAuditEntry {
+  id                String                @id @default(uuid())
+  action            String
+  entityType        String
+  entityId          String
+  eventId           String?
+  kordaScopeId      String?
+  actorUserId       String
+  actorRoleSnapshot String
+  amount            Int?
+  reason            String?
+  paymentId         String?
+  payment           Payment?              @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refundId          String?
+  refund            Refund?               @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  correctionId      String?
+  correction        FinancialCorrection?  @relation(fields: [correctionId], references: [id], onDelete: Restrict)
+  disbursementId    String?
+  disbursement      TreasuryDisbursement? @relation(fields: [disbursementId], references: [id], onDelete: Restrict)
+  createdAt         DateTime              @default(now())
+
+  @@index([eventId, createdAt])
+  @@index([kordaScopeId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// Records funds actually disbursed from the central treasurer account to a Korda.
+model TreasuryDisbursement {
+  id              String                @id @default(uuid())
+  kordaId         String
+  korda           Korda                 @relation(fields: [kordaId], references: [id], onDelete: Restrict)
+  amount          Int
+  disbursedAt     DateTime
+  note            String?
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  auditEntries    FinancialAuditEntry[]
+
+  @@index([kordaId, disbursedAt])
+}
+
+// Legacy true booleans are captured as unverified flags only. No amount is
+// inferred from current tariffs.
+model LegacyPaymentReconciliation {
+  id                 String              @id @default(uuid())
+  registrationId     String
+  registration       Registration        @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  direction          JourneyDirection
+  legacyMarkedPaid   Boolean
+  status             LegacyPaymentStatus @default(OPEN)
+  reconciledByUserId String?
+  reconciledAt       DateTime?
+  note               String?
+  createdAt          DateTime            @default(now())
+
+  @@unique([registrationId, direction])
+  @@index([status, createdAt])
 }

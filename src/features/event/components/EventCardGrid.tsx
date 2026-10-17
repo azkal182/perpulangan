@@ -26,7 +26,6 @@ function statusVariant(status: EventStatus) {
 
 export async function EventCardGrid() {
   const rows = await getEvents();
-  console.log(rows)
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -47,9 +46,7 @@ export async function EventCardGrid() {
             date={formatDateRange(event.startDate, event.endDate)}
             status={statusLabel(event.status)}
             statusVariant={statusVariant(event.status)}
-            santri={`${event._count.registrations}/3`}
-            payment={`Rp ${event.payment.totalPaid.toLocaleString()}`}
-            progress={event._count.registrations / 3 * 100}
+            santri={`${event._count.registrations}`}
             actions={<EventRowActions event={eventForClient} />}
           />
         );

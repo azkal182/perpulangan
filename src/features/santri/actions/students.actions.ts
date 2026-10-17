@@ -23,6 +23,8 @@ export type StudentNormalized = {
 
   villageId?: number | null;
   fullAddress: string;
+  sourceAddress?: Record<string, unknown>;
+  regionalNeedsReview?: boolean;
 };
 
 export type BulkImportResult = {
@@ -171,13 +173,46 @@ export async function bulkUpsertStudents(
 
   if (rows.length === 0) return result;
 
+  // Preserve raw API IDs in sourceAddress, but never persist foreign keys that
+  // do not exist locally or do not match the regional hierarchy.
+  const [provinces, regencies, districts, villages] = await Promise.all([
+    prisma.province.findMany({ where: { id: { in: rows.map((r) => r.data.provinceId).filter((id): id is number => typeof id === "number") } }, select: { id: true } }),
+    prisma.regency.findMany({ where: { id: { in: rows.map((r) => r.data.regencyId).filter((id): id is number => typeof id === "number") } }, select: { id: true, provinceId: true } }),
+    prisma.district.findMany({ where: { id: { in: rows.map((r) => r.data.districtId).filter((id): id is number => typeof id === "number") } }, select: { id: true, regencyId: true } }),
+    prisma.village.findMany({ where: { id: { in: rows.map((r) => r.data.villageId).filter((id): id is number => typeof id === "number") } }, select: { id: true, districtId: true } }),
+  ]);
+  const provinceIds = new Set(provinces.map((item) => item.id));
+  const regencyById = new Map(regencies.map((item) => [item.id, item]));
+  const districtById = new Map(districts.map((item) => [item.id, item]));
+  const villageById = new Map(villages.map((item) => [item.id, item]));
+  for (const row of rows) {
+    const s = row.data;
+    const provinceId = s.provinceId && provinceIds.has(s.provinceId) ? s.provinceId : null;
+    const regency = s.regencyId ? regencyById.get(s.regencyId) : undefined;
+    const regencyId = regency && provinceId === regency.provinceId ? regency.id : null;
+    const district = s.districtId ? districtById.get(s.districtId) : undefined;
+    const districtId = district && regencyId === district.regencyId ? district.id : null;
+    const village = s.villageId ? villageById.get(s.villageId) : undefined;
+    const villageId = village && districtId === village.districtId ? village.id : null;
+    s.regionalNeedsReview = Boolean((s.provinceId && !provinceId) || (s.regencyId && !regencyId) || (s.districtId && !districtId) || (s.villageId && !villageId));
+    s.provinceId = provinceId;
+    s.regencyId = regencyId;
+    s.districtId = districtId;
+    s.villageId = villageId;
+  }
+
   // 2) prefetch existing by idApi
   const idApis = Array.from(new Set(rows.map((r) => r.data.idApi)));
   const existing = await prisma.student.findMany({
     where: { idApi: { in: idApis } },
-    select: { idApi: true },
+    select: { idApi: true, provinceId: true, regencyId: true, regionalStatus: true },
   });
   const existingSet = new Set(existing.map((e) => e.idApi));
+  const existingByApi = new Map(existing.map((e) => [e.idApi, e]));
+  const regencyIds = Array.from(new Set(rows.map((r) => r.data.regencyId).filter((id): id is number => typeof id === "number")));
+  const mappedRegencies = await prisma.regency.findMany({ where: { id: { in: regencyIds }, kordaId: { not: null } }, select: { id: true, provinceId: true } });
+  const mappedRegenciesById = new Map(mappedRegencies.map((r) => [r.id, r]));
+  const districtsById = districtById;
 
   // 3) chunk + upsert
   const BATCH_SIZE = 200;
@@ -188,6 +223,11 @@ export async function bulkUpsertStudents(
       async (tx) => {
         for (const row of batch) {
           const s = row.data;
+          const previous = existingByApi.get(s.idApi);
+          const sameRegion = previous?.provinceId === (s.provinceId ?? null) && previous?.regencyId === (s.regencyId ?? null);
+          const regency = typeof s.regencyId === "number" ? mappedRegenciesById.get(s.regencyId) : undefined;
+          const district = typeof s.districtId === "number" ? districtsById.get(s.districtId) : undefined;
+          const mappedRegion = !s.regionalNeedsReview && !!regency && regency.provinceId === s.provinceId && (!s.districtId || district?.regencyId === regency.id);
 
           try {
             await tx.student.upsert({
@@ -207,6 +247,8 @@ export async function bulkUpsertStudents(
                 districtId: s.districtId,
                 villageId: s.villageId,
                 fullAddress: s.fullAddress,
+                ...(s.sourceAddress ? { sourceAddress: s.sourceAddress as never } : {}),
+                regionalStatus: mappedRegion ? "AUTO_MAPPED" : "NEEDS_REVIEW",
               },
               update: {
                 // nis: s.nis,
@@ -222,6 +264,8 @@ export async function bulkUpsertStudents(
                 districtId: s.districtId,
                 villageId: s.villageId,
                 fullAddress: s.fullAddress,
+                ...(s.sourceAddress ? { sourceAddress: s.sourceAddress as never } : {}),
+                ...(sameRegion && previous?.regionalStatus === "VERIFIED" ? {} : { regionalStatus: mappedRegion ? "AUTO_MAPPED" : "NEEDS_REVIEW" }),
               },
             });
 

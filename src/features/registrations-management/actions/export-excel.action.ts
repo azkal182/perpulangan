@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
 import type { Prisma, RegistrationStatus } from "@/generated/prisma/client";
 import {
   andWhere,
@@ -120,6 +121,7 @@ export async function getRegistrationsForExcelExportAction(
             gender: true,
           },
         },
+        externalParticipant: { select: { name: true, gender: true } },
         outboundKorda: {
           select: {
             name: true,
@@ -147,6 +149,8 @@ export async function getRegistrationsForExcelExportAction(
     const grouped = new Map<string, Map<string, RegistrationExportRow[]>>();
 
     registrations.forEach((registration) => {
+      const participantName = registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta eksternal";
+      const participantGender = registration.student?.gender ?? normalizeExternalParticipantGender(registration.externalParticipant?.gender) ?? "";
       const korwilName = registration.outboundKorda?.korwil?.name || "Tanpa Korwil";
       const kordaName = registration.outboundKorda?.name || "Tanpa Korda Outbound";
 
@@ -160,8 +164,8 @@ export async function getRegistrationsForExcelExportAction(
       }
 
       kordaMap.get(kordaName)!.push({
-        studentName: registration.student.name,
-        gender: mapGenderToShortLabel(registration.student.gender),
+        studentName: participantName,
+        gender: mapGenderToShortLabel(participantGender),
         outboundKorda: registration.outboundKorda?.name || "-",
         outboundDropPoint: registration.outboundDropPoint?.name || "-",
         bus: "",

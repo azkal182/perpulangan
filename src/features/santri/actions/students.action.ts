@@ -14,9 +14,13 @@ export type StudentBasic = {
   id: string;
   name: string;
   nis: string | null;
+  gender?: string;
   regencyId: number | null;
+  externalParticipantId?: string;
+  address?: string | null;
   regency?: {
     kordaId: string | null;
+    korda?: { id: string; name: string } | null;
   } | null;
 };
 
@@ -86,7 +90,7 @@ export async function getStudentsByKorda(kordaId: string): Promise<{
  * Search students by name or NIS (async autocomplete)
  * Used for registration form with optional Korda selection
  * @param query - Search query (name or NIS)
- * @param kordaId - Optional Korda ID to filter students
+ * @param kordaId - Optional destination Korda; its access scope permits minimal cross-Korda lookup.
  */
 export async function searchStudents(
   query: string,
@@ -131,18 +135,11 @@ export async function searchStudents(
             {
               status: true, // Only active students
             },
-            ...(kordaId
-              ? [
-                  {
-                    regency: {
-                      kordaId: kordaId,
-                    },
-                  },
-                ]
-              : []),
           ],
         },
-        studentScopeWhere(scope),
+        // Selecting an authorized destination Korda permits searching by minimal identifiers
+        // across origin Kordas. Without a destination, keep the ordinary origin scope.
+        kordaId ? undefined : studentScopeWhere(scope),
       ),
       select: {
         id: true,
@@ -152,6 +149,7 @@ export async function searchStudents(
         regency: {
           select: {
             kordaId: true,
+            korda: { select: { id: true, name: true } },
           },
         },
       },

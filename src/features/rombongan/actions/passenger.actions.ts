@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
+import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
 import {
   AccessDeniedError,
   andWhere,
@@ -24,6 +25,14 @@ export interface BusPassenger {
   dropPointPrice: number | null;
   journeyDate: Date | null;
   paid: boolean;
+  assignmentChanged: boolean;
+  previousBusLabel: string | null;
+  assignmentHistory: Array<{
+    action: "ASSIGNED" | "REASSIGNED" | "UNASSIGNED";
+    fromBusLabel: string | null;
+    toBusLabel: string | null;
+    createdAt: Date;
+  }>;
 }
 
 export interface AssignableRegistration {
@@ -50,6 +59,7 @@ export interface BusAttendanceManifest {
   busId: string;
   busLabel: string;
   busCapacity: number;
+  dataUpdatedAt: Date;
   korwilName: string | null;
   kordaNames: string[];
   passengers: BusAttendancePassenger[];
@@ -134,61 +144,54 @@ export async function getBusPassengers(
       throw new AccessDeniedError("Bus di luar cakupan akses");
     }
 
-    if (journey === "outbound") {
-      const regs = await prisma.registration.findMany({
-        where: andWhere(
-          { outboundBusId: busId },
-          registrationScopeWhere(scope),
-        ),
-        include: {
-          student: {
-            select: { id: true, name: true, nis: true, gender: true },
-          },
-          outboundKorda: { select: { name: true } },
-          outboundDropPoint: { select: { name: true, price: true } },
+    const assignments = await prisma.journeyBusAssignment.findMany({
+      where: {
+        busId,
+        journey: {
+          direction: journey === "outbound" ? "OUTBOUND" : "RETURN",
+          status: "REGISTERED",
+          registration: registrationScopeWhere(scope),
         },
-        orderBy: { student: { name: "asc" } },
-      });
-      return regs.map((r) => ({
-        registrationId: r.id,
-        studentId: r.student.id,
-        studentName: r.student.name,
-        studentNis: r.student.nis,
-        studentGender: r.student.gender,
-        kordaName: r.outboundKorda?.name ?? null,
-        dropPointName: r.outboundDropPoint?.name ?? null,
-        dropPointPrice: r.outboundDropPoint?.price ?? null,
-        journeyDate: r.outboundDate,
-        paid: r.outboundPaid,
-      }));
-    } else {
-      const regs = await prisma.registration.findMany({
-        where: andWhere(
-          { returnBusId: busId },
-          registrationScopeWhere(scope),
-        ),
-        include: {
-          student: {
-            select: { id: true, name: true, nis: true, gender: true },
+      },
+      include: {
+        journey: {
+          include: {
+            destinationKorda: { select: { name: true } },
+            registration: {
+              include: {
+                student: { select: { id: true, name: true, nis: true, gender: true } },
+                externalParticipant: { select: { id: true, name: true, gender: true } },
+              },
+            },
           },
-          returnKorda: { select: { name: true } },
-          returnDropPoint: { select: { name: true, price: true } },
         },
-        orderBy: { student: { name: "asc" } },
-      });
-      return regs.map((r) => ({
+        history: { orderBy: { createdAt: "desc" } },
+      },
+      orderBy: { journey: { registration: { student: { name: "asc" } } } },
+    });
+    return assignments.map((assignment) => {
+      const r = assignment.journey.registration;
+      return {
         registrationId: r.id,
-        studentId: r.student.id,
-        studentName: r.student.name,
-        studentNis: r.student.nis,
-        studentGender: r.student.gender,
-        kordaName: r.returnKorda?.name ?? null,
-        dropPointName: r.returnDropPoint?.name ?? null,
-        dropPointPrice: r.returnDropPoint?.price ?? null,
-        journeyDate: r.returnDate,
-        paid: r.returnPaid,
-      }));
-    }
+        studentId: r.student?.id ?? r.externalParticipant?.id ?? "",
+        studentName: r.student?.name ?? r.externalParticipant?.name ?? "Peserta eksternal",
+        studentNis: r.student?.nis ?? null,
+        studentGender: r.student?.gender ?? normalizeExternalParticipantGender(r.externalParticipant?.gender) ?? "-",
+        kordaName: assignment.journey.destinationKorda.name,
+        dropPointName: assignment.journey.locationNameSnapshot,
+        dropPointPrice: assignment.journey.tariffSnapshot,
+        journeyDate: assignment.journey.travelDate,
+        paid: journey === "outbound" ? r.outboundPaid : r.returnPaid,
+        assignmentChanged: assignment.changedAt !== null,
+        previousBusLabel: assignment.previousBusLabelSnapshot,
+        assignmentHistory: assignment.history.map((item) => ({
+          action: item.action,
+          fromBusLabel: item.fromBusLabelSnapshot,
+          toBusLabel: item.toBusLabelSnapshot,
+          createdAt: item.createdAt,
+        })),
+      };
+    });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       throw new Error(error.message);
@@ -220,94 +223,6 @@ export async function getBusAttendanceManifest(params: {
       await ensureKordaInScope(scope, params.kordaId);
     }
 
-    if (params.journey === "outbound") {
-      const buses = await prisma.bus.findMany({
-        where: andWhere(
-          {
-            eventId: params.eventId,
-            ...(params.korwilId && { korwilId: params.korwilId }),
-            ...(params.kordaId && {
-              kordas: {
-                some: {
-                  kordaId: params.kordaId,
-                },
-              },
-            }),
-          },
-          busScopeWhere(scope),
-        ),
-        select: {
-          id: true,
-          label: true,
-          capacity: true,
-          korwil: { select: { name: true } },
-          kordas: {
-            select: {
-              korda: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-            orderBy: {
-              korda: { name: "asc" },
-            },
-          },
-          outboundRegistrations: {
-            where: registrationScopeWhere(scope),
-            select: {
-              id: true,
-              student: {
-                select: {
-                  name: true,
-                  nis: true,
-                  gender: true,
-                  regency: {
-                    select: {
-                      name: true,
-                      label: true,
-                    },
-                  },
-                },
-              },
-              outboundDropPoint: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-            orderBy: {
-              student: { name: "asc" },
-            },
-          },
-        },
-        orderBy: { label: "asc" },
-      });
-
-      const manifests = buses.map((bus) => ({
-        busId: bus.id,
-        busLabel: bus.label,
-        busCapacity: bus.capacity,
-        korwilName: bus.korwil?.name ?? null,
-        kordaNames: bus.kordas.map((item) => item.korda.name),
-        passengers: sortBusAttendancePassengers(
-          bus.outboundRegistrations.map((registration) => ({
-            registrationId: registration.id,
-            studentName: registration.student.name,
-            studentNis: registration.student.nis,
-            studentGender: registration.student.gender,
-            kabKota:
-              registration.student.regency?.label ??
-              registration.student.regency?.name ??
-              null,
-            dropPointName: registration.outboundDropPoint?.name ?? null,
-          })),
-        ),
-      }));
-
-      return sortBusAttendanceManifest(manifests);
-    }
-
     const buses = await prisma.bus.findMany({
       where: andWhere(
         {
@@ -327,11 +242,14 @@ export async function getBusAttendanceManifest(params: {
         id: true,
         label: true,
         capacity: true,
+        updatedAt: true,
         korwil: { select: { name: true } },
         kordas: {
           select: {
+            kordaId: true,
             korda: {
               select: {
+                id: true,
                 name: true,
               },
             },
@@ -340,58 +258,77 @@ export async function getBusAttendanceManifest(params: {
             korda: { name: "asc" },
           },
         },
-        returnRegistrations: {
-          where: registrationScopeWhere(scope),
-          select: {
-            id: true,
-            student: {
-              select: {
-                name: true,
-                nis: true,
-                gender: true,
-                regency: {
-                  select: {
-                    name: true,
-                    label: true,
+      },
+      orderBy: { label: "asc" },
+    });
+    const busIds = buses.map((bus) => bus.id);
+    const registrationAccessWhere = registrationScopeWhere(scope);
+    const assignments = busIds.length
+      ? await prisma.journeyBusAssignment.findMany({
+          where: {
+            busId: { in: busIds },
+            journey: {
+              direction: params.journey === "outbound" ? "OUTBOUND" : "RETURN",
+              status: "REGISTERED",
+              registration: {
+                eventId: params.eventId,
+                ...(registrationAccessWhere ? { AND: [registrationAccessWhere] } : {}),
+              },
+            },
+          },
+          include: {
+            bus: { select: { id: true } },
+            journey: {
+              include: {
+                destinationKorda: { select: { name: true } },
+                registration: {
+                  include: {
+                    student: { select: { name: true, nis: true, gender: true, regency: { select: { name: true, label: true } } } },
+                    externalParticipant: { select: { name: true, gender: true } },
                   },
                 },
               },
             },
-            returnDropPoint: {
-              select: {
-                name: true,
-              },
-            },
           },
-          orderBy: {
-            student: { name: "asc" },
-          },
-        },
-      },
-      orderBy: { label: "asc" },
+        })
+      : [];
+    const assignmentsByBusId = new Map<string, typeof assignments>();
+    for (const assignment of assignments) {
+      if (!assignment.busId || !assignment.bus) continue;
+      const current = assignmentsByBusId.get(assignment.busId) ?? [];
+      current.push(assignment);
+      assignmentsByBusId.set(assignment.busId, current);
+    }
+    const manifests = buses.map((bus) => {
+      const allowedKordaIds = new Set(bus.kordas.map((item) => item.kordaId));
+      const busAssignments = assignmentsByBusId.get(bus.id) ?? [];
+      const latestUpdate = busAssignments.reduce((latest, assignment) => {
+        const candidate = assignment.updatedAt > assignment.journey.updatedAt ? assignment.updatedAt : assignment.journey.updatedAt;
+        return candidate > latest ? candidate : latest;
+      }, bus.updatedAt);
+      const passengers = busAssignments
+        .filter((assignment) => allowedKordaIds.has(assignment.journey.destinationKordaId))
+        .map((assignment) => {
+          const registration = assignment.journey.registration;
+          return {
+            registrationId: registration.id,
+            studentName: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta eksternal",
+            studentNis: registration.student?.nis ?? null,
+            studentGender: registration.student?.gender ?? normalizeExternalParticipantGender(registration.externalParticipant?.gender) ?? "-",
+            kabKota: registration.student?.regency?.label ?? registration.student?.regency?.name ?? null,
+            dropPointName: assignment.journey.locationNameSnapshot,
+          };
+        });
+      return {
+        busId: bus.id,
+        busLabel: bus.label,
+        busCapacity: bus.capacity,
+        dataUpdatedAt: latestUpdate,
+        korwilName: bus.korwil?.name ?? null,
+        kordaNames: bus.kordas.map((item) => item.korda.name),
+        passengers: sortBusAttendancePassengers(passengers),
+      };
     });
-
-    const manifests = buses.map((bus) => ({
-      busId: bus.id,
-      busLabel: bus.label,
-      busCapacity: bus.capacity,
-      korwilName: bus.korwil?.name ?? null,
-      kordaNames: bus.kordas.map((item) => item.korda.name),
-      passengers: sortBusAttendancePassengers(
-        bus.returnRegistrations.map((registration) => ({
-          registrationId: registration.id,
-          studentName: registration.student.name,
-          studentNis: registration.student.nis,
-          studentGender: registration.student.gender,
-          kabKota:
-            registration.student.regency?.label ??
-            registration.student.regency?.name ??
-            null,
-          dropPointName: registration.returnDropPoint?.name ?? null,
-        })),
-      ),
-    }));
-
     return sortBusAttendanceManifest(manifests);
   } catch (error) {
     if (error instanceof AccessDeniedError) {
@@ -431,78 +368,54 @@ export async function getAssignableRegistrations(
       return [];
     }
 
-    const searchFilter = search?.trim()
+    const normalizedSearch = search?.trim();
+    const searchFilter = normalizedSearch
       ? {
           OR: [
-            { name: { contains: search.trim(), mode: "insensitive" as const } },
-            { nis: { contains: search.trim(), mode: "insensitive" as const } },
+            { name: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { nis: { contains: normalizedSearch, mode: "insensitive" as const } },
           ],
         }
       : undefined;
 
-    if (journey === "outbound") {
-      const regs = await prisma.registration.findMany({
-        where: andWhere(
-          {
+    const journeys = await prisma.journey.findMany({
+      where: andWhere(
+        {
+          direction: journey === "outbound" ? "OUTBOUND" : "RETURN",
+          status: "REGISTERED",
+          destinationKordaId: { in: busKordaIds },
+          OR: [{ busAssignment: null }, { busAssignment: { busId: null } }],
+          registration: {
             eventId: bus.eventId,
-            outboundBusId: null, // belum di-assign ke bus manapun
-            outboundKordaId: { in: busKordaIds },
-            status: { in: ["CONFIRMED", "PARTIAL_CANCEL"] },
-            ...(searchFilter && { student: searchFilter }),
+            ...(normalizedSearch && { OR: [
+              { student: searchFilter },
+              { externalParticipant: { name: { contains: normalizedSearch, mode: "insensitive" as const } } },
+            ] }),
           },
-          registrationScopeWhere(scope),
-        ),
-        include: {
-          student: {
-            select: { id: true, name: true, nis: true, gender: true },
-          },
-          outboundKorda: { select: { name: true } },
-          outboundDropPoint: { select: { name: true } },
         },
-        orderBy: { student: { name: "asc" } },
-      });
-      return regs.map((r) => ({
-        registrationId: r.id,
-        studentId: r.student.id,
-        studentName: r.student.name,
-        studentNis: r.student.nis,
-        studentGender: r.student.gender,
-        kordaName: r.outboundKorda?.name ?? null,
-        dropPointName: r.outboundDropPoint?.name ?? null,
-        journeyDate: r.outboundDate,
-      }));
-    } else {
-      const regs = await prisma.registration.findMany({
-        where: andWhere(
-          {
-            eventId: bus.eventId,
-            returnBusId: null, // belum di-assign ke bus manapun
-            returnKordaId: { in: busKordaIds },
-            status: { in: ["CONFIRMED", "PARTIAL_CANCEL"] },
-            ...(searchFilter && { student: searchFilter }),
+        { registration: registrationScopeWhere(scope) },
+      ),
+      include: {
+        destinationKorda: { select: { name: true } },
+        registration: {
+          include: {
+            student: { select: { id: true, name: true, nis: true, gender: true } },
+            externalParticipant: { select: { id: true, name: true, gender: true } },
           },
-          registrationScopeWhere(scope),
-        ),
-        include: {
-          student: {
-            select: { id: true, name: true, nis: true, gender: true },
-          },
-          returnKorda: { select: { name: true } },
-          returnDropPoint: { select: { name: true } },
         },
-        orderBy: { student: { name: "asc" } },
-      });
-      return regs.map((r) => ({
-        registrationId: r.id,
-        studentId: r.student.id,
-        studentName: r.student.name,
-        studentNis: r.student.nis,
-        studentGender: r.student.gender,
-        kordaName: r.returnKorda?.name ?? null,
-        dropPointName: r.returnDropPoint?.name ?? null,
-        journeyDate: r.returnDate,
-      }));
-    }
+      },
+      orderBy: { registration: { student: { name: "asc" } } },
+    });
+    return journeys.map((item) => ({
+      registrationId: item.registration.id,
+      studentId: item.registration.student?.id ?? item.registration.externalParticipant?.id ?? "",
+      studentName: item.registration.student?.name ?? item.registration.externalParticipant?.name ?? "Peserta eksternal",
+      studentNis: item.registration.student?.nis ?? null,
+      studentGender: item.registration.student?.gender ?? normalizeExternalParticipantGender(item.registration.externalParticipant?.gender) ?? "-",
+      kordaName: item.destinationKorda.name,
+      dropPointName: item.locationNameSnapshot,
+      journeyDate: item.travelDate,
+    }));
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       throw new Error(error.message);
@@ -522,12 +435,14 @@ export async function assignToBus(
 ): Promise<void> {
   try {
     const scope = await getRegionalAccessScope();
-    const [bus, registration] = await Promise.all([
+    const [bus, journeyRecord] = await Promise.all([
       prisma.bus.findFirst({
         where: andWhere({ id: busId }, busScopeWhere(scope)),
         select: {
           id: true,
+          label: true,
           eventId: true,
+          capacity: true,
           kordas: {
             select: {
               kordaId: true,
@@ -535,13 +450,16 @@ export async function assignToBus(
           },
         },
       }),
-      prisma.registration.findFirst({
-        where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-        select: {
-          id: true,
-          eventId: true,
-          outboundKordaId: true,
-          returnKordaId: true,
+      prisma.journey.findFirst({
+        where: {
+          registrationId,
+          direction: journey === "outbound" ? "OUTBOUND" : "RETURN",
+          status: "REGISTERED",
+          registration: registrationScopeWhere(scope),
+        },
+        include: {
+          registration: { select: { eventId: true } },
+          busAssignment: { include: { bus: { select: { label: true } } } },
         },
       }),
     ]);
@@ -549,35 +467,67 @@ export async function assignToBus(
     if (!bus) {
       throw new AccessDeniedError("Bus di luar cakupan akses");
     }
-    if (!registration) {
+    if (!journeyRecord) {
       throw new AccessDeniedError("Registrasi di luar cakupan akses");
     }
-    if (registration.eventId !== bus.eventId) {
+    if (journeyRecord.registration.eventId !== bus.eventId) {
       throw new Error("Registrasi tidak sesuai event bus");
     }
     const busKordaIds = bus.kordas.map((item) => item.kordaId);
     if (busKordaIds.length === 0) {
       throw new Error("Bus belum memiliki korda. Tambahkan korda pada bus terlebih dahulu.");
     }
-    const registrationKordaId =
-      journey === "outbound"
-        ? registration.outboundKordaId
-        : registration.returnKordaId;
-    if (!registrationKordaId || !busKordaIds.includes(registrationKordaId)) {
+    if (!busKordaIds.includes(journeyRecord.destinationKordaId)) {
       throw new Error("Korda peserta tidak sesuai dengan korda bus.");
     }
+    await ensureKordaInScope(scope, journeyRecord.destinationKordaId);
+    if (bus.capacity < 1) throw new Error("Kapasitas bus belum valid. Admin/Korwil harus mengisi kapasitas kursi terlebih dahulu.");
 
-    if (journey === "outbound") {
-      await prisma.registration.update({
-        where: { id: registrationId },
-        data: { outboundBusId: busId },
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Bus" WHERE "id" = ${busId} FOR UPDATE`;
+      const current = await tx.journeyBusAssignment.findUnique({
+        where: { journeyId: journeyRecord.id },
+        include: { bus: { select: { label: true } } },
       });
-    } else {
-      await prisma.registration.update({
-        where: { id: registrationId },
-        data: { returnBusId: busId },
+      if (current?.busId === busId) return;
+      const occupied = await tx.journeyBusAssignment.count({
+        where: {
+          busId,
+          journey: {
+            status: "REGISTERED",
+            direction: journeyRecord.direction,
+          },
+        },
       });
-    }
+      if (occupied >= bus.capacity) {
+        throw new Error(`Kapasitas bus penuh (${occupied}/${bus.capacity} kursi)`);
+      }
+      const changed = Boolean(current?.busId && current.busId !== busId);
+      const previousBusLabelSnapshot = changed
+        ? current?.bus?.label ?? null
+        : current?.previousBusLabelSnapshot ?? null;
+      const assignment = await tx.journeyBusAssignment.upsert({
+        where: { journeyId: journeyRecord.id },
+        create: { journeyId: journeyRecord.id, busId },
+        update: {
+          busId,
+          ...(changed ? { previousBusLabelSnapshot, changedAt: new Date(), changedByUserId: scope.userId } : {}),
+        },
+      });
+      await tx.journeyBusAssignmentHistory.create({
+        data: {
+          assignmentId: assignment.id,
+          action: current ? "REASSIGNED" : "ASSIGNED",
+          fromBusLabelSnapshot: current?.bus?.label ?? current?.previousBusLabelSnapshot ?? null,
+          toBusLabelSnapshot: bus.label,
+          actorUserId: scope.userId,
+        },
+      });
+      await tx.registration.update({
+        where: { id: registrationId },
+        data: journey === "outbound" ? { outboundBusId: busId } : { returnBusId: busId },
+      });
+    });
     logger.info({ registrationId, busId, journey }, "passenger.assigned");
     revalidatePath("/rombongan");
   } catch (error) {
@@ -601,23 +551,45 @@ export async function unassignFromBus(
 ): Promise<void> {
   try {
     const scope = await getRegionalAccessScope();
-    const existing = await prisma.registration.findFirst({
-      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true },
+    const existing = await prisma.journey.findFirst({
+      where: {
+        registrationId,
+        direction: journey === "outbound" ? "OUTBOUND" : "RETURN",
+        status: "REGISTERED",
+        registration: registrationScopeWhere(scope),
+        busAssignment: { bus: busScopeWhere(scope) },
+      },
+      include: { busAssignment: { include: { bus: { select: { label: true } } } } },
     });
     if (!existing) {
       throw new AccessDeniedError("Registrasi di luar cakupan akses");
     }
 
-    if (journey === "outbound") {
-      await prisma.registration.update({
-        where: { id: registrationId },
-        data: { outboundBusId: null },
-      });
-    } else {
-      await prisma.registration.update({
-        where: { id: registrationId },
-        data: { returnBusId: null },
+    await ensureKordaInScope(scope, existing.destinationKordaId);
+    const existingAssignment = existing.busAssignment;
+    if (existingAssignment?.busId) {
+      await prisma.$transaction(async (tx) => {
+        await tx.journeyBusAssignment.update({
+          where: { journeyId: existing.id },
+          data: {
+            busId: null,
+            previousBusLabelSnapshot: existingAssignment.bus?.label ?? null,
+            changedAt: new Date(),
+            changedByUserId: scope.userId,
+          },
+        });
+        await tx.journeyBusAssignmentHistory.create({
+          data: {
+            assignmentId: existingAssignment.id,
+            action: "UNASSIGNED",
+            fromBusLabelSnapshot: existingAssignment.bus?.label ?? null,
+            actorUserId: scope.userId,
+          },
+        });
+        await tx.registration.update({
+          where: { id: registrationId },
+          data: journey === "outbound" ? { outboundBusId: null } : { returnBusId: null },
+        });
       });
     }
     logger.info({ registrationId, journey }, "passenger.unassigned");

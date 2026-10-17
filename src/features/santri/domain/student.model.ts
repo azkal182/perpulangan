@@ -14,4 +14,5 @@ export type Student = {
   districtId?: number;
   villageId?: number;
   fullAddress: string;
+  sourceAddress?: Record<string, unknown>;
 };

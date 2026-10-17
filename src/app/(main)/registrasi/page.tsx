@@ -59,7 +59,6 @@ export default async function RegistrationPage() {
             kordas={kordas}
             dropPoints={dropPoints}
             defaultMode="both"
-            lockMode={true}
             enableUnsavedGuard
           />
         </div>

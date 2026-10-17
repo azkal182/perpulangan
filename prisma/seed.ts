@@ -150,30 +150,31 @@ async function assignRegenciesPlaceholder(
 }
 
 async function main() {
-  console.log(process.env.DATABASE_URL!);
-  const email = "admin@local.test";
-  const name = "Admin";
-  const password = "admin123";
+  const email = process.env.ADMIN_SEED_EMAIL?.trim();
+  const name = process.env.ADMIN_SEED_NAME?.trim();
+  const password = process.env.ADMIN_SEED_PASSWORD;
+  const adminSeedValues = [email, name, password];
 
-  const userAdmin = await prisma.user.findFirst({ where: { email } });
-  if (!userAdmin) {
-    if (!password) {
+  if (adminSeedValues.some(Boolean) && !adminSeedValues.every(Boolean)) {
     throw new Error(
-      "ADMIN_SEED_PASSWORD is required to seed the admin account.",
+      "Set ADMIN_SEED_EMAIL, ADMIN_SEED_NAME, and ADMIN_SEED_PASSWORD together to seed an admin account.",
     );
   }
 
-  await auth.api.createUser({
-    body: {
-      email: email, // required
-      password: password, // required
-      name: name, // required
-      role: "admin",
-    },
-  });
-
-  console.log(`Admin seeded: ${email}`);
-
+  if (email && name && password) {
+    const userAdmin = await prisma.user.findFirst({ where: { email } });
+    if (!userAdmin) {
+      await auth.api.createUser({
+        body: { email, password, name, role: "admin" },
+      });
+      console.log(`Admin seeded: ${email}`);
+    } else {
+      console.log(`Admin already exists: ${email}`);
+    }
+  } else {
+    console.log(
+      "Admin account skipped (set ADMIN_SEED_EMAIL, ADMIN_SEED_NAME, and ADMIN_SEED_PASSWORD to seed one).",
+    );
   }
 
   

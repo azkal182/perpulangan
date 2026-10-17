@@ -100,6 +100,14 @@ export function DetailStudentDialog({
                 <span className="font-medium text-muted-foreground">Alamat</span>
                 <span>{student.fullAddress || "-"}</span>
             </div>
+            {student.sourceAddress && (
+              <div className="grid gap-1 rounded-md border p-3">
+                <span className="font-medium text-muted-foreground">Sumber alamat API</span>
+                <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(student.sourceAddress, null, 2)}</pre>
+                <span className="text-xs text-muted-foreground">Status data wilayah: {student.regionalStatus === "VERIFIED" ? "Terverifikasi admin" : student.regionalStatus === "AUTO_MAPPED" ? "Terpetakan otomatis" : "Perlu ditinjau"}</span>
+                {student.regionalReviewNote && <span className="text-xs text-muted-foreground">Catatan: {student.regionalReviewNote}</span>}
+              </div>
+            )}
             <div className="grid grid-cols-[120px_auto] gap-2 items-center">
                 <span className="font-medium text-muted-foreground">No. HP Wali</span>
                 <span>{student.parrentPhone || "-"}</span>

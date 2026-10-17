@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -38,6 +39,7 @@ import {
   searchStudents,
   type StudentBasic,
 } from "@/features/santri/actions/students.action";
+import { createExternalParticipantFromRegistration, searchCompleteExternalParticipants } from "@/features/santri/actions/external-participant.actions";
 import { toast } from "sonner";
 
 type Props = {
@@ -45,15 +47,16 @@ type Props = {
   eventName: string;
   kordas: Korda[];
   dropPoints: DropPoint[];
-  defaultMode?: "both" | "return_only"; // Initial mode
+  defaultMode?: "both" | "outbound_only" | "return_only"; // Initial mode
   lockMode?: boolean; // If true, hide mode selector
   enableUnsavedGuard?: boolean; // Prevent accidental navigation while draft exists
 };
 
 type ParticipantDraft = {
   student: StudentBasic;
+  externalParticipantId?: string;
   outboundDropPoint: DropPoint | null; // Nullable for return-only
-  returnDropPoint: DropPoint;
+  returnDropPoint: DropPoint | null;
   paymentStatus: "unpaid" | "outbound_only" | "paid_both" | "paid_return";
 };
 
@@ -222,7 +225,7 @@ export function MultiParticipantRegistrationForm({
 }: Props) {
   // Registration mode: 'both' or 'return_only'
   const [registrationMode, setRegistrationMode] = React.useState<
-    "both" | "return_only"
+    "both" | "outbound_only" | "return_only"
   >(defaultMode);
 
   const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(
@@ -233,6 +236,11 @@ export function MultiParticipantRegistrationForm({
   >(null);
   const [selectedStudent, setSelectedStudent] =
     React.useState<StudentBasic | null>(null);
+  const [participantType, setParticipantType] = React.useState<"student" | "external">("student");
+  const [showExternalDraft, setShowExternalDraft] = React.useState(false);
+  const [externalDraftName, setExternalDraftName] = React.useState("");
+  const [externalDraftGender, setExternalDraftGender] = React.useState("");
+  const [externalDraftAddress, setExternalDraftAddress] = React.useState("");
 
   // Separate korda for outbound and return
   const [selectedOutboundKordaId, setSelectedOutboundKordaId] = React.useState<
@@ -246,8 +254,6 @@ export function MultiParticipantRegistrationForm({
     React.useState<string | null>(null);
   const [selectedReturnDropPointId, setSelectedReturnDropPointId] =
     React.useState<string | null>(null);
-  const [selectedPaymentStatus, setSelectedPaymentStatus] =
-    React.useState<string>("paid_both");
   const [participants, setParticipants] = React.useState<ParticipantDraft[]>(
     [],
   );
@@ -286,26 +292,6 @@ export function MultiParticipantRegistrationForm({
     message: UNSAVED_WARNING_MESSAGE,
   });
 
-  // When student is selected, auto-populate korda and drop points from their default korda
-  React.useEffect(() => {
-    if (selectedStudent?.regency?.kordaId) {
-      const studentKordaId = selectedStudent.regency.kordaId;
-
-      // Set both korda selectors to student's default korda
-      setSelectedOutboundKordaId(studentKordaId);
-      setSelectedReturnKordaId(studentKordaId);
-
-      // Find the first drop point from student's korda for both outbound and return
-      const studentDropPoints = dropPoints.filter(
-        (dp) => dp.kordaId === studentKordaId,
-      );
-      if (studentDropPoints.length > 0) {
-        setSelectedOutboundDropPointId(studentDropPoints[0].id);
-        setSelectedReturnDropPointId(studentDropPoints[0].id);
-      }
-    }
-  }, [selectedStudent, dropPoints]);
-
   // Reset student selection when Korda changes
   React.useEffect(() => {
     setSelectedStudentId(null);
@@ -314,7 +300,7 @@ export function MultiParticipantRegistrationForm({
 
   // Reset outbound drop point when outbound korda changes
   React.useEffect(() => {
-    if (registrationMode === "both") {
+    if (registrationMode === "both" || registrationMode === "outbound_only") {
       setSelectedOutboundDropPointId(null);
     }
   }, [selectedOutboundKordaId, registrationMode]);
@@ -323,6 +309,7 @@ export function MultiParticipantRegistrationForm({
   React.useEffect(() => {
     setSelectedReturnDropPointId(null);
   }, [selectedReturnKordaId]);
+
 
   // Filter drop points for outbound journey
   const outboundDropPoints = React.useMemo(() => {
@@ -347,10 +334,21 @@ export function MultiParticipantRegistrationForm({
     [dropPoints, selectedReturnDropPointId],
   );
 
+  const selectDestinationKorda = (kordaId: string | null) => {
+    setSelectedKordaId(kordaId || null);
+    setSelectedOutboundKordaId(kordaId || null);
+    setSelectedReturnKordaId(kordaId || null);
+  };
+
   const handleStudentSelection = React.useCallback(
     async (student: StudentBasic | null) => {
       if (!student) {
         setSelectedStudent(null);
+        return;
+      }
+
+      if (student.externalParticipantId) {
+        setSelectedStudent(student);
         return;
       }
 
@@ -372,18 +370,23 @@ export function MultiParticipantRegistrationForm({
         return;
       }
 
-      if (checkResult.registered) {
+      const alreadyHasRequestedJourney = registrationMode === "both"
+        ? checkResult.registered
+        : registrationMode === "outbound_only"
+          ? checkResult.hasOutbound
+          : checkResult.hasReturn;
+      if (alreadyHasRequestedJourney) {
         setSelectedStudentId(null);
         setSelectedStudent(null);
         toast.error(
-          `${student.name} sudah terdaftar di event ini pada Korda ${checkResult.kordaName || "-"}`,
+          `${student.name} sudah terdaftar pada perjalanan ini untuk event tersebut.`,
         );
         return;
       }
 
       setSelectedStudent(student);
     },
-    [eventId],
+    [eventId, registrationMode],
   );
 
   const handleAddParticipant = () => {
@@ -394,16 +397,13 @@ export function MultiParticipantRegistrationForm({
       (!selectedOutboundDropPoint || !selectedReturnDropPoint)
     )
       return;
+    if (registrationMode === "outbound_only" && !selectedOutboundDropPoint) return;
     if (registrationMode === "return_only" && !selectedReturnDropPoint) return;
 
-    // Validate payment status is selected
-    if (!selectedPaymentStatus) {
-      alert("Silakan pilih status pembayaran terlebih dahulu");
-      return;
-    }
-
     // Check if student already added
-    if (participants.some((p) => p.student.id === selectedStudent.id)) {
+    if (participants.some((p) => p.externalParticipantId
+      ? p.externalParticipantId === selectedStudent.externalParticipantId
+      : !selectedStudent.externalParticipantId && p.student.id === selectedStudent.id)) {
       alert("Siswa sudah ditambahkan");
       return;
     }
@@ -412,14 +412,11 @@ export function MultiParticipantRegistrationForm({
       ...participants,
       {
         student: selectedStudent,
+        ...(selectedStudent.externalParticipantId ? { externalParticipantId: selectedStudent.externalParticipantId } : {}),
         outboundDropPoint:
-          registrationMode === "both" ? selectedOutboundDropPoint! : null,
-        returnDropPoint: selectedReturnDropPoint!,
-        paymentStatus: selectedPaymentStatus as
-          | "unpaid"
-          | "outbound_only"
-          | "paid_both"
-          | "paid_return",
+          registrationMode !== "return_only" ? selectedOutboundDropPoint! : null,
+        returnDropPoint: registrationMode === "outbound_only" ? null : selectedReturnDropPoint!,
+        paymentStatus: "unpaid",
       },
     ]);
 
@@ -431,7 +428,41 @@ export function MultiParticipantRegistrationForm({
     setSelectedReturnKordaId(null);
     setSelectedOutboundDropPointId(null);
     setSelectedReturnDropPointId(null);
-    // setSelectedPaymentStatus("");
+  };
+
+  const handleCreateExternalDraft = async () => {
+    if (!selectedKordaId) {
+      toast.error("Pilih Korda tujuan terlebih dahulu.");
+      return;
+    }
+    const result = await createExternalParticipantFromRegistration({
+      intendedKordaId: selectedKordaId,
+      name: externalDraftName,
+      gender: externalDraftGender,
+      address: externalDraftAddress,
+    });
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    setShowExternalDraft(false);
+    setExternalDraftName("");
+    setExternalDraftGender("");
+    setExternalDraftAddress("");
+    const item: StudentBasic = {
+      id: `external:${result.data.id}`,
+      externalParticipantId: result.data.id,
+      name: result.data.name,
+      nis: null,
+      gender: result.data.gender ?? undefined,
+      address: result.data.address,
+      regencyId: null,
+      regency: null,
+    };
+    setParticipantType("external");
+    setSelectedStudent(item);
+    setSelectedStudentId(item.id);
+    toast.success("Profil eksternal lengkap dan siap ditambahkan ke registrasi.");
   };
 
   const handleRemoveParticipant = (studentId: string) => {
@@ -443,7 +474,7 @@ export function MultiParticipantRegistrationForm({
     // Sum of outbound (if exists) and return drop point prices
     return participants.reduce((sum, p) => {
       const outboundPrice = p.outboundDropPoint?.price || 0;
-      const returnPrice = p.returnDropPoint.price;
+      const returnPrice = p.returnDropPoint?.price || 0;
       return sum + outboundPrice + returnPrice;
     }, 0);
   }, [participants]);
@@ -459,26 +490,20 @@ export function MultiParticipantRegistrationForm({
       // Submit each participant
       const results = await Promise.all(
         participants.map((p) => {
-          const outboundPaid =
-            p.paymentStatus === "outbound_only" ||
-            p.paymentStatus === "paid_both";
-          const returnPaid =
-            p.paymentStatus === "paid_both" ||
-            p.paymentStatus === "paid_return";
-
           return createRegistration({
             eventId,
-            studentId: p.student.id,
+            studentId: p.externalParticipantId ? null : p.student.id,
+            externalParticipantId: p.externalParticipantId ?? null,
             outboundKordaId: p.outboundDropPoint?.kordaId || null,
             outboundDropPointId: p.outboundDropPoint?.id || null,
-            returnKordaId: p.returnDropPoint.kordaId,
-            returnDropPointId: p.returnDropPoint.id,
-            registrarName: "Admin", // TODO: Get from authenticated user
-            registrarPhone: "-", // TODO: Get from authenticated user
+            returnKordaId: p.returnDropPoint?.kordaId || null,
+            returnDropPointId: p.returnDropPoint?.id || null,
+            registrarName: "",
+            registrarPhone: "",
             kordaChanged: false,
             kordaChangeConfirmed: true,
-            outboundPaid,
-            returnPaid,
+            outboundPaid: false,
+            returnPaid: false,
           });
         }),
       );
@@ -504,8 +529,7 @@ export function MultiParticipantRegistrationForm({
     selectedStudent &&
     (registrationMode === "both"
       ? selectedOutboundDropPoint && selectedReturnDropPoint // Both required
-      : selectedReturnDropPoint) && // Only return required
-    selectedPaymentStatus;
+      : registrationMode === "outbound_only" ? selectedOutboundDropPoint : selectedReturnDropPoint);
 
   return (
     <div className="space-y-6">
@@ -523,14 +547,20 @@ export function MultiParticipantRegistrationForm({
               <Label className="mb-2 block">Mode Registrasi</Label>
               <RadioGroup
                 value={registrationMode}
-                onValueChange={(value) =>
-                  setRegistrationMode(value as "both" | "return_only")
+                  onValueChange={(value) =>
+                  setRegistrationMode(value as "both" | "outbound_only" | "return_only")
                 }
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="both" id="mode-both" />
                   <label htmlFor="mode-both" className="text-sm cursor-pointer">
                     Pulang & Kembali (Normal)
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="outbound_only" id="mode-outbound" />
+                  <label htmlFor="mode-outbound" className="text-sm cursor-pointer">
+                    Perjalanan Pulang saja
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -548,31 +578,42 @@ export function MultiParticipantRegistrationForm({
 
           {/* Step 1: Select Korda (Optional) */}
           <div>
-            <Label className="mb-1">1. Pilih Korda (Opsional)</Label>
+            <Label className="mb-1">1. Korda tujuan</Label>
             <Autocomplete
               items={kordas}
               value={selectedKordaId}
-              onValueChange={setSelectedKordaId}
+              onValueChange={selectDestinationKorda}
               keyField="id"
               getLabel={(korda) => korda.name}
-              placeholder="Pilih Korda (opsional)"
+              placeholder="Pilih Korda tujuan"
               searchPlaceholder="Cari korda..."
               emptyText="Tidak ada korda"
             />
             <p className="text-sm text-muted-foreground mt-1">
-              Pilih Korda untuk filter titik turun, atau kosongkan untuk lihat
-              semua
+              Pilih Korda tujuan untuk mencari peserta. Tujuan ini otomatis dipilih pada bagian perjalanan dan dapat diubah dari sana. Pencarian santri lintas Korda hanya menampilkan identitas minimum dan Korda asal.
             </p>
           </div>
 
           {/* Step 2: Search Student (Async) */}
           <div>
-            <Label className="mb-1">2. Cari & Pilih Siswa *</Label>
+            <Label className="mb-1">2. Jenis peserta</Label>
+            <RadioGroup value={participantType} onValueChange={(value) => {
+              setParticipantType(value as "student" | "external");
+              setSelectedStudent(null);
+              setSelectedStudentId(null);
+            }} className="mb-2 flex gap-4">
+              <div className="flex items-center gap-2"><RadioGroupItem value="student" id="participant-student" /><label htmlFor="participant-student" className="text-sm">Santri</label></div>
+              <div className="flex items-center gap-2"><RadioGroupItem value="external" id="participant-external" /><label htmlFor="participant-external" className="text-sm">Peserta eksternal</label></div>
+            </RadioGroup>
+            <Label className="mb-1">Cari & Pilih {participantType === "student" ? "Santri" : "Peserta eksternal"} *</Label>
             <Autocomplete
-              key={selectedKordaId || "all"} // Reset cache when Korda changes
+              key={`${participantType}:${selectedKordaId || "all"}`} // Reset cache when destination or type changes
               async={{
-                loadOptions: (query) =>
-                  searchStudents(query, selectedKordaId || undefined),
+                loadOptions: (query) => participantType === "student"
+                  ? searchStudents(query, selectedKordaId || undefined)
+                  : selectedKordaId
+                    ? searchCompleteExternalParticipants(query, selectedKordaId)
+                    : Promise.resolve([]),
                 debounceMs: 300,
                 cache: {
                   enabled: true,
@@ -585,21 +626,61 @@ export function MultiParticipantRegistrationForm({
                 void handleStudentSelection(student as StudentBasic | null);
               }}
               keyField="id"
-              getLabel={(student) => `${student.name} (${student.nis})`}
-              placeholder="Cari siswa..."
-              searchPlaceholder="Ketik nama atau NIS..."
-              emptyText="Tidak ada hasil"
+              getLabel={(student) => `${student.name}${student.nis ? ` (${student.nis})` : ""}${student.regency?.korda?.name ? ` · Asal ${student.regency.korda.name}` : ""}`}
+              placeholder={participantType === "student" ? "Cari santri..." : "Cari peserta eksternal yang sudah lengkap..."}
+              searchPlaceholder={participantType === "student" ? "Ketik nama atau NIS..." : "Ketik nama atau alamat..."}
+              emptyText={participantType === "external" && !selectedKordaId ? "Pilih Korda tujuan terlebih dahulu" : "Tidak ada hasil"}
               virtualized={{ enabled: true }}
             />
-            {selectedKordaId && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Hanya menampilkan siswa dari Korda terpilih
-              </p>
+            {participantType === "external" && (
+              <div className="mt-3 space-y-2">
+                {!showExternalDraft ? (
+                  <div className="space-y-1">
+                    <Button type="button" variant="outline" size="sm" disabled={!selectedKordaId} onClick={() => setShowExternalDraft(true)}>
+                      Buat profil peserta eksternal
+                    </Button>
+                    {!selectedKordaId && (
+                      <p className="text-xs text-muted-foreground" role="status">
+                        Pilih Korda tujuan terlebih dahulu. Profil eksternal akan disimpan untuk Korda tujuan tersebut.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <p className="text-sm font-medium">Profil baru untuk Korda tujuan</p>
+                    <Input required value={externalDraftName} onChange={(event) => setExternalDraftName(event.target.value)} placeholder="Nama peserta *" />
+                    <Select value={externalDraftGender || "none"} onValueChange={(value) => setExternalDraftGender(value === "none" ? "" : value)}>
+                      <SelectTrigger><SelectValue placeholder="Jenis kelamin *" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Belum diisi</SelectItem>
+                        <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+                        <SelectItem value="Perempuan">Perempuan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input required value={externalDraftAddress} onChange={(event) => setExternalDraftAddress(event.target.value)} placeholder="Alamat *" />
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" disabled={!externalDraftName.trim() || !externalDraftGender || !externalDraftAddress.trim()} onClick={() => void handleCreateExternalDraft()}>Simpan profil lengkap</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setShowExternalDraft(false)}>Batal</Button>
+                    </div>
+                    {selectedKordaId && <p className="text-xs text-muted-foreground">Nama, jenis kelamin, dan alamat wajib diisi. Setelah disimpan, profil langsung berstatus Lengkap dan siap diregistrasikan oleh role yang berwenang pada Korda tujuan.</p>}
+                  </div>
+                )}
+              </div>
             )}
+              {selectedKordaId && participantType === "student" && (
+                <p className="text-sm text-muted-foreground mt-1">
+                Pencarian dibatasi pada Korda tujuan ini; santri dari Korda asal lain dapat ditemukan.
+                </p>
+              )}
+              {selectedKordaId && participantType === "external" && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Hanya profil Lengkap pada Korda tujuan ini yang dapat dipilih. Profil lama yang masih Draf perlu dilengkapi melalui halaman Peserta eksternal sebelum registrasi.
+                </p>
+              )}
           </div>
 
           {/* Step 3: Perjalanan Pulang (Outbound) - Only for 'both' mode */}
-          {registrationMode === "both" && (
+          {(registrationMode === "both" || registrationMode === "outbound_only") && (
             <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
               <h3 className="font-semibold text-sm">
                 3. Perjalanan Pulang (Outbound)
@@ -609,11 +690,8 @@ export function MultiParticipantRegistrationForm({
                 <div>
                   <Label className="mb-1">Pilih Korda *</Label>
                   <Select
-                    value={selectedOutboundKordaId || ""}
-                    onValueChange={(value) => {
-                      setSelectedOutboundKordaId(value);
-                      setSelectedReturnKordaId(value);
-                    }}
+                  value={selectedOutboundKordaId || ""}
+                  onValueChange={selectDestinationKorda}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Pilih korda pulang" />
@@ -667,33 +745,31 @@ export function MultiParticipantRegistrationForm({
           )}
 
           {/* Step 4: Perjalanan Kembali (Return) */}
-          <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+          {registrationMode !== "outbound_only" && <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
             <h3 className="font-semibold text-sm">
               4. Perjalanan Kembali (Return)
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1">Pilih Korda *</Label>
-                <Select
-                  value={selectedReturnKordaId || ""}
-                  onValueChange={setSelectedReturnKordaId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih korda kembali" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {kordas.map((korda) => (
-                      <SelectItem key={korda.id} value={korda.id}>
-                        {korda.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <Label className="mb-1">Korda tujuan *</Label>
+                  {registrationMode === "return_only" ? (
+                    <Select value={selectedReturnKordaId || ""} onValueChange={selectDestinationKorda}>
+                      <SelectTrigger><SelectValue placeholder="Pilih Korda tujuan" /></SelectTrigger>
+                      <SelectContent>
+                        {kordas.map((korda) => <SelectItem key={korda.id} value={korda.id}>{korda.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-md border bg-background px-3 py-2 text-sm">
+                      {kordas.find((korda) => korda.id === selectedReturnKordaId)?.name || "Pilih Korda tujuan"}
+                    </div>
+                  )}
+                    <p className="mt-1 text-xs text-muted-foreground">Pulang-pergi hanya dapat memakai satu Korda tujuan.</p>
+                </div>
 
               <div>
-                <Label className="mb-1">Pilih Titik Turun *</Label>
+                <Label className="mb-1">Pilih Titik Penjemputan *</Label>
                 <Select
                   value={selectedReturnDropPointId || ""}
                   onValueChange={setSelectedReturnDropPointId}
@@ -703,7 +779,7 @@ export function MultiParticipantRegistrationForm({
                     <SelectValue
                       placeholder={
                         selectedReturnKordaId
-                          ? "Pilih titik turun"
+                          ? "Pilih titik penjemputan"
                           : "Pilih korda terlebih dahulu"
                       }
                     />
@@ -724,42 +800,9 @@ export function MultiParticipantRegistrationForm({
                 )}
               </div>
             </div>
-          </div>
+          </div>}
 
-          {/* Step 5: Payment Status */}
-          <div>
-            <Label className="mb-1">5. Status Pembayaran *</Label>
-            <Select
-              value={selectedPaymentStatus}
-              onValueChange={setSelectedPaymentStatus}
-            >
-              <SelectTrigger
-                className={
-                  !selectedPaymentStatus ? "text-muted-foreground" : ""
-                }
-              >
-                <SelectValue placeholder="Pilih status pembayaran" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unpaid">Belum Bayar</SelectItem>
-                {registrationMode === "both" && (
-                  <>
-                    <SelectItem value="outbound_only">
-                      Sudah Bayar Pulang Saja
-                    </SelectItem>
-                    <SelectItem value="paid_both">
-                      Sudah Bayar Pulang-Pergi
-                    </SelectItem>
-                  </>
-                )}
-                {registrationMode === "return_only" && (
-                  <SelectItem value="paid_return">
-                    Sudah Bayar Kembali
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          <p className="rounded bg-muted p-3 text-sm text-muted-foreground">Pembayaran dicatat sebagai transaksi di menu Pembayaran setelah perjalanan berhasil didaftarkan.</p>
 
           {/* Add Button */}
           <Button
@@ -799,23 +842,23 @@ export function MultiParticipantRegistrationForm({
                 </TableHeader>
                 <TableBody>
                   {participants.map((p) => {
-                    const paymentLabel =
-                      p.paymentStatus === "paid_both"
-                        ? "Lunas PP"
-                        : p.paymentStatus === "outbound_only"
-                          ? "Pulang Saja"
-                          : p.paymentStatus === "paid_return"
-                            ? "Lunas Kembali"
-                            : "Belum Bayar";
-
                     const outboundPrice = p.outboundDropPoint?.price || 0;
-                    const returnPrice = p.returnDropPoint.price;
+                    const returnPrice = p.returnDropPoint?.price ?? 0;
                     const totalPrice = outboundPrice + returnPrice;
 
                     return (
                       <TableRow key={p.student.id}>
                         <TableCell className="font-medium">
                           {p.student.name}
+                          {p.student.regency?.korda?.name && (() => {
+                            const destinationId = p.outboundDropPoint?.kordaId ?? p.returnDropPoint?.kordaId;
+                            const destinationName = kordas.find((korda) => korda.id === destinationId)?.name;
+                            return destinationId && destinationId !== p.student.regency.kordaId ? (
+                              <div className="text-xs font-normal text-muted-foreground">
+                                Lintas Korda · Asal: {p.student.regency.korda.name} · Tujuan: {destinationName ?? "Korda terpilih"}
+                              </div>
+                            ) : null;
+                          })()}
                         </TableCell>
                         <TableCell>{p.student.nis}</TableCell>
                         <TableCell>
@@ -839,15 +882,16 @@ export function MultiParticipantRegistrationForm({
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
-                            {p.returnDropPoint.name}
-                            <div className="text-xs text-muted-foreground">
-                              Rp{" "}
-                              {p.returnDropPoint.price.toLocaleString("id-ID")}
-                            </div>
+                            {p.returnDropPoint ? <>
+                              {p.returnDropPoint.name}
+                              <div className="text-xs text-muted-foreground">
+                                Rp {p.returnDropPoint.price.toLocaleString("id-ID")}
+                              </div>
+                            </> : <span className="text-muted-foreground text-xs">-</span>}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm">{paymentLabel}</span>
+                          <span className="text-sm">Belum bayar</span>
                         </TableCell>
                         <TableCell className="text-right">
                           Rp {totalPrice.toLocaleString("id-ID")}

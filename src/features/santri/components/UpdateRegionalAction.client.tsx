@@ -12,6 +12,7 @@ export function UpdateRegionalAction({
   currentProvinceId,
   currentRegencyId,
   currentDistrictId,
+  sourceAddress,
   provinces = [],
   regencies = [],
 }: {
@@ -21,6 +22,7 @@ export function UpdateRegionalAction({
   currentProvinceId?: number | null;
   currentRegencyId?: number | null;
   currentDistrictId?: number | null;
+  sourceAddress?: Record<string, unknown> | null;
   provinces?: Array<{ id: number; code: string; name: string }>;
   regencies?: Array<{ id: number; code: string; name: string; label?: string | null; provinceId: number }>;
 }) {
@@ -41,6 +43,7 @@ export function UpdateRegionalAction({
         currentProvinceId={currentProvinceId}
         currentRegencyId={currentRegencyId}
         currentDistrictId={currentDistrictId}
+        sourceAddress={sourceAddress}
         provinces={provinces}
         regencies={regencies}
       />

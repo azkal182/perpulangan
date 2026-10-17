@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
 import type { PrintDataItem } from "../lib/print-utils";
 import type { Prisma } from "@/generated/prisma/client";
 import {
@@ -157,8 +158,10 @@ export async function getPrintDataAction(
             fullAddress: true,
             parrentPhone: true,
             gender: true,
+            regency: { select: { kordaId: true } },
           },
         },
+        externalParticipant: { select: { name: true, gender: true, address: true } },
         outboundKorda: {
           select: {
             id: true,
@@ -271,14 +274,16 @@ export async function getPrintDataAction(
         journeyType === "outbound" || journeyType === "return";
       const resolvedData =
         hasPreferredData || isFixedJourney ? preferredData : fallbackData;
+      const participantName = reg.student?.name ?? reg.externalParticipant?.name ?? "Peserta eksternal";
+      const crossKordaStudent = scope.role === "korda" && !!reg.student && reg.student.regency?.kordaId !== scope.kordaId;
 
       return {
         id: reg.id,
-        studentName: reg.student.name,
-        studentNis: reg.student.nis,
-        fullAddress: reg.student.fullAddress,
-        parrentPhone: reg.student.parrentPhone,
-        studentGender: reg.student.gender,
+        studentName: participantName,
+        studentNis: reg.student?.nis ?? null,
+        fullAddress: crossKordaStudent ? null : reg.student?.fullAddress ?? reg.externalParticipant?.address ?? null,
+        parrentPhone: crossKordaStudent ? null : reg.student?.parrentPhone ?? null,
+        studentGender: reg.student?.gender ?? normalizeExternalParticipantGender(reg.externalParticipant?.gender) ?? "-",
         kordaName: resolvedData.korda?.name || "-",
         dropPointName: resolvedData.dropPoint?.name || "-",
         busLabel: resolvedData.busLabel,

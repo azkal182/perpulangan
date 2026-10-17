@@ -64,9 +64,12 @@ async function getActiveEvent() {
   try {
     const result = await getEvent();
     if (result.success && result.data) {
-      const events = Array.isArray(result.data) ? result.data : [result.data];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return events.find((e: any) => e.status === "ACTIVE");
+      const events = (Array.isArray(result.data) ? result.data : [result.data]) as Array<{ id: string; name: string; status: string; endDate: Date | string }>;
+      const active = events.find((event) => event.status === "ACTIVE");
+      if (active) return active;
+      return events
+        .filter((event) => event.status === "COMPLETED")
+        .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
     }
     return null;
   } catch {

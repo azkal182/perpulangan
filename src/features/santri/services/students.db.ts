@@ -7,17 +7,13 @@ import {
   studentScopeWhere,
 } from "@/server/access-scope";
 
-/**
- * Get count of students without provinceId or regencyId
- */
-export async function getIncompleteRegionalCount() {
+/** Count students whose city/regency has not been mapped. */
+export async function getMissingCityCount() {
   try {
     const scope = await getRegionalAccessScope();
     const count = await prisma.student.count({
       where: andWhere(
-        {
-          OR: [{ provinceId: null }, { regencyId: null }],
-        } as StudentWhereInput,
+        { regencyId: null } as StudentWhereInput,
         studentScopeWhere(scope) as StudentWhereInput | undefined,
       ),
     });
@@ -25,8 +21,24 @@ export async function getIncompleteRegionalCount() {
   } catch (error) {
     logger.error(
       { err: error },
-      "students.db.getIncompleteRegionalCount failed",
+      "students.db.getMissingCityCount failed",
     );
+    return 0;
+  }
+}
+
+/** Count students whose regency exists but is not linked to a Korda. */
+export async function getUnlinkedKordaCount() {
+  try {
+    const scope = await getRegionalAccessScope();
+    return await prisma.student.count({
+      where: andWhere(
+        { regencyId: { not: null }, regency: { kordaId: null } } as StudentWhereInput,
+        studentScopeWhere(scope) as StudentWhereInput | undefined,
+      ),
+    });
+  } catch (error) {
+    logger.error({ err: error }, "students.db.getUnlinkedKordaCount failed");
     return 0;
   }
 }
@@ -38,7 +50,8 @@ export async function getStudentsPage(
   status?: string,
   korwilId?: string,
   kordaId?: string,
-  incompleteRegional?: boolean,
+  missingCity?: boolean,
+  unlinkedKorda?: boolean,
 ) {
   const scope = await getRegionalAccessScope();
 
@@ -52,30 +65,35 @@ export async function getStudentsPage(
   const safeSize = Math.min(Math.max(1, pageSize), 50);
   const skip = (safePage - 1) * safeSize;
 
-  const where: StudentWhereInput = {};
+  const filters: StudentWhereInput[] = [];
 
-  if (q) {
-    where.OR = [
+  if (query) {
+    filters.push({ OR: [
       { name: { contains: query, mode: "insensitive" } },
       { nis: { contains: query, mode: "insensitive" } },
-    ];
+    ] });
   }
 
   if (status && status !== "all") {
-    where.status = status === "active" ? true : false;
+    filters.push({ status: status === "active" });
   }
 
   if (korwil || korda) {
     const regencyWhere: Record<string, unknown> = {};
     if (korda) regencyWhere.kordaId = korda;
     if (korwil) regencyWhere.korda = { korwilId: korwil };
-    where.regency = regencyWhere as StudentWhereInput["regency"];
+    filters.push({ regency: regencyWhere as StudentWhereInput["regency"] });
   }
 
-  // Filter for incomplete regional data
-  if (incompleteRegional) {
-    where.OR = [...(where.OR || []), { provinceId: null }, { regencyId: null }];
+  if (missingCity) {
+    filters.push({ regencyId: null });
   }
+
+  if (unlinkedKorda) {
+    filters.push({ regencyId: { not: null }, regency: { kordaId: null } });
+  }
+
+  const where: StudentWhereInput = filters.length ? { AND: filters } : {};
 
   //   where.provinceId = 11;
 
@@ -103,6 +121,7 @@ export async function getStudentsPage(
           provinceId: true,
           regencyId: true,
           districtId: true,
+          sourceAddress: true,
           regency: {
             select: {
               name: true,

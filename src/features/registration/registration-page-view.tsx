@@ -5,10 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MultiParticipantRegistrationForm } from "./components/MultiParticipantRegistrationForm";
 import { RegistrationList } from "./components/RegistrationList";
-import {
-  deleteRegistration,
-  confirmKordaChange,
-} from "./actions/registration.action";
+import { deleteRegistration } from "./actions/registration.action";
 import type { Registration, Korda } from "./types";
 import type { DropPoint } from "@/features/drop-points/types";
 
@@ -41,15 +38,6 @@ export default function RegistrationPageView({
       window.location.reload();
     } else {
       alert(result.error || "Gagal menghapus");
-    }
-  }
-
-  async function handleConfirmKordaChange(id: string) {
-    const result = await confirmKordaChange(id);
-    if (result.success) {
-      window.location.reload();
-    } else {
-      alert(result.error || "Gagal konfirmasi");
     }
   }
 
@@ -92,7 +80,6 @@ export default function RegistrationPageView({
                 <RegistrationList
                   registrations={registrations}
                   onDelete={handleDelete}
-                  onConfirmKordaChange={handleConfirmKordaChange}
                 />
               </CardContent>
             </Card>

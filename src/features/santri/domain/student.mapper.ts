@@ -28,6 +28,38 @@ function normalizeName(name: string): string {
         .trim();
 }
 
+function mapSourceAddress(dto: StudentDTO) {
+  const pickRegion = (region?: { id: string | null; nama: string | null }) =>
+    region ? { id: region.id ?? null, nama: region.nama ?? null } : null;
+
+  return {
+    alamat_new: dto.alamat_new
+      ? {
+          provinsi: pickRegion(dto.alamat_new.provinsi),
+          kabupaten: pickRegion(dto.alamat_new.kabupaten),
+          kecamatan: pickRegion(dto.alamat_new.kecamatan),
+          desa: pickRegion(dto.alamat_new.desa),
+          rt: dto.alamat_new.rt ?? null,
+          rw: dto.alamat_new.rw ?? null,
+          kodepos: dto.alamat_new.kodepos ?? null,
+          alamat_lengkap: dto.alamat_new.alamat_lengkap ?? null,
+        }
+      : null,
+    alamat_legacy: dto.alamat
+      ? {
+          provinsi: pickRegion(dto.alamat.provinsi),
+          kabupaten: pickRegion(dto.alamat.kabupaten),
+          kecamatan: pickRegion(dto.alamat.kecamatan),
+          desa: dto.alamat.desa ?? null,
+          rt: dto.alamat.rt ?? null,
+          rw: dto.alamat.rw ?? null,
+          kodepos: dto.alamat.kodepos ?? null,
+          alamat_lengkap: dto.alamat.alamat_lengkap ?? null,
+        }
+      : null,
+  };
+}
+
 export function mapStudent(
   dto: StudentDTO,
   validationMap?: Map<string, { provinceId: number | null; regencyId: number | null }>,
@@ -73,5 +105,6 @@ export function mapStudent(
       ? Number(dto.alamat_new.desa.id)
       : undefined,
     fullAddress: dto.alamat_new?.alamat_lengkap || dto.alamat?.alamat_lengkap || "",
+    sourceAddress: mapSourceAddress(dto),
   };
 }

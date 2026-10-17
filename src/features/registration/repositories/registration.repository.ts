@@ -8,13 +8,28 @@ import {
 
 export type RegistrationCreateData = {
   eventId: string;
-  studentId: string;
+  studentId?: string | null;
+  externalParticipantId?: string | null;
+  journeys?: Array<{
+    direction: "OUTBOUND" | "RETURN";
+    destinationKordaId: string;
+    destinationKordaNameSnapshot: string;
+    dropPointId: string;
+    locationNameSnapshot: string;
+    travelDate?: Date | null;
+    tariffSnapshot: number;
+  }>;
+  registrarUserId?: string;
+  originKordaId?: string | null;
+  originKordaNameSnapshot?: string | null;
   // Optional outbound journey (for return-only registration)
   outboundKordaId: string | null;
   outboundDropPointId: string | null;
+  outboundDate?: Date | null;
   // Optional return journey (can be cancelled)
   returnKordaId: string | null;
   returnDropPointId: string | null;
+  returnDate?: Date | null;
   outboundPaid?: boolean;
   returnPaid?: boolean;
   kordaChanged?: boolean;
@@ -42,7 +57,6 @@ const registrationSelect = {
     select: {
       name: true,
       nis: true,
-      parrentPhone: true,
       regency: {
         select: {
           kordaId: true,
@@ -50,6 +64,7 @@ const registrationSelect = {
       },
     },
   },
+  externalParticipant: { select: { id: true, name: true, gender: true, address: true } },
   outboundKordaId: true,
   outboundKorda: { select: { id: true, name: true } },
   outboundDropPointId: true,
@@ -98,11 +113,20 @@ export const registrationRepository = {
         select: registrationSelect,
       });
 
+      const normalized = items.map((item) => item.student ? item : ({
+        ...item,
+        student: item.externalParticipant ? {
+          name: item.externalParticipant.name,
+          nis: null,
+          parrentPhone: null,
+          regency: { kordaId: null },
+        } : null,
+      }));
       logger.debug(
         { count: items.length, params },
         "registrationRepository.findMany success"
       );
-      return items as unknown as Registration[];
+      return normalized as unknown as Registration[];
     } catch (error) {
       logger.error(
         { err: error, params },
@@ -121,11 +145,20 @@ export const registrationRepository = {
         where: where ? { AND: [{ id }, where] } : { id },
         select: registrationSelect,
       });
+      const normalized = item && !item.student && item.externalParticipant ? {
+        ...item,
+        student: {
+          name: item.externalParticipant.name,
+          nis: null,
+          parrentPhone: null,
+          regency: { kordaId: null },
+        },
+      } : item;
       logger.debug(
         { id, found: !!item },
         "registrationRepository.findById success"
       );
-      return item as unknown as Registration;
+      return normalized as unknown as Registration;
     } catch (error) {
       logger.error({ err: error, id }, "registrationRepository.findById failed");
       throw error;
@@ -137,12 +170,22 @@ export const registrationRepository = {
       const result = await prisma.registration.create({
         data: {
           eventId: data.eventId,
-          studentId: data.studentId,
+          studentId: data.studentId ?? null,
+          externalParticipantId: data.externalParticipantId ?? null,
+          registrarUserId: data.registrarUserId,
+          originKordaId: data.originKordaId,
+          originKordaNameSnapshot: data.originKordaNameSnapshot,
+          journeys: data.journeys ? { create: data.journeys.map((journey) => {
+            const { dropPointId, ...snapshot } = journey;
+            return { ...snapshot, dropPointId };
+          }) } : undefined,
           outboundKordaId: data.outboundKordaId,
           outboundDropPointId: data.outboundDropPointId,
+          outboundDate: data.outboundDate,
           outboundPaid: data.outboundPaid ?? false,
           returnKordaId: data.returnKordaId,
           returnDropPointId: data.returnDropPointId,
+          returnDate: data.returnDate,
           returnPaid: data.returnPaid ?? false,
           kordaChanged: data.kordaChanged ?? false,
           kordaChangeConfirmed: data.kordaChangeConfirmed ?? false,

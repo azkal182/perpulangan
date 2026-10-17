@@ -1,0 +1,7 @@
+interface:
+  display_name: "Perpulangan Implementation"
+  short_description: "Maintain consistent phased perpulangan implementation"
+  default_prompt: "Use $perpulangan-implementation to work on the next approved phase and update the project progress tracker."
+
+policy:
+  allow_implicit_invocation: true

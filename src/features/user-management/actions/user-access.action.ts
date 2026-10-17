@@ -1,6 +1,7 @@
 "use server";
 
-import prisma from "@/lib/prisma";
+import { auth } from "@/server/auth";
+import prisma from "@/server/db/prisma";
 import { roleOptions, type AppRole } from "@/lib/auth-access";
 import {
   AccessDeniedError,
@@ -364,5 +365,85 @@ export async function updateUserRegionalAccess(input: {
       return fail(error.message);
     }
     return fail("Gagal memperbarui akses wilayah user");
+  }
+}
+
+/**
+ * Set a password for a managed user, creating the Better Auth credential
+ * account when the user was initially created without a password.
+ * Better Auth's admin setUserPassword endpoint only updates an existing
+ * credential account and silently succeeds when one does not exist.
+ */
+export async function setManagedUserPassword(input: {
+  userId: string;
+  newPassword: string;
+}): Promise<ActionResult<null>> {
+  try {
+    const scope = await getRegionalAccessScope();
+    requireKorwilOrAdmin(scope);
+
+    const target = await prisma.user.findUnique({
+      where: { id: input.userId },
+      select: {
+        id: true,
+        korwilpic: { select: { id: true } },
+        kordapic: { select: { korwilId: true } },
+      },
+    });
+
+    if (!target) return fail("User tidak ditemukan");
+    if (
+      scope.role === "korwil" &&
+      target.korwilpic?.id !== scope.korwilId &&
+      target.kordapic?.korwilId !== scope.korwilId
+    ) {
+      return fail("User berada di luar cakupan korwil Anda");
+    }
+
+    const authContext = await auth.$context;
+    const password = input.newPassword;
+    if (password.length < authContext.password.config.minPasswordLength) {
+      return fail(
+        `Password minimal ${authContext.password.config.minPasswordLength} karakter`,
+      );
+    }
+    if (password.length > authContext.password.config.maxPasswordLength) {
+      return fail(
+        `Password maksimal ${authContext.password.config.maxPasswordLength} karakter`,
+      );
+    }
+
+    const hashedPassword = await authContext.password.hash(password);
+    await prisma.$transaction(async (tx) => {
+      const credential = await tx.account.findFirst({
+        where: { userId: target.id, providerId: "credential" },
+        select: { id: true },
+      });
+
+      if (credential) {
+        await tx.account.update({
+          where: { id: credential.id },
+          data: { password: hashedPassword },
+        });
+        return;
+      }
+
+      await tx.account.create({
+        data: {
+          id: authContext.generateId({ model: "account" }) || crypto.randomUUID(),
+          accountId: target.id,
+          providerId: "credential",
+          userId: target.id,
+          password: hashedPassword,
+        },
+      });
+    });
+
+    return { success: true, data: null };
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return fail(error.message);
+    }
+    return fail("Gagal menyimpan password user");
   }
 }

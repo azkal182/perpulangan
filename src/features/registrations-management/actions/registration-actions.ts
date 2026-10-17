@@ -16,42 +16,8 @@ export async function updatePaymentStatusAction(params: {
   outboundPaid?: boolean;
   returnPaid?: boolean;
 }) {
-  try {
-    const scope = await getRegionalAccessScope();
-    const { registrationId, outboundPaid, returnPaid } = params;
-
-    const updateData: {
-      outboundPaid?: boolean;
-      returnPaid?: boolean;
-    } = {};
-
-    if (outboundPaid !== undefined) updateData.outboundPaid = outboundPaid;
-    if (returnPaid !== undefined) updateData.returnPaid = returnPaid;
-
-    const existing = await prisma.registration.findFirst({
-      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true },
-    });
-    if (!existing) {
-      return { success: false, error: "Registrasi tidak ditemukan" };
-    }
-
-    await prisma.registration.update({
-      where: { id: registrationId },
-      data: updateData,
-    });
-
-    revalidatePath("/daftar-peserta");
-    revalidatePath("/registrasi");
-
-    return { success: true };
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return { success: false, error: error.message };
-    }
-    console.error("Failed to update payment status:", error);
-    return { success: false, error: "Gagal mengupdate status pembayaran" };
-  }
+  void params;
+  return { success: false, error: "Status lunas tidak lagi dapat diubah langsung. Catat nominal transaksi di halaman Pembayaran." };
 }
 
 // Cancel registration
@@ -197,40 +163,6 @@ export async function refundPaymentAction(params: {
   refundOutbound?: boolean;
   refundReturn?: boolean;
 }) {
-  try {
-    const scope = await getRegionalAccessScope();
-    const { registrationId, refundOutbound, refundReturn } = params;
-
-    const updateData: {
-      outboundPaid?: boolean;
-      returnPaid?: boolean;
-    } = {};
-
-    if (refundOutbound) updateData.outboundPaid = false;
-    if (refundReturn) updateData.returnPaid = false;
-
-    const existing = await prisma.registration.findFirst({
-      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true },
-    });
-    if (!existing) {
-      return { success: false, error: "Registrasi tidak ditemukan" };
-    }
-
-    await prisma.registration.update({
-      where: { id: registrationId },
-      data: updateData,
-    });
-
-    revalidatePath("/daftar-peserta");
-    revalidatePath("/registrasi");
-
-    return { success: true };
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return { success: false, error: error.message };
-    }
-    console.error("Failed to refund payment:", error);
-    return { success: false, error: "Gagal melakukan refund" };
-  }
+  void params;
+  return { success: false, error: "Refund harus dicatat sebagai transaksi dengan nominal, alasan, metode, dan riwayat di halaman Pembayaran." };
 }

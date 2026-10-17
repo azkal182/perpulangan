@@ -186,6 +186,7 @@ export function registrationScopeWhere(
     if (!scope.korwilId) return { id: "__NO_ACCESS__" };
     return {
       OR: [
+        { journeys: { some: { destinationKorda: { korwilId: scope.korwilId } } } },
         { outboundKorda: { korwilId: scope.korwilId } },
         { returnKorda: { korwilId: scope.korwilId } },
       ],
@@ -193,7 +194,11 @@ export function registrationScopeWhere(
   }
   if (!scope.kordaId) return { id: "__NO_ACCESS__" };
   return {
-    OR: [{ outboundKordaId: scope.kordaId }, { returnKordaId: scope.kordaId }],
+    OR: [
+      { journeys: { some: { destinationKordaId: scope.kordaId } } },
+      { outboundKordaId: scope.kordaId },
+      { returnKordaId: scope.kordaId },
+    ],
   };
 }
 

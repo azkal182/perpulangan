@@ -43,10 +43,11 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
   const [selectedKorwilId, setSelectedKorwilId] = useState("");
   const [selectedKordaIds, setSelectedKordaIds] = useState<string[]>([]);
   const [label, setLabel] = useState("");
-  const [capacity, setCapacity] = useState(0);
+  const [capacity, setCapacity] = useState(1);
   
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -66,7 +67,7 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
       setSelectedKorwilId("");
       setSelectedKordaIds([]);
       setLabel("");
-      setCapacity(0);
+      setCapacity(1);
     }
   }, [initialData, eventId, open]);
 
@@ -99,15 +100,10 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setFormError(null);
     
     if (!selectedEventId || selectedKordaIds.length === 0 || !label.trim()) {
-      alert("Mohon lengkapi semua field wajib");
-      return;
-    }
-
-    const selectedEvent = events.find(e => e.id === selectedEventId);
-    if (!selectedEvent?.trackerEventId && !initialData) {
-      alert("Event belum di-sync ke tracker API. Silakan sync event terlebih dahulu.");
+      setFormError("Mohon lengkapi semua field wajib");
       return;
     }
 
@@ -133,14 +129,11 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
       onSuccess();
       onOpenChange(false);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Gagal menyimpan bus");
+      setFormError(error instanceof Error ? error.message : "Gagal menyimpan bus");
     } finally {
       setSubmitting(false);
     }
   }
-
-  const selectedEvent = events.find(e => e.id === selectedEventId);
-  const isSynced = selectedEvent?.trackerEventId != null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,7 +141,7 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
         <DialogHeader>
           <DialogTitle>{initialData ? "Edit Bus" : "Tambah Bus"}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Perbarui data bus" : "Buat bus baru dengan tracker GPS"}
+            {initialData ? "Perbarui data bus dan penempatan kordanya" : "Buat armada untuk perjalanan event"}
           </DialogDescription>
         </DialogHeader>
 
@@ -158,6 +151,11 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {formError && (
+              <Alert variant="destructive" role="alert">
+                <AlertDescription>{formError}</AlertDescription>
+              </Alert>
+            )}
             {/* Event */}
             <div className="space-y-2">
               <Label>Event *</Label>
@@ -172,19 +170,11 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
                 <SelectContent>
                   {events.map((event) => (
                     <SelectItem key={event.id} value={event.id}>
-                      {event.name}
-                      {event.trackerEventId && " ✓"}
+                    {event.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {selectedEventId && !isSynced && (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    Event ini belum di-sync ke tracker API. Sync event terlebih dahulu di halaman Master → Events.
-                  </AlertDescription>
-                </Alert>
-              )}
             </div>
 
             {/* Korwil */}
@@ -258,9 +248,7 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
                 onChange={(e) => setLabel(e.target.value)}
                 required
               />
-              <p className="text-xs text-muted-foreground">
-                Nama bus yang akan muncul di tracker
-              </p>
+              <p className="text-xs text-muted-foreground">Nama armada yang tampil pada daftar operasional dan manifest.</p>
             </div>
 
             {/* Kapasitas */}
@@ -269,13 +257,12 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
               <Input
                 id="capacity"
                 type="number"
-                min={0}
-                placeholder="0 = tidak dibatasi"
+                min={1}
                 value={capacity}
                 onChange={(e) => setCapacity(Number(e.target.value))}
               />
               <p className="text-xs text-muted-foreground">
-                Jumlah maksimal penumpang. Isi 0 jika tidak dibatasi.
+                Jumlah kursi tersedia. Kapasitas adalah batas maksimal penumpang.
               </p>
             </div>
 

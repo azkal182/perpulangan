@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, Loader2, LogOut } from "lucide-react";
-import { signOut, useSession } from "@/client/auth";
+import { signOut } from "@/client/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Breadcrumb,
@@ -48,16 +48,20 @@ function buildBreadcrumbs(pathname: string): BreadcrumbEntry[] {
   }));
 }
 
-export function MainHeader() {
+type HeaderUser = { name: string; email: string; image: string };
+
+export function MainHeader({ user }: { user: HeaderUser }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [isHydrated, setIsHydrated] = React.useState(false);
+
+  React.useEffect(() => setIsHydrated(true), []);
 
   const breadcrumbs = buildBreadcrumbs(pathname);
-  const userName = session?.user?.name || "User";
-  const userEmail = session?.user?.email || "-";
-  const userImage = session?.user?.image || "";
+  const userName = isHydrated ? user.name : "User";
+  const userEmail = isHydrated ? user.email : "-";
+  const userImage = isHydrated ? user.image : "";
   const userInitial = userName.charAt(0).toUpperCase() || "U";
 
   const handleLogout = async () => {

@@ -33,17 +33,6 @@ function normalizeStatusParam(v: string): StatusParam {
   return "all";
 }
 
-function useDebouncedValue<T>(value: T, delay = 400) {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(value), delay);
-    return () => window.clearTimeout(t);
-  }, [value, delay]);
-
-  return debounced;
-}
-
 export function SantriToolbarClient({
   lastSyncAt,
   lastStatus,
@@ -51,8 +40,10 @@ export function SantriToolbarClient({
   initialStatus,
   initialKorwilId,
   initialKordaId,
-  incompleteCount = 0,
-  initialIncompleteRegional = false,
+  missingCityCount = 0,
+  unlinkedKordaCount = 0,
+  initialMissingCity = false,
+  initialUnlinkedKorda = false,
 }: {
   lastSyncAt: string | null; // ISO
   lastStatus: string | null;
@@ -60,8 +51,10 @@ export function SantriToolbarClient({
   initialStatus: string; // dari URL
   initialKorwilId: string;
   initialKordaId: string;
-  incompleteCount?: number;
-  initialIncompleteRegional?: boolean;
+  missingCityCount?: number;
+  unlinkedKordaCount?: number;
+  initialMissingCity?: boolean;
+  initialUnlinkedKorda?: boolean;
 }) {
   const [exportingPDF, setExportingPDF] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
@@ -70,13 +63,16 @@ export function SantriToolbarClient({
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+  const searchParamsString = sp.toString();
 
   // URL values
   const urlQ = (sp.get("q") ?? "").trim();
   const urlStatus = normalizeStatusParam((sp.get("status") ?? "all").trim());
   const urlKorwilId = (sp.get("korwilId") ?? "all").trim() || "all";
   const urlKordaId = (sp.get("kordaId") ?? "all").trim() || "all";
-  const urlIncompleteRegional = sp.get("incompleteRegional") === "true";
+  const urlMissingCity = sp.get("missingCity") === "true";
+  const urlUnlinkedKorda = sp.get("unlinkedKorda") === "true";
+  const lastCommittedQueryRef = useRef(urlQ);
 
   // UI state
   const [q, setQ] = useState(initialQuery);
@@ -89,7 +85,8 @@ export function SantriToolbarClient({
   const [kordaId, setKordaId] = useState(
     initialKordaId?.trim() ? initialKordaId.trim() : "all",
   );
-  const [incompleteRegional, setIncompleteRegional] = useState(initialIncompleteRegional);
+  const [missingCity, setMissingCity] = useState(initialMissingCity);
+  const [unlinkedKorda, setUnlinkedKorda] = useState(initialUnlinkedKorda);
   const kordaIdRef = useRef(kordaId);
 
   const [korwilOptions, setKorwilOptions] = useState<Korwil[]>([]);
@@ -98,11 +95,19 @@ export function SantriToolbarClient({
   const [loadingKorda, setLoadingKorda] = useState(false);
 
   // debounce hanya untuk search
-  const debouncedQ = useDebouncedValue(q, 400);
+  const [debouncedQ, setDebouncedQ] = useState(q);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQ(q), 400);
+    return () => window.clearTimeout(timer);
+  }, [q]);
 
   // Sync URL -> UI (anti loop)
   useEffect(() => {
-    setQ((prev) => (prev === urlQ ? prev : urlQ));
+    if (urlQ === lastCommittedQueryRef.current) return;
+    lastCommittedQueryRef.current = urlQ;
+    setQ(urlQ);
+    setDebouncedQ(urlQ);
   }, [urlQ]);
 
   useEffect(() => {
@@ -122,8 +127,12 @@ export function SantriToolbarClient({
   }, [kordaId]);
 
   useEffect(() => {
-    setIncompleteRegional((prev) => (prev === urlIncompleteRegional ? prev : urlIncompleteRegional));
-  }, [urlIncompleteRegional]);
+    setMissingCity((prev) => (prev === urlMissingCity ? prev : urlMissingCity));
+  }, [urlMissingCity]);
+
+  useEffect(() => {
+    setUnlinkedKorda((prev) => (prev === urlUnlinkedKorda ? prev : urlUnlinkedKorda));
+  }, [urlUnlinkedKorda]);
 
   useEffect(() => {
     if (korwilId !== "all") return;
@@ -201,7 +210,8 @@ export function SantriToolbarClient({
     const nextStatus = status;
     const nextKorwilId = korwilId;
     const nextKordaId = korwilId === "all" ? "all" : kordaId;
-    const nextIncompleteRegional = incompleteRegional;
+    const nextMissingCity = missingCity;
+    const nextUnlinkedKorda = unlinkedKorda;
 
     // jika sama persis, skip
     if (
@@ -209,11 +219,12 @@ export function SantriToolbarClient({
       nextStatus === urlStatus &&
       nextKorwilId === urlKorwilId &&
       nextKordaId === urlKordaId &&
-      nextIncompleteRegional === urlIncompleteRegional
+      nextMissingCity === urlMissingCity &&
+      nextUnlinkedKorda === urlUnlinkedKorda
     )
       return;
 
-    const params = new URLSearchParams(sp.toString());
+    const params = new URLSearchParams(searchParamsString);
 
     // reset page saat filter berubah
     params.delete("page");
@@ -230,11 +241,15 @@ export function SantriToolbarClient({
     if (nextKordaId !== "all") params.set("kordaId", nextKordaId);
     else params.delete("kordaId");
 
-    if (nextIncompleteRegional) params.set("incompleteRegional", "true");
-    else params.delete("incompleteRegional");
+    if (nextMissingCity) params.set("missingCity", "true");
+    else params.delete("missingCity");
+
+    if (nextUnlinkedKorda) params.set("unlinkedKorda", "true");
+    else params.delete("unlinkedKorda");
 
     const qs = params.toString();
     const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+    lastCommittedQueryRef.current = nextQ;
 
     router.replace(nextUrl, { scroll: false });
   }, [
@@ -242,15 +257,17 @@ export function SantriToolbarClient({
     status,
     korwilId,
     kordaId,
-    incompleteRegional,
+    missingCity,
+    unlinkedKorda,
     pathname,
     router,
-    sp,
+    searchParamsString,
     urlQ,
     urlStatus,
     urlKorwilId,
     urlKordaId,
-    urlIncompleteRegional,
+    urlMissingCity,
+    urlUnlinkedKorda,
   ]);
 
   const lastSyncLabel = (() => {
@@ -314,12 +331,27 @@ export function SantriToolbarClient({
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
           <Input
-            className="pl-9"
+            className="pl-9 pr-10"
             placeholder="Cari nama atau NIS..."
             aria-label="Cari nama atau NIS"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+          {q && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Hapus pencarian"
+              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+              onClick={() => {
+                setQ("");
+                setDebouncedQ("");
+              }}
+            >
+              <XIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* Filters and Actions Row */}
@@ -391,21 +423,36 @@ export function SantriToolbarClient({
               </SelectContent>
             </Select>
 
-            {/* INCOMPLETE REGIONAL FILTER */}
-            {incompleteCount > 0 && (
+            {/* MISSING CITY FILTER */}
+            {missingCityCount > 0 && (
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="incompleteRegional"
-                  checked={incompleteRegional}
-                  onChange={(e) => setIncompleteRegional(e.target.checked)}
+                  id="missingCity"
+                  checked={missingCity}
+                  onChange={(e) => setMissingCity(e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 />
                 <label
-                  htmlFor="incompleteRegional"
+                  htmlFor="missingCity"
                   className="text-sm font-medium text-foreground cursor-pointer"
                 >
-                  Data Regional Tidak Lengkap ({incompleteCount})
+                  Kota/kabupaten belum ada ({missingCityCount})
+                </label>
+              </div>
+            )}
+
+            {unlinkedKordaCount > 0 && (
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="unlinkedKorda"
+                  checked={unlinkedKorda}
+                  onChange={(e) => setUnlinkedKorda(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="unlinkedKorda" className="cursor-pointer text-sm font-medium text-foreground">
+                  Kabupaten/kota belum terhubung ke Korda ({unlinkedKordaCount})
                 </label>
               </div>
             )}

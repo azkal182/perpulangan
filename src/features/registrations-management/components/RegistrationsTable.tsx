@@ -122,12 +122,10 @@ export function RegistrationsTable({
                               Bus: {reg.outboundBus.label}
                             </div>
                           )}
-                          {reg.outboundPaid && (
-                            <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700">
-                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                              Bayar
-                            </Badge>
-                          )}
+                          {reg.outboundPaymentStatus && <Badge variant="outline" className={`mt-1 text-xs ${reg.outboundPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
+                            {reg.outboundPaymentStatus === "PAID" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+                            {reg.outboundPaymentStatus === "PAID" ? "Sudah bayar" : reg.outboundPaymentStatus === "PARTIAL" ? "Partial" : reg.outboundPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
+                          </Badge>}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -145,12 +143,10 @@ export function RegistrationsTable({
                               Bus: {reg.returnBus.label}
                             </div>
                           )}
-                          {reg.returnPaid && (
-                            <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700">
-                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                              Bayar
-                            </Badge>
-                          )}
+                          {reg.returnPaymentStatus && <Badge variant="outline" className={`mt-1 text-xs ${reg.returnPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
+                            {reg.returnPaymentStatus === "PAID" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+                            {reg.returnPaymentStatus === "PAID" ? "Sudah bayar" : reg.returnPaymentStatus === "PARTIAL" ? "Partial" : reg.returnPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
+                          </Badge>}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -224,11 +220,9 @@ export function RegistrationsTable({
                         {reg.outboundBus?.label && (
                           <div className="text-xs">Bus: {reg.outboundBus.label}</div>
                         )}
-                        {reg.outboundPaid && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
-                            Bayar
-                          </Badge>
-                        )}
+                        {reg.outboundPaymentStatus && <Badge variant="outline" className={`text-xs ${reg.outboundPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
+                          {reg.outboundPaymentStatus === "PAID" ? "Sudah bayar" : reg.outboundPaymentStatus === "PARTIAL" ? "Partial" : reg.outboundPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
+                        </Badge>}
                       </div>
                     ) : (
                       <div className="text-muted-foreground">-</div>
@@ -244,11 +238,9 @@ export function RegistrationsTable({
                         {reg.returnBus?.label && (
                           <div className="text-xs">Bus: {reg.returnBus.label}</div>
                         )}
-                        {reg.returnPaid && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
-                            Bayar
-                          </Badge>
-                        )}
+                        {reg.returnPaymentStatus && <Badge variant="outline" className={`text-xs ${reg.returnPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
+                          {reg.returnPaymentStatus === "PAID" ? "Sudah bayar" : reg.returnPaymentStatus === "PARTIAL" ? "Partial" : reg.returnPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
+                        </Badge>}
                       </div>
                     ) : (
                       <div className="text-muted-foreground">-</div>

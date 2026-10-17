@@ -15,7 +15,8 @@ export type Student = {
 
 export type RegistrationFormData = {
   eventId: Id;
-  studentId: Id;
+  studentId: Id | null;
+  externalParticipantId?: Id | null;
   // Optional outbound journey (for return-only registration)
   outboundKordaId?: Id | null;
   outboundDropPointId?: Id | null;

@@ -48,6 +48,32 @@ type PreviewSummary = {
 
 type Phase = "idle" | "loading" | "preview" | "importing" | "done";
 
+const MAX_IMPORT_ACTION_PAYLOAD_BYTES = 512 * 1024;
+
+function splitImportRowsByPayload<T>(rows: T[]): T[][] {
+  const encoder = new TextEncoder();
+  const batches: T[][] = [];
+  let batch: T[] = [];
+  let batchBytes = 2;
+
+  for (const row of rows) {
+    const rowBytes = encoder.encode(JSON.stringify(row)).byteLength + 1;
+    if (rowBytes > MAX_IMPORT_ACTION_PAYLOAD_BYTES) {
+      throw new Error("Satu data santri melebihi batas ukuran import. Periksa kembali sumber alamatnya.");
+    }
+    if (batch.length > 0 && batchBytes + rowBytes > MAX_IMPORT_ACTION_PAYLOAD_BYTES) {
+      batches.push(batch);
+      batch = [];
+      batchBytes = 2;
+    }
+    batch.push(row);
+    batchBytes += rowBytes;
+  }
+
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function analyzeStudents(students: Student[]): PreviewSummary {
@@ -438,7 +464,37 @@ export function ImportPreviewPage() {
     setPhase("importing");
     try {
       const toImport = students.filter((s): s is typeof s & { nis: string } => s.nis != null);
-      const result = await bulkUpsertStudents(toImport);
+      const batches = splitImportRowsByPayload(toImport);
+      const result: BulkImportResult = {
+        total: 0,
+        processed: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        errors: [],
+        skippedRows: [],
+      };
+
+      let offset = 0;
+      for (const batch of batches) {
+        const batchResult = await bulkUpsertStudents(batch);
+        result.total += batchResult.total;
+        result.processed += batchResult.processed;
+        result.inserted += batchResult.inserted;
+        result.updated += batchResult.updated;
+        result.skipped += batchResult.skipped;
+        result.failed += batchResult.failed;
+        result.errors.push(...batchResult.errors.map((item) => ({
+          ...item,
+          index: item.index >= 0 ? item.index + offset : item.index,
+        })));
+        result.skippedRows.push(...batchResult.skippedRows.map((item) => ({
+          ...item,
+          index: item.index + offset,
+        })));
+        offset += batch.length;
+      }
       setImportResult(result);
       setPhase("done");
     } catch (e) {

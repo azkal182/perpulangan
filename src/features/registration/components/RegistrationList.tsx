@@ -11,21 +11,19 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, Trash2, Ban } from "lucide-react";
+import { AlertCircle, Trash2, Ban } from "lucide-react";
 import type { Registration } from "../types";
 import { CancelRegistrationDialog } from "./CancelRegistrationDialog";
 
 type Props = {
   registrations: Registration[];
   onDelete: (id: string) => void;
-  onConfirmKordaChange: (id: string) => void;
   loading?: boolean;
 };
 
 export function RegistrationList({
   registrations,
   onDelete,
-  onConfirmKordaChange,
   loading = false,
 }: Props) {
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
@@ -69,7 +67,6 @@ export function RegistrationList({
         <TableBody>
           {registrations.map((reg) => {
             const kordaChanged = reg.kordaChanged;
-            const kordaChangeNeedsConfirmation = kordaChanged && !reg.kordaChangeConfirmed;
             const outboundPrice = reg.outboundDropPoint?.price || 0;
             const returnPrice = reg.returnDropPoint?.price || 0;
             const totalPrice = outboundPrice + returnPrice;
@@ -79,7 +76,7 @@ export function RegistrationList({
                 <TableCell>
                   <div>
                     <div className="font-medium">{reg.student.name}</div>
-                    <div className="text-sm text-muted-foreground">{reg.student.nis}</div>
+                    <div className="text-sm text-muted-foreground">{reg.studentId ? reg.student.nis || "-" : "Peserta eksternal"}</div>
                   </div>
                 </TableCell>
 
@@ -90,6 +87,7 @@ export function RegistrationList({
                         <AlertCircle className="h-4 w-4 text-orange-500" />
                       )}
                       <span className="font-medium">{reg.outboundKorda?.name || reg.returnKorda?.name || '-'}</span>
+                      {kordaChanged && <Badge variant="outline" className="text-xs">Lintas Korda</Badge>}
                     </div>
                     {reg.outboundDropPoint ? (
                       <div className="text-sm text-muted-foreground">
@@ -132,17 +130,6 @@ export function RegistrationList({
 
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    {kordaChangeNeedsConfirmation && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onConfirmKordaChange(reg.id)}
-                        disabled={loading}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Konfirmasi Korda
-                      </Button>
-                    )}
                     <Button
                       size="sm"
                       variant="ghost"

@@ -8,6 +8,7 @@ import {
   andWhere,
   ensureKordaInScope,
   getRegionalAccessScope,
+  requireAdmin,
   studentScopeWhere,
 } from "@/server/access-scope";
 
@@ -49,6 +50,8 @@ export async function updateStudent(input: UpdateStudentInput) {
   try {
     const scope = await getRegionalAccessScope();
     const { id, ...data } = input;
+    const regionalFieldsProvided = ["provinceId", "regencyId", "districtId", "villageId"].some((key) => Object.hasOwn(input, key));
+    if (regionalFieldsProvided) requireAdmin(scope);
 
     const existing = await prisma.student.findFirst({
       where: andWhere({ id }, studentScopeWhere(scope)),
@@ -61,25 +64,41 @@ export async function updateStudent(input: UpdateStudentInput) {
     if (data.regencyId) {
       const regency = await prisma.regency.findUnique({
         where: { id: data.regencyId },
-        select: { kordaId: true },
+        select: { kordaId: true, provinceId: true },
       });
       if (!regency) {
         return { success: false, error: "Regency tidak ditemukan" };
       }
+      if (!data.provinceId || data.provinceId !== regency.provinceId) {
+        return { success: false, error: "Kabupaten/kota tidak sesuai dengan provinsi yang dipilih" };
+      }
       if (regency.kordaId) {
         await ensureKordaInScope(scope, regency.kordaId);
-      } else if (scope.role !== "admin") {
+      } else {
         return {
           success: false,
-          error: "Regency belum terhubung ke korda yang dapat diakses",
+          error: "Kabupaten/kota belum dipetakan ke Korda di Master",
         };
       }
+    }
+
+    if (regionalFieldsProvided && (!data.provinceId || !data.regencyId)) {
+      return { success: false, error: "Provinsi dan kabupaten/kota wajib dipilih" };
+    }
+    if (data.districtId) {
+      const district = await prisma.district.findUnique({ where: { id: data.districtId }, select: { regencyId: true } });
+      if (!district || district.regencyId !== data.regencyId) return { success: false, error: "Kecamatan tidak sesuai dengan kabupaten/kota yang dipilih" };
+    }
+    if (data.villageId) {
+      const village = await prisma.village.findUnique({ where: { id: data.villageId }, select: { districtId: true } });
+      if (!village || village.districtId !== data.districtId) return { success: false, error: "Desa/kelurahan tidak sesuai dengan kecamatan yang dipilih" };
     }
 
     await prisma.student.update({
       where: { id },
       data: {
         ...data,
+        ...(regionalFieldsProvided ? { districtId: data.districtId ?? null, villageId: data.villageId ?? null, regionalStatus: "VERIFIED", regionalReviewNote: null, regionalReviewedAt: new Date(), regionalReviewedByUserId: scope.userId } : {}),
       },
     });
 

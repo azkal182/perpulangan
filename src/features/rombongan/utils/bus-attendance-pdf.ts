@@ -35,11 +35,11 @@ function getJourneyLabel(journey: JourneyType): string {
 }
 
 function formatGeneratedAt(date: Date): string {
-  return date.toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Asia/Jakarta",
+  }).format(date);
 }
 
 function buildColumnStyles() {
@@ -111,6 +111,7 @@ export function buildBusAttendancePdf({
     detailRight.push(
       `Peserta: ${bus.passengers.length}${bus.busCapacity > 0 ? ` / ${bus.busCapacity}` : ""}`,
     );
+    detailRight.push(`Data diperbarui: ${formatGeneratedAt(bus.dataUpdatedAt)}`);
     detailRight.push(`Dicetak: ${generatedAtLabel}`);
 
     detailRight.forEach((line, index) => {
