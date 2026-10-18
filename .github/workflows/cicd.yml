@@ -19,15 +19,15 @@ jobs:
         id: get_project_info
         run: |
           if command -v jq &> /dev/null; then
-            echo "project_name=$(jq -r .name package.json)" >> $GITHUB_OUTPUT
-            echo "project_version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
+            echo "project_name=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
+            echo "project_version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
           else
-            echo "project_name=perpulangan" >> $GITHUB_OUTPUT
-            echo "project_version=v1.0.0" >> $GITHUB_OUTPUT
+            echo "project_name=perpulangan" >> "$GITHUB_OUTPUT"
+            echo "project_version=v1.0.0" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set Timestamp
-        run: echo "TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_ENV
+        run: echo "TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> "$GITHUB_ENV"
 
       - name: Notify Start
         run: |
@@ -88,27 +88,29 @@ jobs:
             ${{ runner.os }}-nextjs-build-
 
       - name: Create .env file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL || 'warn' }}
+          NEXT_PUBLIC_LOG_LEVEL: ${{ secrets.NEXT_PUBLIC_LOG_LEVEL || 'error' }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_API_KEY: ${{ secrets.NEXT_PUBLIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PAYMENT_EVIDENCE_BUCKET: ${{ secrets.SUPABASE_PAYMENT_EVIDENCE_BUCKET || 'payment-evidence' }}
+          TRACK_API_URL: ${{ secrets.TRACK_API_URL }}
+          TRACK_ADMIN_API_KEY: ${{ secrets.TRACK_ADMIN_API_KEY }}
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.start_notify.outputs.project_version || '1.0.0' }}
         run: |
-          rm -f .env
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
-          echo "BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}" >> .env
-          echo "BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}" >> .env
-
-          echo "LOG_LEVEL=${{ secrets.LOG_LEVEL || 'warn' }}" >> .env
-          echo "NEXT_PUBLIC_LOG_LEVEL=${{ secrets.NEXT_PUBLIC_LOG_LEVEL || 'error' }}" >> .env
-
-          echo "NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" >> .env
-          echo "NEXT_PUBLIC_API_KEY=${{ secrets.NEXT_PUBLIC_API_KEY }}" >> .env
-
-          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
-          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
-          echo "SUPABASE_PAYMENT_EVIDENCE_BUCKET=${{ secrets.SUPABASE_PAYMENT_EVIDENCE_BUCKET || 'payment-evidence' }}" >> .env
-
-          echo "TRACK_API_URL=${{ secrets.TRACK_API_URL }}" >> .env
-          echo "TRACK_ADMIN_API_KEY=${{ secrets.TRACK_ADMIN_API_KEY }}" >> .env
-
-          echo "HUSKY=0" >> .env
-          echo "NEXT_PUBLIC_APP_VERSION=${{ needs.start_notify.outputs.project_version || '1.0.0' }}" >> .env
+          umask 077
+          : > .env
+          for name in DATABASE_URL BETTER_AUTH_SECRET BETTER_AUTH_URL LOG_LEVEL NEXT_PUBLIC_LOG_LEVEL \
+            NEXT_PUBLIC_API_BASE_URL NEXT_PUBLIC_API_KEY SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY \
+            SUPABASE_PAYMENT_EVIDENCE_BUCKET TRACK_API_URL TRACK_ADMIN_API_KEY NEXT_PUBLIC_APP_VERSION; do
+            printf '%s=%s\n' "$name" "${!name}" >> .env
+          done
+          printf '%s\n' 'HUSKY=0' >> .env
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -118,18 +120,18 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm build
 
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm prisma migrate deploy
+
       - name: Package artifacts
         run: |
-          tar -czf build-files.tar.gz \
-            .next/ \
-            public/ \
-            package.json \
-            pnpm-lock.yaml \
-            next.config.* \
-            tailwind.config.* \
-            tsconfig.json \
-            prisma/ \
-            .env.example || true
+          mkdir -p .next/standalone/public .next/standalone/.next/static
+          cp -a public/. .next/standalone/public/
+          cp -a .next/static/. .next/standalone/.next/static/
+          cp ecosystem.config.cjs .next/standalone/ecosystem.config.cjs
+          tar -czf build-files.tar.gz -C .next/standalone .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -141,6 +143,14 @@ jobs:
   deploy:
     needs: [build, start_notify]
     runs-on: ubuntu-latest
+    concurrency:
+      group: perpulangan-production-deploy
+      cancel-in-progress: false
+    env:
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_IP: ${{ secrets.VPS_IP }}
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_attempt }}
+      APP_PORT: ${{ secrets.APP_PORT || '3000' }}
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -156,97 +166,118 @@ jobs:
       - name: Add known hosts entry
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts
+          ssh-keyscan "$VPS_IP" >> ~/.ssh/known_hosts
 
-      - name: Clone or pull on VPS
+      - name: Create runtime environment file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL || 'warn' }}
+          NEXT_PUBLIC_LOG_LEVEL: ${{ secrets.NEXT_PUBLIC_LOG_LEVEL || 'error' }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_API_KEY: ${{ secrets.NEXT_PUBLIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PAYMENT_EVIDENCE_BUCKET: ${{ secrets.SUPABASE_PAYMENT_EVIDENCE_BUCKET || 'payment-evidence' }}
+          TRACK_API_URL: ${{ secrets.TRACK_API_URL }}
+          TRACK_ADMIN_API_KEY: ${{ secrets.TRACK_ADMIN_API_KEY }}
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.start_notify.outputs.project_version || '1.0.0' }}
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }} << EOF
-          set -e
-          APP_DIR="/home/${{ secrets.VPS_USER }}/project/perpulangan"
+          umask 077
+          : > runtime.env
+          for name in DATABASE_URL BETTER_AUTH_SECRET BETTER_AUTH_URL LOG_LEVEL NEXT_PUBLIC_LOG_LEVEL \
+            NEXT_PUBLIC_API_BASE_URL NEXT_PUBLIC_API_KEY SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY \
+            SUPABASE_PAYMENT_EVIDENCE_BUCKET TRACK_API_URL TRACK_ADMIN_API_KEY NEXT_PUBLIC_APP_VERSION; do
+            printf '%s=%s\n' "$name" "${!name}" >> runtime.env
+          done
+          printf '%s\n' 'HUSKY=0' >> runtime.env
 
-          if [ ! -d "\$APP_DIR/.git" ]; then
-            echo "Directory not found or not a git repo, cloning..."
-            rm -rf "\$APP_DIR"
-            GIT_URL="https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
-            git clone "\$GIT_URL" "\$APP_DIR"
-            cd "\$APP_DIR"
-            git checkout main
-          else
-            echo "Directory exists, pulling latest code..."
-            cd "\$APP_DIR"
-            git pull origin main
-          fi
-          EOF
-
-      - name: Deploy to VPS
+      - name: Prepare release directory
         run: |
-          rsync -avz build-files.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }}:/home/${{ secrets.VPS_USER }}/project/perpulangan/
+          APP_DIR="/home/$VPS_USER/project/perpulangan"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_IP" \
+            "mkdir -p '$APP_DIR/releases/$RELEASE_ID' '$APP_DIR/incoming/$RELEASE_ID'"
+          rsync -avz build-files.tar.gz runtime.env \
+            "$VPS_USER@$VPS_IP:$APP_DIR/incoming/$RELEASE_ID/"
 
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }} << 'EOF'
-          set -e
-          APP_DIR="/home/${{ secrets.VPS_USER }}/project/perpulangan"
-          cd "$APP_DIR"
+      - name: Install release and activate with rollback
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_IP" \
+            "APP_DIR='/home/$VPS_USER/project/perpulangan' RELEASE_ID='$RELEASE_ID' APP_PORT='$APP_PORT' bash -s" <<'EOF'
+          set -Eeuo pipefail
 
-          # cleanup old build files
-          rm -rf .next/ public/ package.json pnpm-lock.yaml next.config.* tailwind.config.* tsconfig.json prisma/ .env.example || true
+          RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
+          INCOMING_DIR="$APP_DIR/incoming/$RELEASE_ID"
+          APP_NAME="perpulangan"
 
-          # extract artifact
-          tar -xzf build-files.tar.gz
-          rm -f build-files.tar.gz
+          mkdir -p "$RELEASE_DIR"
+          tar -xzf "$INCOMING_DIR/build-files.tar.gz" -C "$RELEASE_DIR"
+          install -m 600 "$INCOMING_DIR/runtime.env" "$RELEASE_DIR/.env"
 
-          # recreate .env
-          rm -f .env
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
-          echo "BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}" >> .env
-          echo "BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}" >> .env
-
-          echo "LOG_LEVEL=${{ secrets.LOG_LEVEL || 'warn' }}" >> .env
-          echo "NEXT_PUBLIC_LOG_LEVEL=${{ secrets.NEXT_PUBLIC_LOG_LEVEL || 'error' }}" >> .env
-
-          echo "NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" >> .env
-          echo "NEXT_PUBLIC_API_KEY=${{ secrets.NEXT_PUBLIC_API_KEY }}" >> .env
-
-          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
-          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
-          echo "SUPABASE_PAYMENT_EVIDENCE_BUCKET=${{ secrets.SUPABASE_PAYMENT_EVIDENCE_BUCKET || 'payment-evidence' }}" >> .env
-
-          echo "TRACK_API_URL=${{ secrets.TRACK_API_URL }}" >> .env
-          echo "TRACK_ADMIN_API_KEY=${{ secrets.TRACK_ADMIN_API_KEY }}" >> .env
-
-          echo "HUSKY=0" >> .env
-          echo "NEXT_PUBLIC_APP_VERSION=${{ needs.start_notify.outputs.project_version || '1.0.0' }}" >> .env
-
-          # setup nvm
           export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
+          if [ -s "$NVM_DIR/nvm.sh" ]; then
+            . "$NVM_DIR/nvm.sh"
+          else
+            echo "nvm tidak ditemukan pada $NVM_DIR" >&2
+            exit 1
+          fi
           nvm use 24
           node -v
-          pnpm -v
 
-          # install prod deps with the pinned project version
-          if ! command -v pnpm >/dev/null 2>&1 || [ "$(pnpm --version)" != "9.15.2" ]; then
-            npm install --global pnpm@9.15.2
-          fi
-          test "$(pnpm --version)" = "9.15.2"
-          pnpm install --frozen-lockfile
-
-          # run prisma migrate deploy (safe for production)
-          pnpm prisma migrate deploy
-
-          # restart pm2
-          echo "🔄 Restarting PM2 process..."
-          if pm2 describe perpulangan > /dev/null 2>&1; then
-            pm2 stop perpulangan || true
-            pm2 delete perpulangan || true
+          PREVIOUS_RELEASE=""
+          if [ -L "$APP_DIR/current" ]; then
+            PREVIOUS_RELEASE="$(readlink -f "$APP_DIR/current")"
           fi
 
-          echo "Starting application on port ${{ secrets.APP_PORT || 3000 }}..."
-          pm2 start npm --name "perpulangan" -- start -- -p ${{ secrets.APP_PORT || 3000 }}
+          ln -sfn "$RELEASE_DIR" "$APP_DIR/current.next"
+          mv -Tf "$APP_DIR/current.next" "$APP_DIR/current"
 
-          sleep 5
-          pm2 describe perpulangan > /dev/null
-          pm2 logs perpulangan --lines 10 --nostream || true
+          activate_pm2() {
+            PERPULANGAN_APP_DIR="$APP_DIR" APP_PORT="$APP_PORT" \
+              pm2 startOrReload "$APP_DIR/current/ecosystem.config.cjs" --update-env
+          }
+
+          health_check() {
+            local attempt
+            for attempt in $(seq 1 20); do
+              if curl --fail --silent --show-error --output /dev/null "http://127.0.0.1:$APP_PORT/"; then
+                return 0
+              fi
+              sleep 2
+            done
+            return 1
+          }
+
+          if ! activate_pm2 || ! health_check; then
+            echo "Release baru gagal aktif; memulihkan release sebelumnya." >&2
+            if [ -n "$PREVIOUS_RELEASE" ] && [ -d "$PREVIOUS_RELEASE" ]; then
+              ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR/current.rollback"
+              mv -Tf "$APP_DIR/current.rollback" "$APP_DIR/current"
+              pm2 restart "$APP_NAME" --update-env || true
+              sleep 3
+            else
+              pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
+              rm -f "$APP_DIR/current"
+            fi
+            pm2 logs "$APP_NAME" --lines 30 --nostream || true
+            exit 1
+          fi
+
+          pm2 save
+          rm -rf "$INCOMING_DIR"
+
+          # Pertahankan lima release terbaru untuk rollback manual.
+          mapfile -t OLD_RELEASES < <(
+            find "$APP_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+              | sort -rn | awk 'NR > 5 { $1=""; sub(/^ /, ""); print }'
+          )
+          for old_release in "${OLD_RELEASES[@]}"; do
+            [ "$old_release" = "$RELEASE_DIR" ] || rm -rf -- "$old_release"
+          done
+
+          echo "Release aktif: $RELEASE_DIR"
+          pm2 describe "$APP_NAME"
           EOF
 
   notify:
@@ -259,7 +290,7 @@ jobs:
       GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Set Timestamp
-        run: echo "TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_ENV
+        run: echo "TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> "$GITHUB_ENV"
 
       - name: Send Telegram Notification
         run: |
@@ -271,10 +302,10 @@ jobs:
           fi
 
           MESSAGE="<b>$STATUS_ICON $STATUS_TEXT</b>%0A"
-          MESSAGE+="📦 Project: ${{ env.PROJECT_NAME }}%0A"
-          MESSAGE+="🔖 Version: ${{ env.PROJECT_VERSION }}%0A"
-          MESSAGE+="🕒 Time: ${{ env.TIMESTAMP }}%0A"
-          MESSAGE+="Github Run: ${{ env.GITHUB_RUN_URL }}%0A"
+          MESSAGE+="📦 Project: $PROJECT_NAME%0A"
+          MESSAGE+="🔖 Version: $PROJECT_VERSION%0A"
+          MESSAGE+="🕒 Time: $TIMESTAMP%0A"
+          MESSAGE+="Github Run: $GITHUB_RUN_URL%0A"
           MESSAGE+="🌍 Port: ${{ secrets.APP_PORT || 3000 }}%0A"
 
           if [[ "$STATUS_TEXT" == "CI/CD Failed" ]]; then

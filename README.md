@@ -90,6 +90,16 @@ pnpm docker:down
 
 ---
 
+## Deployment VPS dengan PM2
+
+Workflow `.github/workflows/cicd.yml` membangun aplikasi dalam mode Next.js `standalone` di GitHub Actions, menjalankan migrasi database di runner GitHub, lalu mengunggah setiap versi ke direktori release terpisah pada VPS. VPS hanya menerima artifact runtime beserta `.env` per release dengan permission `600`; dependency tidak dipasang ulang di sana. Aplikasi aktif dijalankan melalui symlink `current`. Jika pemeriksaan HTTP setelah restart gagal, workflow mengarahkan `current` kembali ke release sebelumnya.
+
+Siapkan Node.js 24 melalui `nvm`, PM2, akses SSH untuk GitHub Actions, dan secret CI/CD yang dibutuhkan. Runner GitHub harus dapat mengakses PostgreSQL melalui secret `DATABASE_URL`; bila database membatasi IP, sediakan akses jaringan untuk runner atau gunakan runner self-hosted di jaringan yang diizinkan. Direktori `/home/<VPS_USER>/project/perpulangan` boleh dibuat baru; workflow membuat `releases/` dan `incoming/` di dalamnya. Tidak perlu clone repository atau memasang pnpm di VPS. Lima release terakhir dipertahankan untuk rollback manual.
+
+`prisma migrate deploy` berjalan setelah build berhasil dan sebelum artifact diunggah/deploy. Jika migrasi gagal, deploy otomatis berhenti. Perubahan schema sebaiknya tetap kompatibel dengan versi aplikasi sebelumnya karena migrasi tidak otomatis dibatalkan saat rollback aplikasi.
+
+---
+
 ## Development Lokal (Tanpa Docker)
 
 ### Prasyarat
