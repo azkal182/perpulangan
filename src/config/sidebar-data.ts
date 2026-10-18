@@ -6,6 +6,7 @@ import {
   Calendar,
   ClipboardCheck,
   ClipboardCopy,
+  ClipboardList,
   Command,
   Database,
   GalleryVerticalEnd,
@@ -90,6 +91,11 @@ export const managements = [
     title: "Daftar Peserta",
     url: "/daftar-peserta",
     icon: Users,
+  },
+  {
+    title: "Data Pulang",
+    url: "/data-pulang",
+    icon: ClipboardList,
   },
   {
     title: "Cetak Kartu & Tiket",

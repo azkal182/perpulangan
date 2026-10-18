@@ -9,12 +9,38 @@ import {
 } from "../repositories/registration.repository";
 import { logger } from "@/server/logger";
 import { RegistrationStatus } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   AccessDeniedError,
   ensureKordaInScope,
   getRegionalAccessScope,
   registrationScopeWhere,
 } from "@/server/access-scope";
+
+async function resolveOutboundDisposition(
+  tx: Prisma.TransactionClient,
+  eventId: string,
+  studentId: string | null | undefined,
+  actorUserId: string,
+) {
+  if (!studentId) return;
+  const disposition = await tx.outboundDisposition.findUnique({
+    where: { eventId_studentId: { eventId, studentId } },
+  });
+  if (!disposition || disposition.status !== "ACTIVE") return;
+  await tx.outboundDisposition.update({
+    where: { id: disposition.id },
+    data: { status: "COMPLETED", updatedByUserId: actorUserId },
+  });
+  await tx.outboundDispositionHistory.create({ data: {
+    dispositionId: disposition.id,
+    fromReason: disposition.reason,
+    toReason: disposition.reason,
+    fromStatus: disposition.status,
+    toStatus: "COMPLETED",
+    actorUserId,
+  } });
+}
 
 async function maskRegistrationForScope<T extends {
   outboundKordaId?: string | null;
@@ -177,12 +203,17 @@ export async function createRegistration(data: RegistrationCreateData) {
         await tx.journey.createMany({ data: missing.map((journey) => ({ ...journey, registrationId: existingRegistration.id })) });
         const outbound = snapshots.find((journey) => journey.direction === "OUTBOUND");
         const returning = snapshots.find((journey) => journey.direction === "RETURN");
-        return tx.registration.update({ where: { id: existingRegistration.id }, data: {
+        const updatedRegistration = await tx.registration.update({ where: { id: existingRegistration.id }, data: {
           ...(outbound ? { outboundKordaId: outbound.destinationKordaId, outboundDropPointId: outbound.dropPointId, outboundDate: outbound.travelDate } : {}),
           ...(returning ? { returnKordaId: returning.destinationKordaId, returnDropPointId: returning.dropPointId, returnDate: returning.travelDate } : {}),
         } });
+        if (missing.some((journey) => journey.direction === "OUTBOUND")) {
+          await resolveOutboundDisposition(tx, data.eventId, data.studentId, scope.userId);
+        }
+        return updatedRegistration;
       });
       revalidatePath("/registrasi");
+      revalidatePath("/data-pulang");
       revalidatePath(`/event/${data.eventId}/participants`);
       return { success: true, data: await maskRegistrationForScope(created, scope) };
     }
@@ -190,7 +221,7 @@ export async function createRegistration(data: RegistrationCreateData) {
     const outbound = snapshots.find((journey) => journey.direction === "OUTBOUND");
     const returning = snapshots.find((journey) => journey.direction === "RETURN");
     const registrar = await prisma.user.findUnique({ where: { id: scope.userId }, select: { name: true } });
-    const result = await registrationRepository.create({
+    const registrationData: RegistrationCreateData = {
       ...data,
       journeys: snapshots,
       originKordaId,
@@ -208,8 +239,16 @@ export async function createRegistration(data: RegistrationCreateData) {
       returnPaid: false,
       registrarName: registrar?.name || data.registrarName || "Pengguna",
       registrarPhone: data.registrarPhone || "",
+    };
+    const result = await prisma.$transaction(async (tx) => {
+      const created = await registrationRepository.create(registrationData, tx);
+      if (snapshots.some((journey) => journey.direction === "OUTBOUND")) {
+        await resolveOutboundDisposition(tx, data.eventId, data.studentId, scope.userId);
+      }
+      return created;
     });
     revalidatePath("/registrasi");
+    revalidatePath("/data-pulang");
     revalidatePath(`/event/${data.eventId}/participants`);
       return { success: true, data: await maskRegistrationForScope(result, scope) };
   } catch (error) {

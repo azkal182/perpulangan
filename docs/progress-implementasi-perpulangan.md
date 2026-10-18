@@ -1,18 +1,92 @@
 # Monitoring Implementasi Perpulangan
 
-Tracker ini mengikuti keputusan pada [perencanaan revisi flow perpulangan](perencanaan-revisi-flow-perpulangan.md). Skill Codex proyek ada di [perpulangan-implementation](../.agents/skills/perpulangan-implementation/SKILL.md).
+Tracker ini mengikuti [perencanaan revisi flow perpulangan](perencanaan-revisi-flow-perpulangan.md) dan [Perencanaan Revisi 1: Roster Pulang, Armada, dan Cetak](perencanaan-revisi-roster-pulang-dan-cetak.md). Skill Codex proyek ada di [perpulangan-implementation](../.agents/skills/perpulangan-implementation/SKILL.md).
 
 ## Status ringkas
 
-- **Status produk:** Perencanaan final dan ditutup pada 18 Oktober 2026. Perubahan kebutuhan baru dicatat sebagai revisi terpisah.
-- **Status implementasi:** Fase 1, Fase 2, Fase 3, Fase 4, Fase 5, Fase 6, dan Fase 7 selesai untuk lingkup development yang disepakati.
+- **Status produk:** Baseline Fase 1–7 final dan ditutup pada 18 Oktober 2026. Revisi 1 juga telah difinalkan pada 18 Oktober 2026 sebagai Fase 8–11.
+- **Status implementasi:** Fase 1–11 selesai untuk lingkup development yang disepakati.
 - **Kesiapan Fase 1:** Fondasi kualitas region dan profil peserta eksternal selesai. Integrasi profil ke form registrasi adalah bagian Fase 2.
-- **Fase aktif:** Tidak ada.
-- **Checkpoint terakhir:** 18 Oktober 2026 — Rekonsiliasi agregat dev cocok; seed legacy diselaraskan dan dibuat tidak menggandakan ledger saat dijalankan ulang. Audit menghapus angka penerimaan event yang semu dan memperbaiki scope bukti refund Saldo Lain.
+- **Fase aktif:** Revisi 1 Fase 8–11 selesai.
+- **Checkpoint terakhir:** 18 Oktober 2026 — Fase 11 selesai: packing lintas Korda, ukuran kertas A3+, aturan NIS, dan regresi cetak/armada sudah diperiksa.
 - **Blocker:** Tidak ada blocker implementasi. Visual isi PDF manifest diserahkan kepada pengguna sesuai arahan. Korwil tidak diuji sesuai arahan sebelumnya.
-- **Langkah berikut:** Tidak ada fase implementasi yang masih terbuka dalam rencana ini. Pemeriksaan backup produksi, pembandingan uang nyata, status bucket/retensi produksi, dan kesiapan rilis produksi dikecualikan dari cakupan sesuai arahan pengguna. PDF manifest diperiksa manual oleh pengguna.
+- **Langkah berikut:** Revisi 1 selesai untuk lingkup development. Pemeriksaan visual PDF tetap dilakukan pengguna secara manual. Pemeriksaan backup produksi, pembandingan uang nyata, status bucket/retensi produksi, dan kesiapan rilis produksi tetap dikecualikan dari cakupan sesuai arahan pengguna.
 
 Status fase: `Belum dimulai` · `Sedang berjalan` · `Terblokir` · `Selesai`.
+
+## Revisi 1 — Roster Pulang, armada, dan cetak
+
+**Status:** Final dan disetujui; Fase 8–11 selesai. Fase 1–7 tetap tertutup dan tidak dibuka kembali. Ruang lingkup dan kriteria ada di [perencanaan revisi roster Pulang dan cetak](perencanaan-revisi-roster-pulang-dan-cetak.md). Butir yang sebelumnya ditandai “sudah” atau “abaikan/fitur lanjutan” tetap di luar revisi ini.
+
+- **Bus di daftar peserta:** sudah ditampilkan terpisah pada kolom Pulang dan Kembali. Tampilan membaca relasi bus lama yang disinkronkan oleh aksi penempatan, sedangkan penempatan operasional utamanya tersimpan pada `JourneyBusAssignment`; perlu dipastikan sumber tampilan tetap konsisten dengan data Journey.
+- **Data santri belum didaftarkan untuk Pulang:** fitur baru menampilkan santri aktif di master yang belum punya Journey Pulang pada event, dengan mengecualikan santri yang dicatat tidak ikut Pulang. Alasan enum: Wisuda, Partisipan, atau Sedang Pulang. Hanya admin yang boleh mencatat, mengubah, atau membatalkan pengecualian. Pengecualian hanya untuk Pulang dan tidak memengaruhi Kembali. Santri yang hanya memiliki Journey Kembali tetap menjadi calon Pulang. Modelnya disposisi per event-santri, terpisah dari Registration/Journey dan tagihan.
+- **Peringatan alokasi bus:** dashboard sudah memiliki kartu hitung Journey terdaftar tanpa bus (`Belum ditempatkan`), tetapi halaman `/rombongan` belum menampilkan banner jumlah tertunda untuk event dan filter Korda/Korwil yang sedang dipilih. Rekomendasi: banner kontekstual di halaman armada dengan jumlah Pulang/Kembali belum ditempatkan dan tautan ke daftar yang dapat dialokasikan.
+- **Kartu/tiket:** filter perjalanan saat ini default “Semua”; daftar cetak tidak diwajibkan berisi perjalanan yang dipilih. Query cetak mencari registrasi yang memiliki titik perjalanan dan tidak membatasi hasil pada peserta yang sudah ditempatkan ke bus.
+- **Cetak kartu/tiket:** tersedia A4, F4, dan A3; A3+ belum ada. Packing halaman saat ini dikelompokkan per Korda sehingga dapat meninggalkan ruang kosong; urutan kartu dimulai dari Korda lalu bus dan nama, tanpa Korwil atau titik turun sebagai kunci urut.
+- **Nomor urut pada dokumen:** pengguna memilih nomor roster dinamis, bukan nomor registrasi permanen. Nomor mengurutkan roster menurut Korda tujuan dan membantu absensi; perubahan roster dapat mengubah nomor yang dihitung ulang pada dokumen baru. Kartu barang dan absensi menampilkan NIS (peserta eksternal kosong); tiket tidak menampilkan NIS.
+- **Integrasi opsional masa depan:** notifikasi WhatsApp berkala dan tracking armada melalui sumber mobile/GPS memerlukan desain sumber lokasi, otorisasi, identifikasi perangkat/bus, serta kanal pengiriman terpisah. Keduanya tidak termasuk revisi inti ini.
+
+**Keputusan final:** Nomor roster dinamis; pengecualian hanya admin dengan alasan enum (Wisuda, Partisipan, Sedang Pulang); santri aktif memakai `Student.status = true`; NIS tampil di kartu barang dan absensi tetapi tidak di tiket; A3+ 329 × 483 mm. Pengguna meminta WhatsApp/tracking dan fitur lanjutan lain diabaikan.
+
+### Fase 8 — Daftar Pulang dan pengecualian
+
+**Status:** Selesai.
+**Tujuan:** Menampilkan santri aktif yang belum punya Journey `OUTBOUND` dan mencatat santri yang tidak ikut Pulang dengan alasan enum, hanya oleh admin.
+
+- [x] Daftar calon per event; query Journey hanya mengecualikan `OUTBOUND` terdaftar sehingga Journey `RETURN` saja tetap menjadi calon.
+- [x] Pengecualian per event-santri terpisah dari Registration/Journey/tagihan dan hanya dikelola admin.
+- [x] Audit append-only aktor/waktu dan alasan; pengecualian aktif terselesaikan saat Journey `OUTBOUND` dibuat.
+- [x] Halaman `/data-pulang` dengan daftar calon, pengecualian aktif, peserta terdaftar, riwayat disposisi, pencarian, dan pagination.
+- [x] Prisma migration `20261018025017_phase8_outbound_roster` dibuat dan berhasil diterapkan ke development.
+- [x] Verifikasi scope role Korda dan aksi pengelolaan pengecualian hanya tampil untuk admin; semua mutasi juga memanggil guard `requireAdmin` di server.
+- [x] Verifikasi santri yang hanya terdaftar Kembali tetap muncul di calon Pulang.
+
+**Verifikasi Fase 8:** `prisma validate`, `prisma generate`, `tsc --noEmit`, ESLint file berubah, dan `git diff --check` lulus. Migrasi dev berhasil dibuat/diterapkan; pemeriksaan read-only `prisma migrate status` menyatakan 32 migrasi ditemukan dan database up to date. QA browser admin memperlihatkan 1.656 calon Pulang, 111 perjalanan Pulang terdaftar, pagination 50 baris, dan pilihan Wisuda/Partisipan/Sedang Pulang. Tombol Simpan nonaktif sebelum alasan dipilih. Formulir ditutup tanpa menyimpan agar tidak membuat riwayat uji pada data santri. Dengan akun Korda Demak, halaman hanya menampilkan 63 santri dalam cakupan dan 2 perjalanan Pulang terdaftar; tidak ada kolom/tombol aksi pengecualian. Server actions create/update/cancel memanggil `requireAdmin`. Santri aktif Achmad Zahid Chudori yang hanya memiliki Journey Kembali ditampilkan sebagai satu calon Pulang pada event demo; tidak ada Journey Pulang terdaftar untuk santri tersebut. Alur simpan/perubahan/pembatalan tidak dijalankan terhadap data operasional; sifat transaksional dan penambahan history diverifikasi pada implementasi. Tidak ada pengecualian atau data keuangan uji yang disimpan.
+
+**Kriteria keluar:** daftar akurat per event, perubahan tercatat melalui history append-only, dan pengecualian hanya memengaruhi Pulang. Fase 8 ditutup pada 18 Oktober 2026. Fase 9 belum dimulai.
+
+### Fase 9 — Peringatan perjalanan tanpa armada
+
+**Status:** Selesai.
+**Tujuan:** Peringatan kontekstual di `/rombongan` untuk Journey terdaftar yang belum ditempatkan.
+
+- [x] Banner pisahkan `OUTBOUND` dan `RETURN`, mengikuti event serta filter Korwil/Korda.
+- [x] Dialog daftar tindak lanjut menampilkan Journey per arah sesuai scope; memilih Korda menyaring armada dan menyiapkan tab perjalanan yang sesuai.
+- [x] Query hanya menghitung Journey `REGISTERED` dengan parent registration aktif serta tanpa assignment bus; pengecualian yang tidak punya Journey dan perjalanan batal tidak dihitung.
+
+**Verifikasi Fase 9:** `tsc --noEmit`, ESLint file berubah, dan `git diff --check` lulus. QA browser admin: event demo menampilkan 0 Pulang/0 Kembali; event `testing` menampilkan 1 Pulang/1 Kembali, dan masing-masing daftar menampilkan Journey Moh. Azkal Arif ke Korda Tegal - Brebes. Tombol daftar memfilter Korda tujuan yang sama. Kombinasi Korwil Jawa Timur dengan Korda Tegal - Brebes menampilkan 0/0 karena tidak cocok. QA akun Korda Demak menampilkan 0/0 pada event demo maupun testing; Journey event testing tujuan Tegal - Brebes tidak bocor ke cakupan Demak. Tidak ada penempatan atau perubahan data yang dilakukan selama QA. Server action memvalidasi scope regional dan membatasi scope berdasarkan Korda tujuan Journey, bukan hanya parent Registration.
+
+**Kriteria keluar:** hitungan banner cocok dengan daftar tindak lanjut pada scope/filter yang sama. Fase 9 ditutup pada 18 Oktober 2026.
+
+### Fase 10 — Sumber roster dan nomor dinamis
+
+**Status:** Selesai.
+**Tujuan:** Menyatukan query, urutan, dan penomoran untuk kartu barang, tiket, serta absensi.
+
+- [x] Arah perjalanan wajib dipilih; hasil hanya Journey aktif dengan `JourneyBusAssignment`.
+- [x] Urutan `Korwil → Korda tujuan → bus → titik perjalanan sesuai arah → nama`.
+- [x] Nomor mulai 1 per Korda tujuan, dihitung dari roster cetak lengkap sebelum filter tambahan.
+- [x] Ketiga dokumen menggunakan roster dan nomor yang sama; dokumen baru menghitung ulang setelah perubahan.
+
+**Implementasi dan verifikasi Fase 10 (18 Okt 2026):** Aksi cetak kartu/tiket membaca Journey `REGISTERED` dan penempatan `JourneyBusAssignment` dalam cakupan tujuan pengguna, bukan kolom bus lama Registration. Arah diwajibkan pada UI dan Server Action. Modul bersama `print-roster.ts` mengurutkan berdasarkan Korwil tujuan → Korda tujuan → bus → titik perjalanan → nama, lalu menomori ulang dari 1 pada tiap Korda tujuan. Filter nama, gender, Korda, dan titik diterapkan setelah penomoran. Absensi menggunakan fungsi roster yang sama; nomor dicetak per Korda tujuan walaupun daftar absensi dikelompokkan per bus. QA browser admin: event demo menghasilkan 131 perjalanan Pulang teralokasi; filter nama ABDUL DJALIL menghasilkan satu item dengan nomor 004, sama dengan roster penuh; preview tiket mempertahankan nomor 004. Preview PDF absensi Keberangkatan berhasil dibangkitkan dari halaman armada. Tidak ada data bisnis yang diubah dan tidak ada migrasi diperlukan. `tsc --noEmit`, ESLint enam file terkait, dan `git diff --check` lulus. Isi/visual PDF tetap diperiksa pengguna secara manual.
+
+**Kriteria keluar:** urutan dan nomor konsisten untuk event/arah/roster yang sama. Fase 10 ditutup pada 18 Oktober 2026.
+
+### Fase 11 — Layout cetak dan QA integrasi
+
+**Status:** Selesai.
+**Tujuan:** Menghasilkan dokumen yang ringkas dengan konten sesuai kebutuhan operasional.
+
+- [x] Packing kartu/tiket melintasi Korda tanpa pemisah halaman wajib; identitas Korda tampak per item.
+- [x] Tambahkan A3+ 329 × 483 mm; NIS pada kartu barang dan absensi saja; NIS eksternal kosong.
+- [x] QA pengecualian, banner, scope, lintas Korda/bus, perubahan nomor, dan konsistensi output.
+- [x] Serahkan pemeriksaan visual PDF kepada pengguna untuk dilakukan manual.
+
+**Implementasi dan QA Fase 11 (18 Okt 2026):** Menambahkan A3+ 329 × 483 mm dengan layout 3 × 9 kartu barang atau 3 × 24 tiket per halaman. Packing kartu/tiket meneruskan urutan roster melewati batas Korda dan setiap item tetap menampilkan identitas Korda. Kartu barang dan absensi menampilkan NIS santri; kolom nilai NIS eksternal kosong. Tiket tidak menampilkan NIS dan tetap menampilkan nomor roster. Absensi menambahkan kolom NIS dan Korda per peserta sehingga nomor yang di-reset per Korda dapat dibedakan pada bus gabungan.
+
+QA browser admin pada event demo: A3+ muncul dengan ukuran yang benar; preview kartu memuat 131 perjalanan dan layout 3 × 9; dua profil peserta eksternal memiliki nilai NIS kosong. Preview tiket layout 3 × 24 menampilkan No. 001 dan tidak memuat NIS. Preview absensi Keberangkatan berhasil dibangkitkan setelah penambahan kolom NIS/Korda; file PDF tidak diperiksa visual oleh agen sesuai keputusan pengguna. QA regresi Fase 8 dan 9 (admin/Korda, pengecualian Pulang, scope banner) serta Fase 5 dan 10 (alokasi lintas Korda, penomoran dan filter) menggunakan bukti yang sudah tercatat pada fase terkait; tidak ada perubahan data atau penempatan baru pada QA ini. `tsc --noEmit`, ESLint file cetak/absensi, dan `git diff --check` lulus. Tidak ada migrasi diperlukan.
+
+**Kriteria keluar:** kriteria revisi terpenuhi, bukti QA fungsional dicatat, dan PDF tersedia untuk pemeriksaan manual pengguna. Fase 11 dan Revisi 1 ditutup pada 18 Oktober 2026.
 
 ## Fase 0 — Baseline dan rancangan implementasi
 
@@ -227,3 +301,7 @@ QA browser baca-saja dengan admin memuat Event, Dashboard, Pembayaran, Refund, L
 | 17 Okt 2026 | Perbaikan login akun QA Korda | Akun yang dibuat tanpa password tidak memiliki baris `credential`; Better Auth `setUserPassword` hanya menjalankan update dan diam-diam tidak membuat baris tersebut. Aksi manajemen user kini memvalidasi role/scope, membuat atau memperbarui credential dengan hash Better Auth, dan memberi notifikasi sukses. | Query metadata lokal baca-saja mengonfirmasi user `qakordademak` aktif dengan role `korda` tetapi belum memiliki credential. Percobaan login dengan nilai password yang diasumsikan sama dengan username ditolak. `pnpm exec tsc --noEmit` dan `git diff --check` lulus setelah perbaikan. | Password belum tersimpan; admin perlu mengatur ulang lewat tombol **Set Password** setelah masuk kembali sebagai admin. | Atur password akun QA melalui admin, lalu masuk sebagai Korda dan lanjutkan QA. |
 | 18 Okt 2026 | QA dan penutupan Fase 5 | Menguji alokasi lintas Korda pada arah Pulang dan Kembali, kapasitas penuh/perubahan kapasitas, status aktif, serta hak kelola Korda vs Admin. Mengganti konfirmasi Hapus armada dari popup native `confirm()` menjadi `AlertDialog` aplikasi. Peserta QA dikembalikan ke armada semula; bus `QA Fase 5 - Demak` tetap aktif dengan 0 peserta. | Browser menunjukkan bus Pulang Demak 11 peserta, Kembali Demak 11 peserta, dan bus QA 0/0. Kapasitas di bawah jumlah alokasi ditolak; Korda hanya melihat aksi Peserta; dialog hapus tampil tanpa popup JavaScript. Preview manifest berhasil dibuka. Pemeriksaan visual isi PDF diserahkan kepada pengguna. `tsc --noEmit`, ESLint komponen armada, dan `git diff --check` lulus. | Korwil tidak diuji sesuai arahan pengguna sebelumnya. | Fase 6 — Ringkasan operasional. |
 | 18 Okt 2026 | Fase 6 — Dashboard operasional dan penutupan | Mengganti placeholder dengan ringkasan jumlah peserta/perjalanan, kelengkapan identitas dan perjalanan, status pembayaran bersih, perjalanan belum ditempatkan, serta armada/kursi. Menambah filter event, tanggal perjalanan, arah, Korda tujuan, dan status Journey; tautan ke laporan keuangan, armada/manifest, dan GPS. Manifest menyertakan `Data diperbarui` dari update bus/assignment/journey dan waktu cetak. Widget dashboard lama yang berisi data mock dihapus. | `tsc --noEmit`, ESLint tiga file terkait, dan `git diff --check` lulus. QA browser admin: semua event menunjukkan 141 peserta unik/262 perjalanan, status bayar 180/51/31, 2 belum ditempatkan, 25 armada aktif dan 260/1.202 kursi. Filter event `[DEMO SEED]`, arah Pulang menghasilkan 131 peserta; filter Korda Demak/Kembali menghasilkan 11 perjalanan. Filter tanggal 1–15 Nov 2026 tetap 11; filter Dibatalkan menjadi 0 perjalanan dan 0 kursi terisi. QA akun Korda Demak menampilkan hanya event `[DEMO SEED]` dan Korda Demak (12 peserta/22 perjalanan); parameter Korda Blora di luar scope diabaikan dan data tetap pada scope Demak. Console tidak menampilkan error. Isi PDF tidak dibuka sesuai arahan pengguna untuk memeriksanya manual. | Korwil tidak diuji sesuai arahan pengguna sebelumnya. Pemeriksaan visual PDF dilakukan manual oleh pengguna. | Fase 7 belum dimulai. |
+| 18 Okt 2026 | Fase 8 — Daftar Pulang dan pengecualian | Menambahkan disposisi event-santri dengan alasan enum, audit append-only, halaman `/data-pulang`, dan penyelesaian otomatis ketika Journey Pulang dibuat. | Migrasi dev diterapkan; Prisma status 32 migrasi up to date. Browser Admin memeriksa roster, pagination, dan formulir tanpa menyimpan. Browser Korda Demak hanya menampilkan santri dalam scope dan tidak melihat kontrol pengelolaan. Santri RETURN-only terlihat sebagai calon Pulang. `tsc`, ESLint, Prisma validate/generate, dan `git diff --check` lulus. | Mutasi tidak dijalankan pada data operasional. Korwil tidak diuji sesuai arahan. | Fase 9. |
+| 18 Okt 2026 | Fase 9 — Peringatan perjalanan tanpa armada | Menambahkan hitungan perjalanan Pulang/Kembali terpisah di `/rombongan`, dialog daftar tindak lanjut per arah, filter Korda tujuan, dan navigasi ke armada yang dapat dipilih. Query membatasi setiap Journey sesuai scope Korda tujuan dan mengecualikan assignment aktif yang sudah ada serta perjalanan batal. | QA Admin: event demo 0/0; event `testing` 1/1; daftar kedua arah menampilkan Journey Moh. Azkal Arif ke Tegal - Brebes. Filter Korda menerapkan tujuan yang tepat; Korwil Jawa Timur + Korda Tegal - Brebes menghasilkan 0/0. QA Korda Demak: 0/0 pada event demo dan testing, tanpa akses ke perjalanan Tegal - Brebes. TypeScript, ESLint file terkait, dan `git diff --check` lulus. Tidak ada data yang diubah. | Korwil tidak diuji sesuai arahan. Tidak ada blocker. | Fase 10 — sumber roster cetak dan nomor dinamis. |
+| 18 Okt 2026 | Fase 10 — Sumber roster cetak dan nomor dinamis | Kartu barang, tiket, dan absensi kini berbagi sumber Journey teralokasi, urutan kanonik dan penomoran dinamis per Korda tujuan. Filter tampilan diterapkan setelah penomoran agar tidak menggeser nomor roster. | Browser Admin: event demo menghasilkan 131 perjalanan Pulang; filter ABDUL DJALIL menampilkan nomor 004 baik pada preview kartu barang maupun tiket. Preview absensi berhasil dibangkitkan dari armada. `tsc --noEmit`, ESLint enam file, dan `git diff --check` lulus. Tidak ada data bisnis yang diubah. | Tidak ada blocker. PDF diperiksa manual pengguna. | Fase 11 — layout cetak dan QA integrasi. |
+| 18 Okt 2026 | Fase 11 — Layout cetak dan QA integrasi | Menambahkan ukuran A3+ 329 × 483 mm, packing berurutan lintas Korda, tampilan nomor roster dan identitas Korda, aturan NIS kartu/absensi/tiket, serta kolom Korda dan NIS per peserta absensi. | QA browser Admin: A3+ 3 × 9 kartu dan 3 × 24 tiket per halaman; 131 perjalanan pada preview; dua peserta eksternal tidak memiliki nilai NIS; tiket memuat No. 001 tanpa NIS. Preview absensi berhasil dibangkitkan. TypeScript, ESLint enam file, dan `git diff --check` lulus. Tidak ada data diubah dan tidak ada migrasi. | Tidak ada blocker implementasi. PDF diperiksa manual pengguna. | Revisi 1 Fase 8–11 selesai. |

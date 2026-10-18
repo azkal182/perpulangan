@@ -40,7 +40,7 @@ export function TicketTemplate({ data, width, height }: TicketTemplateProps) {
         {/* Header */}
         <div className="mb-3 text-center">
           <div className="text-base font-bold uppercase text-teal-800">
-            Tiket Perjalanan
+            Tiket Perjalanan · No. {String(data.rosterNumber).padStart(3, "0")}
           </div>
           <div className="h-0.5 mt-1 bg-gradient-to-r from-transparent via-teal-600 to-transparent" />
         </div>
@@ -54,10 +54,6 @@ export function TicketTemplate({ data, width, height }: TicketTemplateProps) {
               <div className="line-clamp-2 font-bold text-gray-900">
                 {data.studentName}
               </div>
-            </div>
-            <div>
-              <div className="text-xs font-semibold text-gray-600">NIS</div>
-              <div className="font-bold text-gray-900">{data.studentNis}</div>
             </div>
             <div>
               <div className="text-xs font-semibold text-gray-600">Korda</div>

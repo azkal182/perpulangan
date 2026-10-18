@@ -7,15 +7,19 @@ const PAGE_HEIGHT = 330;
 const PAGE_MARGIN = 10;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
-const NO_COLUMN_WIDTH = 10;
-const NAME_COLUMN_WIDTH = 60;
-const KAB_KOTA_COLUMN_WIDTH = 42;
-const CHECKLIST_ONE_COLUMN_WIDTH = 14;
-const CHECKLIST_TWO_COLUMN_WIDTH = 14;
-const ABSEN_COLUMN_WIDTH = 13;
+const NO_COLUMN_WIDTH = 8;
+const NAME_COLUMN_WIDTH = 45;
+const NIS_COLUMN_WIDTH = 17;
+const KORDA_COLUMN_WIDTH = 26;
+const KAB_KOTA_COLUMN_WIDTH = 29;
+const CHECKLIST_ONE_COLUMN_WIDTH = 12;
+const CHECKLIST_TWO_COLUMN_WIDTH = 12;
+const ABSEN_COLUMN_WIDTH = 12;
 const DROP_POINT_COLUMN_WIDTH = CONTENT_WIDTH
   - NO_COLUMN_WIDTH
   - NAME_COLUMN_WIDTH
+  - NIS_COLUMN_WIDTH
+  - KORDA_COLUMN_WIDTH
   - KAB_KOTA_COLUMN_WIDTH
   - CHECKLIST_ONE_COLUMN_WIDTH
   - CHECKLIST_TWO_COLUMN_WIDTH
@@ -46,11 +50,13 @@ function buildColumnStyles() {
   const styles: Record<number, { cellWidth: number; halign?: "left" | "center" }> = {
     0: { cellWidth: NO_COLUMN_WIDTH, halign: "center" },
     1: { cellWidth: NAME_COLUMN_WIDTH, halign: "left" },
-    2: { cellWidth: KAB_KOTA_COLUMN_WIDTH, halign: "left" },
-    3: { cellWidth: DROP_POINT_COLUMN_WIDTH, halign: "left" },
-    4: { cellWidth: CHECKLIST_ONE_COLUMN_WIDTH, halign: "center" },
-    5: { cellWidth: CHECKLIST_TWO_COLUMN_WIDTH, halign: "center" },
-    6: { cellWidth: ABSEN_COLUMN_WIDTH, halign: "center" },
+    2: { cellWidth: NIS_COLUMN_WIDTH, halign: "left" },
+    3: { cellWidth: KORDA_COLUMN_WIDTH, halign: "left" },
+    4: { cellWidth: KAB_KOTA_COLUMN_WIDTH, halign: "left" },
+    5: { cellWidth: DROP_POINT_COLUMN_WIDTH, halign: "left" },
+    6: { cellWidth: CHECKLIST_ONE_COLUMN_WIDTH, halign: "center" },
+    7: { cellWidth: CHECKLIST_TWO_COLUMN_WIDTH, halign: "center" },
+    8: { cellWidth: ABSEN_COLUMN_WIDTH, halign: "center" },
   };
 
   return styles;
@@ -122,8 +128,10 @@ export function buildBusAttendancePdf({
     const body = Array.from({ length: minimumRows }, (_, rowIndex) => {
       const passenger = bus.passengers[rowIndex];
       return [
-        passenger ? String(rowIndex + 1) : "",
+        passenger ? String(passenger.rosterNumber) : "",
         passenger?.studentName ?? "",
+        passenger?.studentNis ?? "",
+        passenger?.kordaName ?? "",
         passenger?.kabKota ?? "",
         passenger?.dropPointName ?? "",
         "",
@@ -135,6 +143,8 @@ export function buildBusAttendancePdf({
       [
         "No",
         "Nama",
+        "NIS",
+        "Korda",
         "Kab/Kota",
         "Titik Turun",
         { content: "Ceklis", colSpan: 2 },

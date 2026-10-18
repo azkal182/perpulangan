@@ -3,23 +3,20 @@
 import prisma from "@/lib/prisma";
 import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
 import type { PrintDataItem } from "../lib/print-utils";
-import type { Prisma } from "@/generated/prisma/client";
+import { buildNumberedPrintRoster } from "../lib/print-roster";
 import {
   AccessDeniedError,
-  andWhere,
   ensureKordaInScope,
   getRegionalAccessScope,
-  registrationScopeWhere,
 } from "@/server/access-scope";
 
 export interface GetPrintDataParams {
   eventId: string;
+  journeyType: "outbound" | "return";
   gender?: "Laki-laki" | "Perempuan";
-  kordaId?: string;
   kordaIds?: string[];
   dropPointId?: string;
   studentName?: string;
-  journeyType?: "outbound" | "return" | "both";
 }
 
 export async function getPrintDataAction(
@@ -27,283 +24,145 @@ export async function getPrintDataAction(
 ): Promise<{ success: boolean; data?: PrintDataItem[]; error?: string }> {
   try {
     const scope = await getRegionalAccessScope();
-    const {
-      eventId,
-      gender,
-      journeyType,
-      kordaId,
-      kordaIds,
-      dropPointId,
-      studentName,
-    } = params;
-    const selectedKordaIds = Array.from(
-      new Set([...(kordaIds ?? []), ...(kordaId ? [kordaId] : [])]),
-    ).filter((value): value is string => value.length > 0);
-
-    // Build where clause - simplified, just need drop points
-    const where: Prisma.RegistrationWhereInput = {
-      eventId,
-      // Don't filter by status - print all registrations
-      OR: [
-        { outboundDropPointId: { not: null } },
-        { returnDropPointId: { not: null } },
-      ],
-    };
-
-    const studentFilter: Prisma.StudentWhereInput = {};
-    if (gender) {
-      studentFilter.gender = gender;
-    }
-    if (studentName) {
-      studentFilter.name = {
-        contains: studentName,
-        mode: "insensitive",
-      };
-    }
-    if (Object.keys(studentFilter).length > 0) {
-      where.student = studentFilter;
+    if (!params.eventId) throw new Error("Event wajib dipilih.");
+    if (params.journeyType !== "outbound" && params.journeyType !== "return") {
+      throw new Error("Pilih arah perjalanan sebelum menyiapkan dokumen.");
     }
 
-    // Korda filter (either outbound or return)
-    if (selectedKordaIds.length > 0) {
-      await Promise.all(
-        selectedKordaIds.map((selectedKordaId) =>
-          ensureKordaInScope(scope, selectedKordaId),
-        ),
-      );
-      const orConditions = where.OR || [];
-      where.AND = [
-        { OR: orConditions },
-        {
-          OR: [
-            { outboundKordaId: { in: selectedKordaIds } },
-            { returnKordaId: { in: selectedKordaIds } },
-          ],
+    const selectedKordaIds = Array.from(new Set(params.kordaIds ?? [])).filter(Boolean);
+    await Promise.all(selectedKordaIds.map((id) => ensureKordaInScope(scope, id)));
+
+    const journeys = await prisma.journey.findMany({
+      where: {
+        direction: params.journeyType === "outbound" ? "OUTBOUND" : "RETURN",
+        status: "REGISTERED",
+        registration: {
+          eventId: params.eventId,
+          status: { not: "CANCELLED" },
         },
-      ];
-      delete where.OR;
-    }
-
-    // Drop point filter (either outbound or return)
-    if (dropPointId) {
-      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
-        ? Array.isArray(where.AND)
-          ? where.AND
-          : [where.AND]
-        : where.OR
-          ? [{ OR: where.OR }]
-          : [];
-      where.AND = [
-        ...existingConditions,
-        {
-          OR: [
-            { outboundDropPointId: dropPointId },
-            { returnDropPointId: dropPointId },
-          ],
+        busAssignment: {
+          is: {
+            busId: { not: null },
+            bus: {
+              is: {
+                ...(scope.role === "korda" ? { kordas: { some: { kordaId: scope.kordaId ?? "__NO_ACCESS__" } } } : {}),
+                ...(scope.role === "korwil" ? { OR: [
+                  { korwilId: scope.korwilId ?? "__NO_ACCESS__" },
+                  { kordas: { some: { korda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } } } },
+                ] } : {}),
+              },
+            },
+          },
         },
-      ];
-      delete where.OR;
-    }
-
-    const outboundJourneyExists: Prisma.RegistrationWhereInput = {
-      OR: [
-        { outboundDropPointId: { not: null } },
-        { outboundKordaId: { not: null } },
-        { outboundBusId: { not: null } },
-        { outboundDate: { not: null } },
-      ],
-    };
-    const returnJourneyExists: Prisma.RegistrationWhereInput = {
-      OR: [
-        { returnDropPointId: { not: null } },
-        { returnKordaId: { not: null } },
-        { returnBusId: { not: null } },
-        { returnDate: { not: null } },
-      ],
-    };
-
-    if (journeyType === "outbound") {
-      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
-        ? Array.isArray(where.AND)
-          ? where.AND
-          : [where.AND]
-        : [];
-      where.AND = [...existingConditions, outboundJourneyExists];
-    } else if (journeyType === "return") {
-      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
-        ? Array.isArray(where.AND)
-          ? where.AND
-          : [where.AND]
-        : [];
-      where.AND = [...existingConditions, returnJourneyExists];
-    } else if (journeyType === "both") {
-      const existingConditions: Prisma.RegistrationWhereInput[] = where.AND
-        ? Array.isArray(where.AND)
-          ? where.AND
-          : [where.AND]
-        : [];
-      where.AND = [...existingConditions, outboundJourneyExists, returnJourneyExists];
-    }
-
-    const finalWhere = andWhere(where, registrationScopeWhere(scope));
-
-    const registrations = await prisma.registration.findMany({
-      where: finalWhere,
-      include: {
-        student: {
+        ...(scope.role === "korda"
+          ? { destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" }
+          : scope.role === "korwil"
+            ? { destinationKorda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } }
+            : {}),
+      },
+      select: {
+        id: true,
+        destinationKordaId: true,
+        destinationKorda: {
           select: {
-            id: true,
             name: true,
-            nis: true,
-            fullAddress: true,
-            parrentPhone: true,
-            gender: true,
-            regency: { select: { kordaId: true } },
+            korwilId: true,
+            korwil: { select: { name: true } },
           },
         },
-        externalParticipant: { select: { name: true, gender: true, address: true } },
-        outboundKorda: {
+        dropPointId: true,
+        locationNameSnapshot: true,
+        busAssignment: {
           select: {
-            id: true,
-            name: true,
+            bus: {
+              select: {
+                id: true,
+                label: true,
+              },
+            },
           },
         },
-        outboundDropPoint: {
+        registration: {
           select: {
-            id: true,
-            name: true,
-          },
-        },
-        returnKorda: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        returnDropPoint: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        outboundBus: {
-          select: {
-            id: true,
-            label: true,
-          },
-        },
-        returnBus: {
-          select: {
-            id: true,
-            label: true,
+            student: {
+              select: {
+                id: true,
+                name: true,
+                nis: true,
+                fullAddress: true,
+                parrentPhone: true,
+                gender: true,
+                regency: { select: { kordaId: true } },
+              },
+            },
+            externalParticipant: {
+              select: { name: true, gender: true, address: true },
+            },
           },
         },
       },
-      orderBy: [{ student: { name: "asc" } }],
     });
 
-    const printData: PrintDataItem[] = registrations.map((reg) => {
-      const chooseJourneySide = (): "outbound" | "return" => {
-        if (journeyType === "outbound") {
-          return "outbound";
-        }
-        if (journeyType === "return") {
-          return "return";
-        }
+    const completeRoster = buildNumberedPrintRoster(journeys.flatMap((journey) => {
+      const bus = journey.busAssignment?.bus;
+      if (!bus) return [];
+      const registration = journey.registration;
+      const student = registration.student;
+      const external = registration.externalParticipant;
+      const name = student?.name ?? external?.name ?? "Peserta eksternal";
+      const crossKordaStudent = scope.role === "korda" && !!student && student.regency?.kordaId !== scope.kordaId;
+      return [{
+        id: journey.id,
+        participantName: name,
+        destinationKordaId: journey.destinationKordaId,
+        destinationKordaName: journey.destinationKorda.name,
+        destinationKorwilId: journey.destinationKorda.korwilId,
+        korwilName: journey.destinationKorda.korwil?.name ?? null,
+        busId: bus.id,
+        busLabel: bus.label,
+        dropPointId: journey.dropPointId,
+        dropPointName: journey.locationNameSnapshot,
+        studentNis: student?.nis ?? null,
+        fullAddress: crossKordaStudent ? null : student?.fullAddress ?? external?.address ?? null,
+        parrentPhone: crossKordaStudent ? null : student?.parrentPhone ?? null,
+        studentGender: student?.gender ?? normalizeExternalParticipantGender(external?.gender) ?? "-",
+      }];
+    }));
 
-        if (dropPointId) {
-          const outboundMatch = reg.outboundDropPoint?.id === dropPointId;
-          const returnMatch = reg.returnDropPoint?.id === dropPointId;
-          if (outboundMatch !== returnMatch) {
-            return outboundMatch ? "outbound" : "return";
-          }
-        }
-
-        if (selectedKordaIds.length > 0) {
-          const outboundMatch =
-            !!reg.outboundKorda?.id &&
-            selectedKordaIds.includes(reg.outboundKorda.id);
-          const returnMatch =
-            !!reg.returnKorda?.id && selectedKordaIds.includes(reg.returnKorda.id);
-          if (outboundMatch !== returnMatch) {
-            return outboundMatch ? "outbound" : "return";
-          }
-        }
-
-        const outboundHasBus = Boolean(reg.outboundBus?.id || reg.outboundBus?.label);
-        const returnHasBus = Boolean(reg.returnBus?.id || reg.returnBus?.label);
-        if (outboundHasBus !== returnHasBus) {
-          return outboundHasBus ? "outbound" : "return";
-        }
-
-        if (reg.returnDate || reg.returnKorda || reg.returnDropPoint) {
-          return "return";
-        }
-        return "outbound";
-      };
-
-      const preferredSide = chooseJourneySide();
-      const preferredData =
-        preferredSide === "return"
-          ? {
-              korda: reg.returnKorda,
-              dropPoint: reg.returnDropPoint,
-              busLabel: reg.returnBus?.label ?? null,
-            }
-          : {
-              korda: reg.outboundKorda,
-              dropPoint: reg.outboundDropPoint,
-              busLabel: reg.outboundBus?.label ?? null,
-            };
-      const fallbackData =
-        preferredSide === "return"
-          ? {
-              korda: reg.outboundKorda,
-              dropPoint: reg.outboundDropPoint,
-              busLabel: reg.outboundBus?.label ?? null,
-            }
-          : {
-              korda: reg.returnKorda,
-              dropPoint: reg.returnDropPoint,
-              busLabel: reg.returnBus?.label ?? null,
-            };
-
-      const hasPreferredData =
-        !!preferredData.korda || !!preferredData.dropPoint || !!preferredData.busLabel;
-      const isFixedJourney =
-        journeyType === "outbound" || journeyType === "return";
-      const resolvedData =
-        hasPreferredData || isFixedJourney ? preferredData : fallbackData;
-      const participantName = reg.student?.name ?? reg.externalParticipant?.name ?? "Peserta eksternal";
-      const crossKordaStudent = scope.role === "korda" && !!reg.student && reg.student.regency?.kordaId !== scope.kordaId;
-
-      return {
-        id: reg.id,
-        studentName: participantName,
-        studentNis: reg.student?.nis ?? null,
-        fullAddress: crossKordaStudent ? null : reg.student?.fullAddress ?? reg.externalParticipant?.address ?? null,
-        parrentPhone: crossKordaStudent ? null : reg.student?.parrentPhone ?? null,
-        studentGender: reg.student?.gender ?? normalizeExternalParticipantGender(reg.externalParticipant?.gender) ?? "-",
-        kordaName: resolvedData.korda?.name || "-",
-        dropPointName: resolvedData.dropPoint?.name || "-",
-        busLabel: resolvedData.busLabel,
-      };
-    });
-
-    // console.log(`✅ Returning ${printData.length} print items`);
+    // Apply secondary filters after numbering so filtered previews preserve the
+    // same Korda roster numbers as the complete eligible print roster.
+    const studentName = params.studentName?.trim().toLocaleLowerCase("id-ID");
+    const printData: PrintDataItem[] = completeRoster
+      .filter((item) => !studentName || item.participantName.toLocaleLowerCase("id-ID").includes(studentName))
+      .filter((item) => !params.gender || item.studentGender === params.gender)
+      .filter((item) => selectedKordaIds.length === 0 || selectedKordaIds.includes(item.destinationKordaId))
+      .filter((item) => !params.dropPointId || item.dropPointId === params.dropPointId)
+      .map((item) => ({
+        id: item.id,
+        rosterNumber: item.rosterNumber,
+        studentName: item.participantName,
+        studentNis: item.studentNis,
+        fullAddress: item.fullAddress,
+        parrentPhone: item.parrentPhone,
+        studentGender: item.studentGender,
+        destinationKordaId: item.destinationKordaId,
+        korwilName: item.korwilName,
+        kordaName: item.destinationKordaName,
+        dropPointId: item.dropPointId,
+        dropPointName: item.dropPointName,
+        busId: item.busId,
+        busLabel: item.busLabel,
+      }));
 
     return { success: true, data: printData };
   } catch (error) {
     if (error instanceof AccessDeniedError) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
-    console.error("Error fetching print data:", error);
+    console.error("Error fetching print roster:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch data",
+      error: error instanceof Error ? error.message : "Gagal memuat data roster cetak",
     };
   }
 }

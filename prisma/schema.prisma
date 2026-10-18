@@ -121,7 +121,8 @@ model Student {
   village                  Village?           @relation(fields: [villageId], references: [id])
   villageId                Int?
 
-  registrations Registration[]
+  registrations        Registration[]
+  outboundDispositions OutboundDisposition[]
 
   @@index([status])
   @@index([name])
@@ -263,9 +264,10 @@ model Event {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  registrations Registration[]
-  buses         Bus[]
-  payments      Payment[]
+  registrations        Registration[]
+  outboundDispositions OutboundDisposition[]
+  buses                Bus[]
+  payments             Payment[]
 
   // Tracker API sync status
   trackerEventId String?   @unique // Event ID from tracker API
@@ -475,6 +477,54 @@ enum JourneyDirection {
 enum JourneyStatus {
   REGISTERED
   CANCELLED
+}
+
+enum OutboundDispositionReason {
+  WISUDA
+  PARTISIPAN
+  SEDANG_PULANG
+}
+
+enum OutboundDispositionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// Records why an active student will not join the outbound journey for an event.
+// It is deliberately independent of Registration/Journey and therefore creates no bill.
+model OutboundDisposition {
+  id              String                       @id @default(uuid())
+  eventId         String
+  event           Event                        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studentId       String
+  student         Student                      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reason          OutboundDispositionReason
+  status          OutboundDispositionStatus    @default(ACTIVE)
+  createdByUserId String
+  updatedByUserId String
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  history         OutboundDispositionHistory[]
+
+  @@unique([eventId, studentId])
+  @@index([eventId, status])
+  @@index([studentId, status])
+}
+
+model OutboundDispositionHistory {
+  id            String                     @id @default(uuid())
+  dispositionId String
+  disposition   OutboundDisposition        @relation(fields: [dispositionId], references: [id], onDelete: Cascade)
+  fromReason    OutboundDispositionReason?
+  toReason      OutboundDispositionReason
+  fromStatus    OutboundDispositionStatus?
+  toStatus      OutboundDispositionStatus
+  actorUserId   String
+  createdAt     DateTime                   @default(now())
+
+  @@index([dispositionId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model Journey {

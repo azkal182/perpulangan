@@ -165,9 +165,10 @@ export const registrationRepository = {
     }
   },
 
-  async create(data: RegistrationCreateData): Promise<Registration> {
+  async create(data: RegistrationCreateData, tx?: Prisma.TransactionClient): Promise<Registration> {
     try {
-      const result = await prisma.registration.create({
+      const client = tx ?? prisma;
+      const result = await client.registration.create({
         data: {
           eventId: data.eventId,
           studentId: data.studentId ?? null,

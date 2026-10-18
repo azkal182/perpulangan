@@ -36,6 +36,7 @@ interface BusPassengersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bus: BusWithDetails;
+  initialJourney?: "outbound" | "return";
   onPassengerChange: () => void;
 }
 
@@ -255,6 +256,7 @@ export function BusPassengersDialog({
   open,
   onOpenChange,
   bus,
+  initialJourney = "return",
   onPassengerChange,
 }: BusPassengersDialogProps) {
   return (
@@ -270,7 +272,7 @@ export function BusPassengersDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="return" className="mt-2">
+        <Tabs key={`${bus.id}-${initialJourney}`} defaultValue={initialJourney} className="mt-2">
           <TabsList className="w-full">
             <TabsTrigger value="return" className="flex-1">
               Kepulangan

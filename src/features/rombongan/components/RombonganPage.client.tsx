@@ -8,6 +8,9 @@ import {
   MoreVertical,
   FileDown,
   Printer,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,13 +57,14 @@ import {
   getAllKordas,
   getAllKorwils,
 } from "../actions/helpers.actions";
-import { getBusAttendanceManifest } from "../actions/passenger.actions";
+import { getBusAttendanceManifest, getUnassignedJourneyCounts } from "../actions/passenger.actions";
 import {
   buildBusAttendancePdf,
   openBusAttendancePdfInNewTab,
 } from "../utils/bus-attendance-pdf";
 import { BusFormDialog } from "./BusFormDialog";
 import { BusPassengersDialog } from "./BusPassengersDialog";
+import { UnassignedJourneysDialog } from "./UnassignedJourneysDialog";
 
 function assignedCount(bus: BusWithDetails, direction: "OUTBOUND" | "RETURN") {
   return bus.journeyAssignments.filter((item) => item.journey.status === "REGISTERED" && item.journey.direction === direction).length;
@@ -93,6 +97,11 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBus, setEditingBus] = useState<BusWithDetails | null>(null);
   const [managingBus, setManagingBus] = useState<BusWithDetails | null>(null);
+  const [managingJourney, setManagingJourney] = useState<"outbound" | "return">("return");
+  const [unassignedDirection, setUnassignedDirection] = useState<"OUTBOUND" | "RETURN" | null>(null);
+  const [unassignedCounts, setUnassignedCounts] = useState({ outbound: 0, returning: 0 });
+  const [unassignedLoading, setUnassignedLoading] = useState(false);
+  const [unassignedError, setUnassignedError] = useState<string | null>(null);
   const [busPendingDelete, setBusPendingDelete] = useState<BusWithDetails | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingBus, setDeletingBus] = useState(false);
@@ -109,6 +118,31 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
   useEffect(() => {
     loadBuses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId, selectedKorwilId, selectedKordaId]);
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      setUnassignedCounts({ outbound: 0, returning: 0 });
+      return;
+    }
+    let current = true;
+    setUnassignedLoading(true);
+    setUnassignedError(null);
+    getUnassignedJourneyCounts({
+      eventId: selectedEventId,
+      korwilId: selectedKorwilId,
+      kordaId: selectedKordaId,
+    })
+      .then((counts) => {
+        if (current) setUnassignedCounts(counts);
+      })
+      .catch((error) => {
+        if (current) setUnassignedError(error instanceof Error ? error.message : "Gagal memuat perjalanan tanpa armada.");
+      })
+      .finally(() => {
+        if (current) setUnassignedLoading(false);
+      });
+    return () => { current = false; };
   }, [selectedEventId, selectedKorwilId, selectedKordaId]);
 
   async function loadData() {
@@ -146,6 +180,13 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
     } catch (error) {
       console.error("Failed to load buses:", error);
     }
+  }
+
+  function showBusesForKorda(kordaId: string, direction: "OUTBOUND" | "RETURN") {
+    setUnassignedDirection(null);
+    setSelectedKordaId(kordaId);
+    setManagingJourney(direction === "OUTBOUND" ? "outbound" : "return");
+    document.getElementById("bus-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function handleToggleActive(id: string) {
@@ -395,7 +436,47 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
         </div>
       </div>
 
+      <section aria-labelledby="unassigned-heading" className={unassignedCounts.outbound + unassignedCounts.returning > 0 ? "rounded-lg border border-amber-300 bg-amber-50/70 p-4 dark:bg-amber-950/20" : "rounded-lg border bg-card p-4"}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            {unassignedCounts.outbound + unassignedCounts.returning > 0
+              ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+              : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />}
+            <div>
+              <h2 id="unassigned-heading" className="font-semibold">
+                {unassignedCounts.outbound + unassignedCounts.returning > 0 ? "Perjalanan belum ditempatkan" : "Semua perjalanan sudah ditempatkan"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {unassignedCounts.outbound + unassignedCounts.returning > 0
+                  ? "Hitungan mengikuti event dan cakupan Korda/Korwil yang dipilih. Pengecualian tidak dihitung karena bukan perjalanan."
+                  : "Tidak ada perjalanan terdaftar tanpa armada pada event dan cakupan yang dipilih."}
+              </p>
+            </div>
+          </div>
+          {unassignedLoading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : null}
+        </div>
+        {unassignedError ? (
+          <p role="alert" className="mt-3 text-sm text-destructive">{unassignedError}</p>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-3 rounded-md border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-sm text-muted-foreground">Pulang</p><p className="text-2xl font-semibold tabular-nums">{unassignedCounts.outbound.toLocaleString("id-ID")}</p></div>
+              <Button variant="outline" size="sm" disabled={unassignedLoading || unassignedCounts.outbound === 0} onClick={() => setUnassignedDirection("OUTBOUND")}>
+                Lihat daftar <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-col gap-3 rounded-md border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-sm text-muted-foreground">Kembali</p><p className="text-2xl font-semibold tabular-nums">{unassignedCounts.returning.toLocaleString("id-ID")}</p></div>
+              <Button variant="outline" size="sm" disabled={unassignedLoading || unassignedCounts.returning === 0} onClick={() => setUnassignedDirection("RETURN")}>
+                Lihat daftar <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Mobile Cards */}
+      <div id="bus-list" className="scroll-mt-6" />
       <div className="space-y-3 md:hidden">
         {buses.length === 0 ? (
           <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -655,7 +736,19 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
             if (!open) setManagingBus(null);
           }}
           bus={managingBus}
+          initialJourney={managingJourney}
           onPassengerChange={loadBuses}
+      />}
+      {unassignedDirection && selectedEventId && <UnassignedJourneysDialog
+        key={`${selectedEventId}-${unassignedDirection}-${selectedKorwilId ?? "all"}-${selectedKordaId ?? "all"}`}
+        open={unassignedDirection !== null}
+        onOpenChange={(open) => { if (!open) setUnassignedDirection(null); }}
+        eventId={selectedEventId}
+        eventName={events.find((eventItem) => eventItem.id === selectedEventId)?.name ?? "Event"}
+        direction={unassignedDirection}
+        korwilId={selectedKorwilId}
+        kordaId={selectedKordaId}
+        onChooseKorda={showBusesForKorda}
       />}
       <AlertDialog
         open={busPendingDelete !== null}

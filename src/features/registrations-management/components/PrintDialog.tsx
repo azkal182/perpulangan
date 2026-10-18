@@ -98,9 +98,7 @@ export function PrintWorkspace({
   showCloseButton = false,
   className,
 }: PrintWorkspaceProps) {
-  const [journeyFilter, setJourneyFilter] = useState<
-    "all" | "outbound" | "return"
-  >("all");
+  const [journeyFilter, setJourneyFilter] = useState<"" | "outbound" | "return">("");
   const [printType, setPrintType] = useState<PrintType>("luggage_card");
   const [paperSize, setPaperSize] = useState<PaperSize>("A4");
   const [genderFilter, setGenderFilter] = useState<
@@ -160,11 +158,15 @@ export function PrintWorkspace({
   }, [showPreview]);
 
   const handlePreview = async () => {
+    if (!journeyFilter) {
+      toast.error("Pilih arah perjalanan sebelum membuat preview.");
+      return;
+    }
     setLoading(true);
     try {
       const result = await getPrintDataAction({
         eventId,
-        journeyType: journeyFilter === "all" ? undefined : journeyFilter,
+        journeyType: journeyFilter,
         gender: genderFilter === "all" ? undefined : genderFilter,
         studentName: nameFilter.trim() || undefined,
         kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
@@ -219,7 +221,7 @@ export function PrintWorkspace({
       });
 
       const cardsPerPage = layout.columns * layout.rows;
-      const pageChunks = buildPagesByKorda(previewData, cardsPerPage);
+      const pageChunks = buildPrintPages(previewData, cardsPerPage);
       const totalPages = pageChunks.length;
 
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -263,7 +265,7 @@ export function PrintWorkspace({
   const paper = PAPER_SIZES[paperSize];
   const cardsPerPage = layout.columns * layout.rows;
   const previewPages =
-    previewData && showPreview ? buildPagesByKorda(previewData, cardsPerPage) : [];
+    previewData && showPreview ? buildPrintPages(previewData, cardsPerPage) : [];
   const totalPreviewPages = previewPages.length;
   const currentPreviewPage =
     totalPreviewPages > 0
@@ -275,7 +277,7 @@ export function PrintWorkspace({
   const paperHeightPx = mmToPx(paper.height);
   const availableWidthPx = Math.max(0, previewViewportSize.width - 24);
   const availableHeightPx = Math.max(0, previewViewportSize.height - 24);
-  const fallbackScale = paperSize === "A3" ? 0.34 : 0.4;
+  const fallbackScale = paperSize === "A3+" ? 0.24 : paperSize === "A3" ? 0.34 : 0.4;
   const fitScale =
     availableWidthPx > 0 && availableHeightPx > 0
       ? Math.min(
@@ -366,19 +368,18 @@ export function PrintWorkspace({
         </div>
 
         <div className="space-y-2">
-          <Label>Filter Perjalanan</Label>
+          <Label>Perjalanan <span className="text-destructive">*</span></Label>
           <Select
             value={journeyFilter}
-            onValueChange={(value: "all" | "outbound" | "return") => {
+            onValueChange={(value: "outbound" | "return") => {
               setJourneyFilter(value);
               resetPreview();
             }}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Pilih perjalanan" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Semua perjalanan</SelectItem>
               <SelectItem value="outbound">Keberangkatan</SelectItem>
               <SelectItem value="return">Kepulangan</SelectItem>
             </SelectContent>
@@ -464,6 +465,7 @@ export function PrintWorkspace({
             <SelectItem value="A4">A4 (210 x 297 mm)</SelectItem>
             <SelectItem value="F4">F4 (215 x 330 mm)</SelectItem>
             <SelectItem value="A3">A3 (297 x 420 mm)</SelectItem>
+            <SelectItem value="A3+">A3+ (329 x 483 mm)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -563,7 +565,7 @@ export function PrintWorkspace({
         <Button
           variant="secondary"
           onClick={handlePreview}
-          disabled={loading || generatingPdf}
+          disabled={!journeyFilter || loading || generatingPdf}
         >
           {loading ? (
             <>
@@ -579,7 +581,7 @@ export function PrintWorkspace({
         </Button>
         <Button
           onClick={handleGeneratePDF}
-          disabled={!showPreview || loading || generatingPdf}
+          disabled={!journeyFilter || !showPreview || loading || generatingPdf}
         >
           {generatingPdf ? (
             <>
@@ -727,74 +729,19 @@ function normalizeText(value: string | null | undefined): string {
   return normalized && normalized.length > 0 ? normalized : "-";
 }
 
-function normalizeBusSortValue(value: string | null | undefined): string {
-  const normalized = value?.toString().trim();
-  return normalized && normalized !== "-" ? normalized : "\uffff";
-}
-
 function isPutriGender(value: string | null | undefined): boolean {
   const gender = normalizeText(value).toUpperCase();
   return gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN";
 }
 
-function getGenderSortRank(value: string | null | undefined): number {
-  const gender = normalizeText(value).toUpperCase();
-  if (gender === "L" || gender === "PUTRA" || gender === "LAKI-LAKI") {
-    return 0;
-  }
-  if (gender === "P" || gender === "PUTRI" || gender === "PEREMPUAN") {
-    return 1;
-  }
-  return 2;
-}
-
-function buildPagesByKorda(
+function buildPrintPages(
   data: PrintDataItem[],
   cardsPerPage: number,
 ): PrintDataItem[][] {
-  const grouped = new Map<string, PrintDataItem[]>();
-  data.forEach((item) => {
-    const key = normalizeText(item.kordaName);
-    if (!grouped.has(key)) {
-      grouped.set(key, []);
-    }
-    grouped.get(key)?.push(item);
-  });
-
-  const sortedGroupEntries = Array.from(grouped.entries()).sort(([left], [right]) =>
-    left.localeCompare(right, "id", { sensitivity: "base" }),
-  );
-
   const pages: PrintDataItem[][] = [];
-  sortedGroupEntries.forEach(([, items]) => {
-    const sortedItems = [...items].sort((a, b) => {
-      const busCompare = normalizeBusSortValue(a.busLabel).localeCompare(
-        normalizeBusSortValue(b.busLabel),
-        "id",
-        { sensitivity: "base", numeric: true },
-      );
-      if (busCompare !== 0) {
-        return busCompare;
-      }
-
-      const nameCompare = normalizeText(a.studentName).localeCompare(
-        normalizeText(b.studentName),
-        "id",
-        { sensitivity: "base", numeric: true },
-      );
-      if (nameCompare !== 0) {
-        return nameCompare;
-      }
-
-      return (
-        getGenderSortRank(a.studentGender) - getGenderSortRank(b.studentGender)
-      );
-    });
-
-    for (let index = 0; index < sortedItems.length; index += cardsPerPage) {
-      pages.push(sortedItems.slice(index, index + cardsPerPage));
-    }
-  });
+  for (let index = 0; index < data.length; index += cardsPerPage) {
+    pages.push(data.slice(index, index + cardsPerPage));
+  }
 
   return pages;
 }
@@ -818,7 +765,8 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
   const floralScaleY = 530 / 600;
   const kordaText = truncatePreviewText(item.kordaName, 16).toUpperCase();
   const studentName = truncatePreviewText(item.studentName, 30).toUpperCase();
-  const studentNis = truncatePreviewText(item.studentNis, 20);
+  const studentNis = item.studentNis ? truncatePreviewText(item.studentNis, 20) : "";
+  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
   const parentPhone = truncatePreviewText(item.parrentPhone, 24);
   const dropPoint = truncatePreviewText(item.dropPointName, 20);
   const busLabel = truncatePreviewText(item.busLabel, 20);
@@ -985,6 +933,9 @@ function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
       <text x="490" y="43" fill="#ffffff" textAnchor="middle" fontSize="34" fontWeight="700" letterSpacing="4">
         {`KARTU BARANG ${genderLabel}`}
       </text>
+      <text x="950" y="42" fill="#ffffff" textAnchor="end" fontSize="27" fontWeight="700">
+        {`NO. ${rosterNumber}`}
+      </text>
       <text x="490" y="96" fill="#ffffff" textAnchor="middle" fontSize="61" fontWeight="900">
         {kordaText}
       </text>
@@ -1022,6 +973,7 @@ function PreviewTicketCard({ item }: { item: PrintDataItem }) {
   const dropPoint = truncatePreviewText(item.dropPointName, 18);
   const korda = truncatePreviewText(item.kordaName, 18);
   const busLabel = truncatePreviewText(item.busLabel, 16);
+  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
   const busBadgeWidth = Math.max(
     40,
     Math.min(430, busLabel.length * 13 + 24),
@@ -1043,6 +995,9 @@ function PreviewTicketCard({ item }: { item: PrintDataItem }) {
 
       <text x="490" y="40" fill="#ffffff" textAnchor="middle" fontSize="40" fontWeight="700">
         TIKET PERJALANAN
+      </text>
+      <text x="950" y="40" fill="#ffffff" textAnchor="end" fontSize="30" fontWeight="700">
+        {`NO. ${rosterNumber}`}
       </text>
 
       <text x="20" y="85" fill="#6b7280" fontSize="23" fontWeight="700">NAMA PESERTA</text>
@@ -1755,6 +1710,10 @@ function drawLuggageCardToPdf(
   pdf.text(`KARTU BARANG ${genderLabel}`, x + width / 2, y + 4, {
     align: "center",
   });
+  pdf.setFontSize(6.4);
+  pdf.text(`NO. ${String(item.rosterNumber).padStart(3, "0")}`, x + width - 2, y + 4, {
+    align: "right",
+  });
 
   const kordaHeader = fitSingleLineText(
     pdf,
@@ -1816,18 +1775,20 @@ function drawLuggageCardToPdf(
   pdf.setFontSize(7);
   pdf.text("NIS", leftColumnX, topLabelY);
 
-  const nisValue = fitSingleLineText(
-    pdf,
-    item.studentNis,
-    columnWidth,
-    9.2,
-    7.2,
-    "normal",
-  );
-  pdf.setTextColor(55, 65, 81);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(nisValue.fontSize);
-  pdf.text(nisValue.text, leftColumnX, topValueY);
+  if (item.studentNis) {
+    const nisValue = fitSingleLineText(
+      pdf,
+      item.studentNis,
+      columnWidth,
+      9.2,
+      7.2,
+      "normal",
+    );
+    pdf.setTextColor(55, 65, 81);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(nisValue.fontSize);
+    pdf.text(nisValue.text, leftColumnX, topValueY);
+  }
 
   pdf.setTextColor(...labelColor);
   pdf.setFont("helvetica", "bold");
@@ -1945,6 +1906,10 @@ function drawTicketToPdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(headerTitle.fontSize);
   pdf.text(headerTitle.text, x + width / 2, y + 3.9, { align: "center" });
+  pdf.setFontSize(5.8);
+  pdf.text(`NO. ${String(item.rosterNumber).padStart(3, "0")}`, x + width - 2, y + 3.9, {
+    align: "right",
+  });
 
   pdf.setFillColor(...palette.bg);
   pdf.rect(x, bodyTop, width, bodyHeight, "F");

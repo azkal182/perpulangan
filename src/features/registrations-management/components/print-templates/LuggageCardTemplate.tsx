@@ -26,8 +26,9 @@ export function LuggageCardTemplate({
     >
       {/* Header */}
       <div className={`${kordaColor.headerBg} shrink-0 px-3 pt-2 pb-1.5 text-center`}>
-        <div className="text-[10px] font-extrabold uppercase tracking-widest text-white/90 shadow-sm leading-none mb-1 pt-0.5">
-          ✦ KARTU BARANGs {data.studentGender === "L" ? "PUTRA" : "PUTRI"} ✦
+        <div className="flex items-center justify-between gap-2 text-[10px] font-extrabold uppercase tracking-widest text-white/90 shadow-sm leading-none mb-1 pt-0.5">
+          <span>✦ KARTU BARANG {data.studentGender === "L" ? "PUTRA" : "PUTRI"} ✦</span>
+          <span>No. {String(data.rosterNumber).padStart(3, "0")}</span>
         </div>
         <div className="text-[17px] font-black uppercase tracking-widest text-white shadow-sm leading-none drop-shadow-sm truncate">
           {data.kordaName}

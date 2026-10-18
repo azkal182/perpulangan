@@ -3,6 +3,7 @@ export const PAPER_SIZES = {
   A4: { width: 210, height: 297, name: "A4" },
   F4: { width: 215, height: 330, name: "F4" },
   A3: { width: 297, height: 420, name: "A3" },
+  "A3+": { width: 329, height: 483, name: "A3+" },
 } as const;
 
 export type PaperSize = keyof typeof PAPER_SIZES;
@@ -304,6 +305,17 @@ export function calculateLayout(
           gapX: 0,
           gapY: 0,
         };
+      case "A3+":
+        return {
+          columns: 3,
+          rows: 9,
+          cardWidth,
+          cardHeight,
+          marginX: 22,
+          marginY: 3,
+          gapX: 0,
+          gapY: 0,
+        };
     }
   } else {
     // Ticket: low-height landscape format to match content density
@@ -344,19 +356,35 @@ export function calculateLayout(
           gapX: 0,
           gapY: 0,
         };
+      case "A3+":
+        return {
+          columns: 3,
+          rows: 24,
+          cardWidth,
+          cardHeight,
+          marginX: 22,
+          marginY: 1.5,
+          gapX: 0,
+          gapY: 0,
+        };
     }
   }
 }
 
 export interface PrintDataItem {
   id: string;
+  rosterNumber: number;
   studentName: string;
   studentNis: string | null;
   fullAddress: string | null;
   parrentPhone: string | null;
   studentGender: string;
+  destinationKordaId: string;
+  korwilName: string | null;
   kordaName: string;
+  dropPointId: string | null;
   dropPointName: string;
+  busId: string;
   busLabel: string | null;
 }
 

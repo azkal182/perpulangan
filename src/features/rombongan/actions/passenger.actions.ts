@@ -3,7 +3,9 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/server/logger";
+import type { Prisma } from "@/generated/prisma/client";
 import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
+import { buildNumberedPrintRoster } from "@/features/registrations-management/lib/print-roster";
 import {
   AccessDeniedError,
   andWhere,
@@ -48,11 +50,13 @@ export interface AssignableRegistration {
 
 export interface BusAttendancePassenger {
   registrationId: string;
+  rosterNumber: number;
   studentName: string;
   studentNis: string | null;
   studentGender: string;
   kabKota: string | null;
   dropPointName: string | null;
+  kordaName: string;
 }
 
 export interface BusAttendanceManifest {
@@ -65,67 +69,138 @@ export interface BusAttendanceManifest {
   passengers: BusAttendancePassenger[];
 }
 
-function normalizeSortValue(
-  value: string | null | undefined,
-  options?: { nullLast?: boolean },
-): string {
-  const normalized = value?.trim().toLocaleLowerCase("id-ID");
-  if (normalized && normalized.length > 0) {
-    return normalized;
+export interface UnassignedJourneyRow {
+  journeyId: string;
+  registrationId: string;
+  direction: "OUTBOUND" | "RETURN";
+  participantName: string;
+  participantNis: string | null;
+  destinationKordaId: string;
+  destinationKordaName: string;
+  dropPointName: string;
+  journeyDate: Date | null;
+}
+
+type UnassignedJourneyFilters = {
+  eventId: string;
+  korwilId?: string;
+  kordaId?: string;
+};
+
+function unassignedJourneyWhere(
+  scope: Awaited<ReturnType<typeof getRegionalAccessScope>>,
+  filters: UnassignedJourneyFilters,
+  direction?: "OUTBOUND" | "RETURN",
+): Prisma.JourneyWhereInput {
+  const destinationClauses: Prisma.JourneyWhereInput[] = [];
+  if (scope.role === "korwil") {
+    destinationClauses.push({ destinationKorda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } });
+  } else if (scope.role === "korda") {
+    destinationClauses.push({ destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" });
   }
-  return options?.nullLast === false ? "" : "\uffff";
+  if (filters.korwilId) destinationClauses.push({ destinationKorda: { korwilId: filters.korwilId } });
+  if (filters.kordaId) destinationClauses.push({ destinationKordaId: filters.kordaId });
+
+  return {
+    AND: [
+      {
+        direction,
+        status: "REGISTERED",
+        registration: {
+          eventId: filters.eventId,
+          status: { not: "CANCELLED" },
+          ...(registrationScopeWhere(scope) ? { AND: [registrationScopeWhere(scope)!] } : {}),
+        },
+        OR: [{ busAssignment: null }, { busAssignment: { busId: null } }],
+      },
+      ...destinationClauses,
+    ],
+  };
 }
 
-function compareSortValue(
-  left: string | null | undefined,
-  right: string | null | undefined,
-  options?: { nullLast?: boolean },
-): number {
-  return normalizeSortValue(left, options).localeCompare(
-    normalizeSortValue(right, options),
-    "id",
-    { sensitivity: "base", numeric: true },
-  );
+async function validateUnassignedJourneyFilters(
+  scope: Awaited<ReturnType<typeof getRegionalAccessScope>>,
+  filters: UnassignedJourneyFilters,
+) {
+  if (!filters.eventId || !(await prisma.event.count({ where: { id: filters.eventId } }))) {
+    throw new Error("Event tidak ditemukan.");
+  }
+  if (filters.korwilId) await ensureKorwilInScope(scope, filters.korwilId);
+  if (filters.kordaId) await ensureKordaInScope(scope, filters.kordaId);
 }
 
-function sortBusAttendancePassengers(
-  passengers: BusAttendancePassenger[],
-): BusAttendancePassenger[] {
-  return [...passengers].sort((a, b) => {
-    const dropPointCompare = compareSortValue(a.dropPointName, b.dropPointName);
-    if (dropPointCompare !== 0) {
-      return dropPointCompare;
-    }
-
-    const nameCompare = compareSortValue(a.studentName, b.studentName, {
-      nullLast: false,
-    });
-    if (nameCompare !== 0) {
-      return nameCompare;
-    }
-
-    return compareSortValue(a.studentNis, b.studentNis);
-  });
+/** Counts registered, unassigned journeys by direction in the exact event and destination scope. */
+export async function getUnassignedJourneyCounts(filters: UnassignedJourneyFilters) {
+  try {
+    const scope = await getRegionalAccessScope();
+    await validateUnassignedJourneyFilters(scope, filters);
+    const [outbound, returning] = await Promise.all([
+      prisma.journey.count({ where: unassignedJourneyWhere(scope, filters, "OUTBOUND") }),
+      prisma.journey.count({ where: unassignedJourneyWhere(scope, filters, "RETURN") }),
+    ]);
+    return { outbound, returning };
+  } catch (error) {
+    if (error instanceof AccessDeniedError) throw new Error(error.message);
+    logger.error({ error, filters }, "passenger.getUnassignedJourneyCounts.failed");
+    throw new Error(error instanceof Error ? error.message : "Gagal memuat jumlah perjalanan tanpa armada.");
+  }
 }
 
-function sortBusAttendanceManifest(
-  manifests: BusAttendanceManifest[],
-): BusAttendanceManifest[] {
-  return [...manifests].sort((a, b) => {
-    const korwilCompare = compareSortValue(a.korwilName, b.korwilName);
-    if (korwilCompare !== 0) {
-      return korwilCompare;
-    }
-
-    const kordaA = a.kordaNames[0] ?? null;
-    const kordaB = b.kordaNames[0] ?? null;
-    const kordaCompare = compareSortValue(kordaA, kordaB);
-    if (kordaCompare !== 0) {
-      return kordaCompare;
-    }
-
-    return compareSortValue(a.busLabel, b.busLabel, { nullLast: false });
-  });
+/** Lists registered, unassigned journeys for the follow-up dialog. */
+export async function getUnassignedJourneys(
+  filters: UnassignedJourneyFilters & { direction: "OUTBOUND" | "RETURN"; page?: number },
+) {
+  try {
+    const scope = await getRegionalAccessScope();
+    await validateUnassignedJourneyFilters(scope, filters);
+    const pageSize = 25;
+    const page = Math.max(1, Number.isSafeInteger(filters.page) ? filters.page! : 1);
+    const where = unassignedJourneyWhere(scope, filters, filters.direction);
+    const [rows, total] = await Promise.all([
+      prisma.journey.findMany({
+        where,
+        select: {
+          id: true,
+          direction: true,
+          locationNameSnapshot: true,
+          travelDate: true,
+          destinationKordaId: true,
+          destinationKorda: { select: { name: true } },
+          registration: {
+            select: {
+              id: true,
+              student: { select: { name: true, nis: true } },
+              externalParticipant: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: [
+          { destinationKorda: { name: "asc" } },
+          { registration: { student: { name: "asc" } } },
+          { registration: { externalParticipant: { name: "asc" } } },
+        ],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.journey.count({ where }),
+    ]);
+    const journeys: UnassignedJourneyRow[] = rows.map((row) => ({
+      journeyId: row.id,
+      registrationId: row.registration.id,
+      direction: row.direction,
+      participantName: row.registration.student?.name ?? row.registration.externalParticipant?.name ?? "Peserta eksternal",
+      participantNis: row.registration.student?.nis ?? null,
+      destinationKordaId: row.destinationKordaId,
+      destinationKordaName: row.destinationKorda.name,
+      dropPointName: row.locationNameSnapshot,
+      journeyDate: row.travelDate,
+    }));
+    return { journeys, total, page, pageSize };
+  } catch (error) {
+    if (error instanceof AccessDeniedError) throw new Error(error.message);
+    logger.error({ error, filters }, "passenger.getUnassignedJourneys.failed");
+    throw new Error(error instanceof Error ? error.message : "Gagal memuat daftar perjalanan tanpa armada.");
+  }
 }
 
 /**
@@ -216,6 +291,7 @@ export async function getBusAttendanceManifest(params: {
 }): Promise<BusAttendanceManifest[]> {
   try {
     const scope = await getRegionalAccessScope();
+    if (!params.eventId) throw new Error("Event wajib dipilih.");
     if (params.korwilId) {
       ensureKorwilInScope(scope, params.korwilId);
     }
@@ -223,113 +299,133 @@ export async function getBusAttendanceManifest(params: {
       await ensureKordaInScope(scope, params.kordaId);
     }
 
-    const buses = await prisma.bus.findMany({
-      where: andWhere(
-        {
-          eventId: params.eventId,
-          ...(params.korwilId && { korwilId: params.korwilId }),
-          ...(params.kordaId && {
-            kordas: {
-              some: {
-                kordaId: params.kordaId,
-              },
-            },
-          }),
+    const assignments = await prisma.journeyBusAssignment.findMany({
+      where: {
+        busId: { not: null },
+        bus: { is: andWhere({ eventId: params.eventId }, busScopeWhere(scope)) },
+        journey: {
+          direction: params.journey === "outbound" ? "OUTBOUND" : "RETURN",
+          status: "REGISTERED",
+          registration: { eventId: params.eventId, status: { not: "CANCELLED" } },
+          ...(scope.role === "korda"
+            ? { destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" }
+            : scope.role === "korwil"
+              ? { destinationKorda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } }
+              : {}),
         },
-        busScopeWhere(scope),
-      ),
+      },
       select: {
-        id: true,
-        label: true,
-        capacity: true,
         updatedAt: true,
-        korwil: { select: { name: true } },
-        kordas: {
+        bus: {
           select: {
-            kordaId: true,
-            korda: {
+            id: true,
+            label: true,
+            capacity: true,
+            updatedAt: true,
+            korwil: { select: { name: true } },
+          },
+        },
+        journey: {
+          select: {
+            id: true,
+            destinationKordaId: true,
+            destinationKorda: { select: { name: true, korwilId: true, korwil: { select: { name: true } } } },
+            locationNameSnapshot: true,
+            updatedAt: true,
+            registration: {
               select: {
                 id: true,
-                name: true,
+                student: { select: { name: true, nis: true, gender: true, regency: { select: { name: true, label: true } } } },
+                externalParticipant: { select: { name: true, gender: true } },
               },
             },
-          },
-          orderBy: {
-            korda: { name: "asc" },
           },
         },
       },
-      orderBy: { label: "asc" },
     });
-    const busIds = buses.map((bus) => bus.id);
-    const registrationAccessWhere = registrationScopeWhere(scope);
-    const assignments = busIds.length
-      ? await prisma.journeyBusAssignment.findMany({
-          where: {
-            busId: { in: busIds },
-            journey: {
-              direction: params.journey === "outbound" ? "OUTBOUND" : "RETURN",
-              status: "REGISTERED",
-              registration: {
-                eventId: params.eventId,
-                ...(registrationAccessWhere ? { AND: [registrationAccessWhere] } : {}),
-              },
-            },
-          },
-          include: {
-            bus: { select: { id: true } },
-            journey: {
-              include: {
-                destinationKorda: { select: { name: true } },
-                registration: {
-                  include: {
-                    student: { select: { name: true, nis: true, gender: true, regency: { select: { name: true, label: true } } } },
-                    externalParticipant: { select: { name: true, gender: true } },
-                  },
-                },
-              },
-            },
-          },
-        })
-      : [];
-    const assignmentsByBusId = new Map<string, typeof assignments>();
-    for (const assignment of assignments) {
-      if (!assignment.busId || !assignment.bus) continue;
-      const current = assignmentsByBusId.get(assignment.busId) ?? [];
-      current.push(assignment);
-      assignmentsByBusId.set(assignment.busId, current);
-    }
-    const manifests = buses.map((bus) => {
-      const allowedKordaIds = new Set(bus.kordas.map((item) => item.kordaId));
-      const busAssignments = assignmentsByBusId.get(bus.id) ?? [];
-      const latestUpdate = busAssignments.reduce((latest, assignment) => {
-        const candidate = assignment.updatedAt > assignment.journey.updatedAt ? assignment.updatedAt : assignment.journey.updatedAt;
-        return candidate > latest ? candidate : latest;
-      }, bus.updatedAt);
-      const passengers = busAssignments
-        .filter((assignment) => allowedKordaIds.has(assignment.journey.destinationKordaId))
-        .map((assignment) => {
-          const registration = assignment.journey.registration;
-          return {
-            registrationId: registration.id,
-            studentName: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta eksternal",
-            studentNis: registration.student?.nis ?? null,
-            studentGender: registration.student?.gender ?? normalizeExternalParticipantGender(registration.externalParticipant?.gender) ?? "-",
-            kabKota: registration.student?.regency?.label ?? registration.student?.regency?.name ?? null,
-            dropPointName: assignment.journey.locationNameSnapshot,
-          };
-        });
-      return {
+
+    const completeRoster = buildNumberedPrintRoster(assignments.flatMap((assignment) => {
+      const bus = assignment.bus;
+      if (!bus) return [];
+      const journey = assignment.journey;
+      const registration = journey.registration;
+      const student = registration.student;
+      const name = student?.name ?? registration.externalParticipant?.name ?? "Peserta eksternal";
+      return [{
+        id: journey.id,
+        participantName: name,
+        destinationKordaId: journey.destinationKordaId,
+        destinationKordaName: journey.destinationKorda.name,
+        destinationKorwilId: journey.destinationKorda.korwilId,
+        korwilName: journey.destinationKorda.korwil?.name ?? null,
         busId: bus.id,
         busLabel: bus.label,
+        dropPointId: null,
+        dropPointName: journey.locationNameSnapshot,
+        studentNis: student?.nis ?? null,
+        registrationId: registration.id,
+        studentName: name,
+        studentGender: student?.gender ?? normalizeExternalParticipantGender(registration.externalParticipant?.gender) ?? "-",
+        kabKota: student?.regency?.label ?? student?.regency?.name ?? null,
         busCapacity: bus.capacity,
-        dataUpdatedAt: latestUpdate,
-        korwilName: bus.korwil?.name ?? null,
-        kordaNames: bus.kordas.map((item) => item.korda.name),
-        passengers: sortBusAttendancePassengers(passengers),
-      };
+        busUpdatedAt: bus.updatedAt,
+        assignmentUpdatedAt: assignment.updatedAt,
+        journeyUpdatedAt: journey.updatedAt,
+        busKorwilName: bus.korwil?.name ?? null,
+      }];
+    }));
+
+    const visibleRoster = completeRoster.filter((entry) =>
+      (!params.kordaId || entry.destinationKordaId === params.kordaId) &&
+      (!params.korwilId || entry.destinationKorwilId === params.korwilId),
+    );
+    const assignmentsByJourneyId = new Map(assignments.map((assignment) => [assignment.journey.id, assignment]));
+    const manifestsByBusId = new Map<string, BusAttendanceManifest & { firstIndex: number }>();
+    visibleRoster.forEach((entry, index) => {
+      const assignment = assignmentsByJourneyId.get(entry.id);
+      const bus = assignment?.bus;
+      if (!bus) return;
+      const latestUpdate = [entry.busUpdatedAt, entry.assignmentUpdatedAt, entry.journeyUpdatedAt]
+        .reduce((latest, candidate) => candidate > latest ? candidate : latest, entry.busUpdatedAt);
+      let manifest = manifestsByBusId.get(bus.id);
+      if (!manifest) {
+        manifest = {
+          busId: bus.id,
+          busLabel: bus.label,
+          busCapacity: entry.busCapacity,
+          dataUpdatedAt: latestUpdate,
+          korwilName: entry.busKorwilName,
+          kordaNames: [],
+          passengers: [],
+          firstIndex: index,
+        };
+        manifestsByBusId.set(bus.id, manifest);
+      }
+      if (latestUpdate > manifest.dataUpdatedAt) manifest.dataUpdatedAt = latestUpdate;
+      if (!manifest.kordaNames.includes(entry.destinationKordaName)) manifest.kordaNames.push(entry.destinationKordaName);
+      manifest.passengers.push({
+        registrationId: entry.registrationId,
+        rosterNumber: entry.rosterNumber,
+        studentName: entry.studentName,
+        studentNis: entry.studentNis,
+        studentGender: entry.studentGender,
+        kabKota: entry.kabKota,
+        dropPointName: entry.dropPointName,
+        kordaName: entry.destinationKordaName,
+      });
     });
-    return sortBusAttendanceManifest(manifests);
+
+    return Array.from(manifestsByBusId.values())
+      .sort((left, right) => left.firstIndex - right.firstIndex)
+      .map((manifest) => ({
+        busId: manifest.busId,
+        busLabel: manifest.busLabel,
+        busCapacity: manifest.busCapacity,
+        dataUpdatedAt: manifest.dataUpdatedAt,
+        korwilName: manifest.korwilName,
+        kordaNames: manifest.kordaNames,
+        passengers: manifest.passengers,
+      }));
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       throw new Error(error.message);
