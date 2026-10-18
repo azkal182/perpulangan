@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Autocomplete } from "@/components/AutoComplete";
 import { updateStudentRegional } from "@/features/santri/actions/update-regional.action";
 import { getDistricts } from "@/features/santri/services/regional.db";
+import { formatLegacyAddress } from "@/features/santri/domain/legacy-address";
 
 type RegionalData = {
   id: number;
@@ -155,12 +156,12 @@ export function UpdateRegionalDialog({
 
         <div className="grid gap-4 py-4">
           {sourceAddress && (
-            <details className="rounded-md border p-3">
-              <summary className="cursor-pointer text-sm font-medium">Acuan alamat dari API</summary>
-              <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs">
-                {JSON.stringify(sourceAddress, null, 2)}
-              </pre>
-            </details>
+            <div className="rounded-md border p-3">
+              <span className="text-sm font-medium">Acuan alamat legacy dari API</span>
+              <p className="mt-3 rounded bg-muted p-2 text-sm leading-relaxed break-words">
+                {formatLegacyAddress(sourceAddress)}
+              </p>
+            </div>
           )}
           {/* Province */}
           <div className="grid gap-2">

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { getStudentById } from "../actions/student-crud.action";
 import { Badge } from "@/components/ui/badge";
+import { formatLegacyAddress } from "@/features/santri/domain/legacy-address";
 
 interface DetailStudentDialogProps {
   open: boolean;
@@ -102,8 +103,8 @@ export function DetailStudentDialog({
             </div>
             {student.sourceAddress && (
               <div className="grid gap-1 rounded-md border p-3">
-                <span className="font-medium text-muted-foreground">Sumber alamat API</span>
-                <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(student.sourceAddress, null, 2)}</pre>
+                <span className="font-medium text-muted-foreground">Acuan alamat legacy dari API</span>
+                <span className="break-words">{formatLegacyAddress(student.sourceAddress)}</span>
                 <span className="text-xs text-muted-foreground">Status data wilayah: {student.regionalStatus === "VERIFIED" ? "Terverifikasi admin" : student.regionalStatus === "AUTO_MAPPED" ? "Terpetakan otomatis" : "Perlu ditinjau"}</span>
                 {student.regionalReviewNote && <span className="text-xs text-muted-foreground">Catatan: {student.regionalReviewNote}</span>}
               </div>
