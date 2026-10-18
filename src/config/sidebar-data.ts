@@ -1,15 +1,12 @@
 import {
-  AudioWaveform,
   Banknote,
-  ChartNoAxesCombined,
   Bus,
   Calendar,
+  ChartNoAxesCombined,
   ClipboardCheck,
   ClipboardCopy,
   ClipboardList,
-  Command,
   Database,
-  GalleryVerticalEnd,
   Home,
   MapPin,
   Navigation,
@@ -19,137 +16,41 @@ import {
   Users2,
 } from "lucide-react";
 
-// Data untuk workspace/team selector
-export const teams = [
-  {
-    name: "Acme Inc",
-    logo: GalleryVerticalEnd,
-    plan: "Enterprise",
-  },
-  {
-    name: "Acme Corp.",
-    logo: AudioWaveform,
-    plan: "Startup",
-  },
-  {
-    name: "Evil Corp.",
-    logo: Command,
-    plan: "Free",
-  },
-];
-
-// Data untuk navigation utama
+// Beranda dan ringkasan aplikasi.
 export const navMain = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: Home,
-    isActive: true,
-  },
-  {
-    title: "Event",
-    url: "/event",
-    icon: Calendar,
-  },
-  {
-    title: "Santri",
-    url: "/santri",
-    icon: User2,
-  },
-  {
-    title: "Peserta Eksternal",
-    url: "/peserta-eksternal",
-    icon: Users2,
-  },
-  {
-    title: "Tracking",
-    url: "/tracking",
-    icon: Navigation,
-  },
+  { title: "Dashboard", url: "/dashboard", icon: Home },
 ];
 
-// Data untuk secondary navigation
-
-// Data Manajemen
-export const managements = [
-  {
-    title: "Master",
-    url: "/master",
-    icon: Database,
-  },
-  {
-    title: "registrasi",
-    url: "/registrasi",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "Registrasi Kembali",
-    url: "/registrasi-kembali",
-    icon: ClipboardCopy,
-  },
-  {
-    title: "Daftar Peserta",
-    url: "/daftar-peserta",
-    icon: Users,
-  },
-  {
-    title: "Data Pulang",
-    url: "/data-pulang",
-    icon: ClipboardList,
-  },
-  {
-    title: "Cetak Kartu & Tiket",
-    url: "/cetak-dokumen",
-    icon: Printer,
-  },
-  {
-    title: "Rombongan",
-    url: "/rombongan",
-    icon: Bus,
-  },
-  {
-    title: "Titik Turun",
-    url: "/titik_turun",
-    icon: MapPin,
-  },
-  {
-    title: "Pembayaran",
-    url: "/pembayaran",
-    icon: Banknote,
-  },
-  {
-    title: "Laporan",
-    url: "/laporan",
-    icon: ChartNoAxesCombined,
-  },
-  {
-    title: "Keuangan Pusat",
-    url: "/keuangan",
-    icon: Banknote,
-  },
-  {
-    title: "Refund",
-    url: "/refund",
-    icon: Banknote,
-  },
+// Alur kerja utama untuk mengelola perjalanan perpulangan.
+export const operations = [
+  { title: "Event", url: "/event", icon: Calendar },
+  { title: "Registrasi Pulang", url: "/registrasi", icon: ClipboardCheck },
+  { title: "Registrasi Kembali", url: "/registrasi-kembali", icon: ClipboardCopy },
+  { title: "Daftar Peserta", url: "/daftar-peserta", icon: Users },
+  { title: "Rombongan & Armada", url: "/rombongan", icon: Bus },
+  { title: "Tracking", url: "/tracking", icon: Navigation },
+  { title: "Cetak Kartu & Tiket", url: "/cetak-dokumen", icon: Printer },
 ];
 
-// Data Lainnya
-export const others = [
-  //   {
-  //     title: "laporan",
-  //     url: "/laporan",
-  //     icon: ClipboardMinus,
-  //     badge: "5",
-  //   },
-  {
-    title: "Users",
-    url: "/dashboard/users",
-    icon: Users2,
-  },
-  //   {
-  //     title: "Pengaturan",
-  //     url: "/pengaturan",
-  //     icon: Settings,
-  //   },
+// Data peserta dan wilayah yang dipakai dalam registrasi serta perjalanan.
+export const participantData = [
+  { title: "Data Pulang", url: "/data-pulang", icon: ClipboardList },
+  { title: "Santri", url: "/santri", icon: User2 },
+  { title: "Peserta Eksternal", url: "/peserta-eksternal", icon: Users2 },
+  { title: "Master Data", url: "/master", icon: Database },
+  { title: "Titik Turun", url: "/titik_turun", icon: MapPin },
+];
+
+// Pencatatan pembayaran dan ringkasan keuangan.
+export const finance = [
+  { title: "Pembayaran", url: "/pembayaran", icon: Banknote },
+  { title: "Refund", url: "/refund", icon: Banknote },
+  { title: "Koreksi Transaksi", url: "/koreksi-keuangan", icon: ClipboardCopy },
+  { title: "Laporan Keuangan", url: "/laporan", icon: ChartNoAxesCombined },
+  { title: "Keuangan Pusat", url: "/keuangan", icon: Banknote, adminOnly: true },
+];
+
+// Administrasi akun dan akses.
+export const administration = [
+  { title: "Pengguna", url: "/dashboard/users", icon: Users2 },
 ];

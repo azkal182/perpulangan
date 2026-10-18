@@ -14,7 +14,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -30,11 +29,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { navMain, managements, others } from "@/config/sidebar-data";
+import { administration, finance, navMain, operations, participantData } from "@/config/sidebar-data";
 import { signOut } from "@/client/auth";
 import type { AppRole } from "@/lib/auth-access";
 
 type SidebarUser = { name: string; email: string; image: string };
+type SidebarNavItem = { title: string; url: string; icon: React.ElementType; adminOnly?: boolean };
 
 export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof Sidebar> & { role: AppRole; user: SidebarUser }) {
   const pathname = usePathname();
@@ -52,9 +52,28 @@ export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof
   // Helper to check if a url is active
   const isActive = (url: string) => {
     if (url === "/dashboard" && pathname === "/dashboard") return true;
-    if (url !== "/dashboard" && pathname === url) return true;
-    return false;
+    return url !== "/dashboard" && (pathname === url || pathname.startsWith(`${url}/`));
   };
+
+  const renderNavGroup = (title: string, items: SidebarNavItem[]) => (
+    <SidebarGroup key={title}>
+      <SidebarGroupLabel>{title}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.filter((item) => !item.adminOnly || role === "admin").map((item) => (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton asChild tooltip={item.title} isActive={isActive(item.url)}>
+                <Link href={item.url}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -97,73 +116,11 @@ export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof
 
       {/* Content */}
       <SidebarContent>
-        {/* Main Navigation */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navMain.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActive(item.url)}
-                  >
-                    <Link href={item.url}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Management Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {managements.filter((item) => item.url !== "/keuangan" || role === "admin").map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActive(item.url)}
-                  >
-                    <Link href={item.url}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Others Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Lainnya</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {others.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActive(item.url)}
-                  >
-                    <Link href={item.url}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {renderNavGroup("Ringkasan", navMain)}
+        {renderNavGroup("Operasional", operations)}
+        {renderNavGroup("Data Peserta & Wilayah", participantData)}
+        {renderNavGroup("Keuangan", finance)}
+        {renderNavGroup("Administrasi", administration)}
       </SidebarContent>
 
       {/* Footer - User Menu */}

@@ -2,6 +2,7 @@
   "name": "perpulangan",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.15.2",
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev",
@@ -9,6 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed:admin": "node --import tsx prisma/seed-admin.ts",
+    "seed:regional": "node --import tsx prisma/seed-regional-account.ts",
     "seed:demo": "node --import tsx prisma/seed-demo-registration-payment.ts",
     "docker:up": "docker compose up",
     "docker:build": "docker compose up --build",

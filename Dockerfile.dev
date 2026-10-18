@@ -5,8 +5,8 @@ RUN apk add --no-cache libc6-compat openssl
 
 WORKDIR /app
 
-# Enable pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin pnpm to the same version used by CI and the VPS
+RUN corepack enable && corepack prepare pnpm@9.15.2 --activate && pnpm --version
 
 # Copy package files first for layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
