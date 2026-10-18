@@ -9,6 +9,14 @@ if (!databaseUrl) throw new Error("DATABASE_URL wajib diatur.");
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 type RegionType = "korwil" | "korda";
+type RegionAccountTarget = {
+  type: RegionType;
+  id: string;
+  name: string;
+  picName: string | null;
+  username: string;
+  email: string;
+};
 
 function generatedUsername(type: RegionType, name: string, id: string) {
   const slug = name
@@ -63,6 +71,41 @@ function getType(args: string[]): RegionType {
   return value;
 }
 
+async function requestPassword() {
+  const suppliedPassword = process.env.REGIONAL_ACCOUNT_PASSWORD;
+  const password = suppliedPassword ?? await readHidden("Password bersama (minimal 8 karakter): ");
+  if (password.length < 8) throw new Error("Password minimal 8 karakter.");
+  if (!suppliedPassword) {
+    const confirmation = await readHidden("Ulangi password bersama: ");
+    if (password !== confirmation) throw new Error("Konfirmasi password tidak sama.");
+  }
+  return password;
+}
+
+async function createAccount(target: RegionAccountTarget, password: string) {
+  const displayName = target.picName?.trim() || `${target.name} (${target.type === "korwil" ? "Korwil" : "Korda"})`;
+  const created = await auth.api.createUser({
+    body: {
+      name: displayName,
+      email: target.email,
+      password,
+      role: target.type,
+      data: { username: target.username, displayUsername: target.username },
+    },
+  });
+
+  try {
+    if (target.type === "korwil") {
+      await prisma.korwil.update({ where: { id: target.id }, data: { picUserId: created.user.id } });
+    } else {
+      await prisma.korda.update({ where: { id: target.id }, data: { picUserId: created.user.id } });
+    }
+  } catch (error) {
+    await prisma.user.delete({ where: { id: created.user.id } }).catch(() => undefined);
+    throw error;
+  }
+}
+
 async function listRegions() {
   const [korwils, kordas] = await Promise.all([
     prisma.korwil.findMany({
@@ -107,44 +150,90 @@ async function seedOne(args: string[]) {
 
   console.log(`Wilayah: ${type} ${region.name}`);
   console.log(`Username: ${username}`);
-  const suppliedPassword = process.env.REGIONAL_ACCOUNT_PASSWORD;
-  const password = suppliedPassword ?? await readHidden("Password baru (minimal 8 karakter): ");
-  if (password.length < 8) throw new Error("Password minimal 8 karakter.");
-  if (!suppliedPassword) {
-    const confirmation = await readHidden("Ulangi password: ");
-    if (password !== confirmation) throw new Error("Konfirmasi password tidak sama.");
-  }
-
-  const displayName = region.picName?.trim() || `${region.name} (${type === "korwil" ? "Korwil" : "Korda"})`;
-  const created = await auth.api.createUser({
-    body: {
-      name: displayName,
-      email,
-      password,
-      role: type,
-      data: { username, displayUsername: username },
-    },
-  });
-
-  try {
-    if (type === "korwil") {
-      await prisma.korwil.update({ where: { id }, data: { picUserId: created.user.id } });
-    } else {
-      await prisma.korda.update({ where: { id }, data: { picUserId: created.user.id } });
-    }
-  } catch (error) {
-    await prisma.user.delete({ where: { id: created.user.id } }).catch(() => undefined);
-    throw error;
-  }
-
+  const password = await requestPassword();
+  await createAccount({ type, id, name: region.name, picName: region.picName, username, email }, password);
   console.log(`Akun ${type} berhasil dibuat dan ditautkan ke ${region.name}. Simpan username ${username} dengan aman.`);
+}
+
+async function seedAll() {
+  const [korwils, kordas] = await Promise.all([
+    prisma.korwil.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, picName: true, picUserId: true },
+    }),
+    prisma.korda.findMany({
+      orderBy: [{ korwil: { name: "asc" } }, { name: "asc" }],
+      select: { id: true, name: true, picName: true, picUserId: true, korwil: { select: { name: true } } },
+    }),
+  ]);
+
+  const targets: RegionAccountTarget[] = [
+    ...korwils.filter((region) => !region.picUserId).map((region) => ({
+      type: "korwil" as const,
+      id: region.id,
+      name: region.name,
+      picName: region.picName,
+      username: generatedUsername("korwil", region.name, region.id),
+      email: buildDummyEmailFromUsername(generatedUsername("korwil", region.name, region.id)),
+    })),
+    ...kordas.filter((region) => !region.picUserId).map((region) => ({
+      type: "korda" as const,
+      id: region.id,
+      name: region.name,
+      picName: region.picName,
+      username: generatedUsername("korda", region.name, region.id),
+      email: buildDummyEmailFromUsername(generatedUsername("korda", region.name, region.id)),
+    })),
+  ];
+
+  if (!targets.length) {
+    console.log("Semua Korda dan Korwil sudah memiliki akun PIC. Tidak ada akun yang dibuat.");
+    return;
+  }
+
+  const usernames = new Set<string>();
+  const duplicateUsernames = targets.filter((target) => {
+    if (usernames.has(target.username)) return true;
+    usernames.add(target.username);
+    return false;
+  }).map((target) => target.username);
+  if (duplicateUsernames.length) {
+    throw new Error(`Username otomatis bentrok: ${[...new Set(duplicateUsernames)].join(", ")}. Perbaiki nama wilayah atau username sebelum seed.`);
+  }
+
+  const existingUsers = await prisma.user.findMany({
+    where: { OR: targets.flatMap((target) => [{ username: target.username }, { email: target.email }]) },
+    select: { username: true, email: true },
+  });
+  if (existingUsers.length) {
+    throw new Error(`Username/email untuk akun wilayah sudah digunakan: ${existingUsers.map((user) => user.username ?? user.email).join(", ")}. Seed dihentikan sebelum membuat akun.`);
+  }
+
+  console.log(`Akun baru: ${targets.length} (${korwils.length} Korwil, ${kordas.length} Korda tercatat).`);
+  console.log("Username yang akan dibuat:");
+  for (const target of targets) console.log(`${target.type}\t${target.name}\t${target.username}`);
+
+  const password = await requestPassword();
+  let createdCount = 0;
+  for (const target of targets) {
+    try {
+      await createAccount(target, password);
+      createdCount += 1;
+      console.log(`Dibuat: ${target.type} ${target.name} — ${target.username}`);
+    } catch (error) {
+      console.error(`Seed berhenti setelah ${createdCount} akun berhasil. Jalankan kembali perintah yang sama untuk melanjutkan; akun yang sudah tertaut akan dilewati.`);
+      throw error;
+    }
+  }
+  console.log(`Selesai: ${createdCount} akun dibuat dengan password bersama.`);
 }
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--list")) return listRegions();
+  if (args.includes("--all")) return seedAll();
   if (args.includes("--type") && args.includes("--id")) return seedOne(args);
-  throw new Error("Gunakan --list, atau --type korwil|korda --id <ID> untuk membuat satu akun.");
+  throw new Error("Gunakan --list, --all, atau --type korwil|korda --id <ID> untuk membuat satu akun.");
 }
 
 main()
