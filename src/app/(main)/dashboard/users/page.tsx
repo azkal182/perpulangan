@@ -204,7 +204,9 @@ export default function UserManagementPage() {
   const assignedKorwilUserMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const user of allUsers) {
-      if (user.korwilId) {
+      // Korda users inherit their parent Korwil ID for display/scope. That
+      // inherited ID must not make the Korwil look assigned to that user.
+      if (user.role === "korwil" && user.korwilId) {
         map.set(user.korwilId, user.id);
       }
     }
