@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
 
@@ -41,6 +41,24 @@ function config() {
 
 export function allowedEvidenceMime(mime: string) {
   return ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(mime);
+}
+
+export function isValidEvidenceStorageKey(storageKey: string, evidenceId: string, mimeType: string) {
+  const extensionByMime: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+  const extension = extensionByMime[mimeType];
+  return Boolean(extension && /^[0-9a-f-]{36}$/i.test(evidenceId) && storageKey === `evidence/${evidenceId}.${extension}`);
+}
+
+export function createEvidenceCleanupToken(userId: string, storageKey: string) {
+  const { key } = config();
+  return createHmac("sha256", key).update(`${userId}:${storageKey}`).digest("hex");
+}
+
+export function isValidEvidenceCleanupToken(userId: string, storageKey: string, token: string) {
+  if (!/^[0-9a-f]{64}$/i.test(token)) return false;
+  const expected = Buffer.from(createEvidenceCleanupToken(userId, storageKey), "hex");
+  const actual = Buffer.from(token, "hex");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export async function createSignedEvidenceUpload(storageKey: string) {

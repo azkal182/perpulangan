@@ -4,6 +4,7 @@ import { getDropPoints } from "@/features/drop-points/actions/drop-point.action"
 import { MultiParticipantRegistrationForm } from "@/features/registration/components/MultiParticipantRegistrationForm";
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
 import type { Metadata } from "next";
+import { getRegionalAccessScope } from "@/server/access-scope";
 
 export const metadata: Metadata = {
   title: "Registrasi Kembali | Perpulangan Santri",
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ReturnOnlyRegistrationPage() {
-  const activeEvent = await getActiveEvent();
+  const [activeEvent, scope] = await Promise.all([getActiveEvent(), getRegionalAccessScope()]);
 
   if (!activeEvent) {
     return (
@@ -71,6 +72,7 @@ export default async function ReturnOnlyRegistrationPage() {
             kordas={kordas}
             dropPoints={dropPoints}
             defaultMode="return_only"
+            defaultKordaId={scope.role === "korda" ? scope.kordaId : null}
             lockMode={true}
           />
         </div>

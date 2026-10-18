@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
 import { admin, useSession } from "@/client/auth";
 import { roleOptions, type AppRole } from "@/lib/auth-access";
 import {
@@ -23,6 +24,7 @@ import {
   AlertCircle,
   CheckCircle2,
   X,
+  FileDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -109,6 +111,7 @@ export default function UserManagementPage() {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState<"filtered" | "non-admin" | null>(null);
 
   const [korwilOptions, setKorwilOptions] = useState<KorwilAccessOption[]>([]);
   const [kordaOptions, setKordaOptions] = useState<KordaAccessOption[]>([]);
@@ -331,6 +334,82 @@ export default function UserManagementPage() {
     setProfileEdits(nextProfileEdits);
     setIsLoading(false);
   }, [canList, searchValue, roleValue]);
+
+  async function exportUsersPdf(kind: "filtered" | "non-admin") {
+    setExportingPdf(kind);
+    try {
+      let sourceUsers: ManagedUser[];
+      if (kind === "filtered") {
+        sourceUsers = users;
+      } else {
+        const pageSize = 500;
+        sourceUsers = [];
+        for (let offset = 0; ; offset += pageSize) {
+          const result = await admin.listUsers({ query: { limit: pageSize, offset } });
+          if (result.error) throw new Error(result.error.message || "Gagal memuat seluruh akun.");
+          const pageUsers = (result.data?.users ?? []) as ManagedUser[];
+          sourceUsers.push(...pageUsers);
+          if (pageUsers.length < pageSize) break;
+        }
+        sourceUsers = sourceUsers.filter((user) => toAppRole(user.role) !== "admin");
+      }
+
+      const sortedUsers = [...sourceUsers].sort((a, b) => (a.name || "").localeCompare(b.name || "", "id"));
+      if (!sortedUsers.length) {
+        toast.error(kind === "filtered" ? "Tidak ada user pada hasil pencarian untuk diekspor." : "Tidak ada user non-admin untuk diekspor.");
+        return;
+      }
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const left = 14;
+      const right = 196;
+      const nameX = 33;
+      const usernameX = 145;
+      let y = 16;
+      const reportTitle = kind === "filtered" ? "Daftar User" : "Daftar User Non-Admin";
+      const drawHeader = (continued = false) => {
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(14);
+        pdf.text(`${reportTitle}${continued ? " (lanjutan)" : ""}`, left, y);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.text(`Dicetak ${new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date())} · ${sortedUsers.length} user`, left, y + 6);
+        y += 14;
+        pdf.setFillColor(241, 245, 249);
+        pdf.rect(left, y - 4, right - left, 9, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("No.", left + 2, y + 2);
+        pdf.text("Nama", nameX, y + 2);
+        pdf.text("Username", usernameX, y + 2);
+        pdf.setDrawColor(203, 213, 225);
+        pdf.line(left, y + 5, right, y + 5);
+        y += 11;
+      };
+      drawHeader();
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      sortedUsers.forEach((user, index) => {
+        const nameLines = pdf.splitTextToSize(user.name?.trim() || "(nama belum diatur)", usernameX - nameX - 6) as string[];
+        const rowHeight = Math.max(8, nameLines.length * 4.2 + 3);
+        if (y + rowHeight > 282) {
+          pdf.addPage(); y = 16; drawHeader(true); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9);
+        }
+        pdf.text(String(index + 1), left + 2, y + 3);
+        pdf.text(nameLines, nameX, y + 3);
+        pdf.text(user.username?.trim() || "-", usernameX, y + 3);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(left, y + rowHeight, right, y + rowHeight);
+        y += rowHeight;
+      });
+      pdf.save(kind === "filtered" ? "daftar-user-filter.pdf" : "daftar-user-non-admin.pdf");
+      toast.success(`${sortedUsers.length} user diekspor ke PDF.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal membuat PDF user.");
+    } finally {
+      setExportingPdf(null);
+    }
+  }
 
   useEffect(() => {
     if (!session?.user || !canList) {
@@ -1083,7 +1162,7 @@ export default function UserManagementPage() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => {
                   void loadUsers();
@@ -1107,6 +1186,26 @@ export default function UserManagementPage() {
                   className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
                 />
               </Button>
+              <Button
+                onClick={() => void exportUsersPdf("filtered")}
+                disabled={isLoading || exportingPdf !== null || users.length === 0}
+                variant="outline"
+                className="gap-2"
+              >
+                <FileDown className="h-4 w-4" />
+                {exportingPdf === "filtered" ? "Membuat PDF..." : "Export hasil"}
+              </Button>
+              {roleValue === "admin" && (
+                <Button
+                  onClick={() => void exportUsersPdf("non-admin")}
+                  disabled={isLoading || exportingPdf !== null}
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <FileDown className="h-4 w-4" />
+                  {exportingPdf === "non-admin" ? "Membuat PDF..." : "Export semua non-admin"}
+                </Button>
+              )}
             </div>
           </div>
         </div>

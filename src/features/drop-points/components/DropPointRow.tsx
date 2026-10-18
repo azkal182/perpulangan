@@ -42,12 +42,12 @@ export function DropPointRow({ item, korda, korwil, onEdit, onDelete }: Props) {
           {korwil?.name ?? "—"} • {korda?.name ?? "—"}
         </div>
         <div className="pt-2 text-sm font-semibold sm:hidden">
-          {formatRupiah(item.price)}
+          Paket Pulang–Kembali · {formatRupiah(item.price)}
         </div>
       </div>
 
       <div className="hidden shrink-0 items-center gap-2 sm:flex">
-        <div className="text-sm font-semibold">{formatRupiah(item.price)}</div>
+        <div className="text-right text-sm font-semibold"><div>{formatRupiah(item.price)}</div><div className="text-xs font-normal text-muted-foreground">Paket Pulang–Kembali</div></div>
 
         <Button type="button" variant="outline" size="sm" onClick={() => onEdit(item)}>
           Edit

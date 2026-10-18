@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { createEvidenceUploadAction, recordFamilyPaymentAction, type PaymentAllocationInput } from "../actions/payment.actions";
+import { cleanupPaymentEvidenceUploadAction, createEvidenceUploadAction, recordFamilyPaymentAction, type PaymentAllocationInput } from "../actions/payment.actions";
 
 type JourneyOption = { id: string; label: string; destination: string; tariff: number | null; previouslyPaid: number };
 type PaymentPreview = { journeyId: string; journeyAmount: number; balanceAmount: number; remainingAmount: number };
@@ -38,20 +38,22 @@ export function FamilyPaymentForm({ eventId, journeys, onSaved }: { eventId: str
 
   function submit() {
     if (!allocations.length || totalSent <= 0) return toast.error("Pilih perjalanan dan masukkan nominal transfer.");
+    if (!evidence) return toast.error("Unggah bukti transfer untuk mencatat pembayaran.");
     if (surplus > 0 && selectedJourneys.length > 1 && !balanceOwner) return toast.error("Pilih peserta/perjalanan pemilik Saldo Lain untuk kelebihan transfer.");
     startTransition(async () => {
       const form = new FormData();
+      let cleanupToken = "";
       form.set("eventId", eventId); form.set("amount", String(totalSent)); form.set("paidAt", new Date().toISOString()); form.set("allocations", JSON.stringify(allocations));
       if (evidence) {
         const upload = await createEvidenceUploadAction({ name: evidence.name, mimeType: evidence.type, sizeBytes: evidence.size });
         if (!upload.success) { toast.error(upload.error); return; }
-        const body = new FormData(); body.append("", evidence);
-        const uploaded = await fetch(upload.signedUrl, { method: "PUT", body });
-        if (!uploaded.ok) { toast.error("Upload bukti ke Supabase gagal. Coba unggah kembali."); return; }
+        cleanupToken = upload.cleanupToken;
+        const uploaded = await fetch(upload.signedUrl, { method: "PUT", headers: { "Content-Type": evidence.type }, body: evidence });
+        if (!uploaded.ok) { await cleanupPaymentEvidenceUploadAction(upload.storageKey, upload.cleanupToken); toast.error("Upload bukti ke Supabase gagal. Coba unggah kembali."); return; }
         form.set("evidenceId", upload.id); form.set("evidenceStorageKey", upload.storageKey); form.set("evidenceName", evidence.name); form.set("evidenceMime", evidence.type); form.set("evidenceSize", String(evidence.size));
       }
       const result = await recordFamilyPaymentAction(form);
-      if (!result.success) { toast.error(result.error); return; }
+      if (!result.success) { const storageKey = String(form.get("evidenceStorageKey") ?? ""); if (storageKey && cleanupToken) await cleanupPaymentEvidenceUploadAction(storageKey, cleanupToken); toast.error(result.error); return; }
       toast.success("Pembayaran berhasil dicatat.");
       setSelected([]); setAmountText(""); setAmountEdited(false); setBalanceOwnerJourneyId(""); setEvidence(null);
       onSaved?.();
@@ -90,7 +92,7 @@ export function FamilyPaymentForm({ eventId, journeys, onSaved }: { eventId: str
     {surplus > 0 && selectedJourneys.length > 1 && <label className="block text-sm font-medium">Kelebihan dicatat atas nama<select value={balanceOwnerJourneyId} onChange={(event) => setBalanceOwnerJourneyId(event.target.value)} className="mt-1.5 w-full rounded-md border bg-background px-3 py-2.5"><option value="">Pilih peserta/perjalanan</option>{selectedJourneys.map((journey) => <option key={journey.id} value={journey.id}>{journey.label} · {journey.destination}</option>)}</select><span className="mt-1 block text-xs font-normal text-muted-foreground">Saldo masuk ke Korda tujuan pada pilihan ini. Pilihan ini menjaga kepemilikan kelebihan tetap jelas bila pembayaran mencakup beberapa peserta/Korda.</span></label>}
     {selectedJourneys.length > 0 && <div className="min-w-0 rounded-lg border p-3"><h3 className="text-sm font-semibold">Rincian otomatis</h3><ul className="mt-2 space-y-2 text-sm">{previews.map((row) => { const journey = selectedJourneys.find((item) => item.id === row.journeyId)!; return <li key={row.journeyId} className="flex min-w-0 items-start justify-between gap-2"><span className="min-w-0 break-words text-muted-foreground">{journey.label} · {journey.destination}</span><span className="shrink-0 text-right"><strong>{money(row.journeyAmount)}</strong><span className="block text-xs text-muted-foreground">sisa {money(row.remainingAmount)}</span></span></li>; })}{surplus > 0 && <li className="flex min-w-0 items-start justify-between gap-2 border-t pt-1.5"><span className="min-w-0 break-words text-muted-foreground">Saldo Lain · {selectedJourneys.find((journey) => journey.id === balanceOwner)?.label ?? "pilih pemilik"}</span><strong className="shrink-0">{money(surplus)}</strong></li>}</ul></div>}
 
-    <label className="block text-sm">Bukti transfer <span className="font-normal text-muted-foreground">(opsional · PDF/JPG/PNG/WebP · maks. 10 MB)</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setEvidence(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border bg-background p-2 text-sm" /></label>
+    <label className="block text-sm">Bukti transfer <span className="font-normal text-muted-foreground">(wajib · PDF/JPG/PNG/WebP · maks. 10 MB)</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setEvidence(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border bg-background p-2 text-sm" /></label>
     <div className="flex flex-col-reverse justify-between gap-3 border-t pt-4 sm:flex-row sm:items-center"><p className="text-xs text-muted-foreground">Pengirim tidak dicatat. Jika nominal melebihi tagihan, selisih otomatis masuk ke Saldo Lain Korda tujuan.</p><button type="button" disabled={pending || !selected.length || totalSent <= 0 || (surplus > 0 && selectedJourneys.length > 1 && !balanceOwner)} onClick={submit} className="w-full rounded-md bg-primary px-5 py-2.5 font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{pending ? "Menyimpan…" : "Simpan pembayaran"}</button></div>
   </section>;
 }

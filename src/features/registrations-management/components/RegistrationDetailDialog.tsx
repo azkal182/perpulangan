@@ -88,7 +88,7 @@ export function RegistrationDetailDialog({
                 <div>
                   <div className="text-muted-foreground">Harga</div>
                   <div className="font-medium">
-                    Rp {(registration.outboundDropPoint?.price || 0).toLocaleString("id-ID")}
+                    Rp {(registration.outboundTariffSnapshot || 0).toLocaleString("id-ID")}
                   </div>
                 </div>
                 <div>
@@ -127,7 +127,7 @@ export function RegistrationDetailDialog({
                 <div>
                   <div className="text-muted-foreground">Harga</div>
                   <div className="font-medium">
-                    Rp {(registration.returnDropPoint?.price || 0).toLocaleString("id-ID")}
+                    Rp {(registration.returnTariffSnapshot || 0).toLocaleString("id-ID")}
                   </div>
                 </div>
                 <div>
@@ -156,8 +156,8 @@ export function RegistrationDetailDialog({
               <span className="font-semibold">Total Biaya</span>
               <span className="text-lg font-bold">
                 Rp {(
-                  (registration.outboundDropPoint?.price || 0) +
-                  (registration.returnDropPoint?.price || 0)
+                  (registration.outboundTariffSnapshot || 0) +
+                  (registration.returnTariffSnapshot || 0)
                 ).toLocaleString("id-ID")}
               </span>
             </div>

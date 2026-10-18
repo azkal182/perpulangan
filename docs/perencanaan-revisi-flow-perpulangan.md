@@ -6,6 +6,8 @@
 
 > **Penutupan perencanaan:** Tidak ada keputusan bisnis utama yang menunggu. Dokumen ini menjadi baseline final untuk pengembangan yang disepakati. Status pekerjaan dan hasil QA terakhir ada di [tracker implementasi](progress-implementasi-perpulangan.md) dan [catatan QA Fase 7](kesiapan-rilis-fase7.md). Butir yang menyebut kondisi repo atau tahapan “diusulkan” di bawah adalah baseline/rencana historis, bukan status implementasi terkini.
 
+> **Revisi setelah penutupan:** Revisi 1 mencakup Fase 8–11. Perubahan tarif paket dan penyatuan submit registrasi/pembayaran ditetapkan terpisah sebagai [Revisi 2 — Tarif Paket dan Registrasi dengan Pembayaran](perencanaan-revisi-tarif-dan-registrasi-pembayaran.md), disetujui final pada 18 Oktober 2026; baseline historis di bawah tidak ditulis ulang.
+
 ## 1. Tujuan
 
 Menyelaraskan aplikasi dengan kegiatan manajemen perpulangan/liburan pondok pesantren, dari penyiapan data santri sampai keberangkatan, kepulangan ke pondok, dan evaluasi event.

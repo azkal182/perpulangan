@@ -2,6 +2,7 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { JourneyDirection, PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { getJourneyTariff } from "../src/features/drop-points/domain/package-tariff";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL wajib diatur.");
@@ -80,6 +81,163 @@ async function ensureEvent() {
   return prisma.event.create({ data: { name: EVENT_NAME, startDate, endDate, status: "ACTIVE" }, select: { id: true } });
 }
 
+async function resetDemoEventIfRequested() {
+  const resetRequested = process.argv.includes("--reset-demo");
+  const planOnly = process.argv.includes("--plan-reset-demo");
+  if (!resetRequested && !planOnly) return false;
+  if (!/(^|[_-])dev([_-]|$)/i.test(databaseName)) {
+    throw new Error("Reset seed demo hanya diizinkan pada database development dengan nama yang mengandung 'dev'. Override non-dev tidak berlaku untuk reset.");
+  }
+
+  const event = await prisma.event.findFirst({ where: { name: EVENT_NAME }, select: { id: true } });
+  if (!event) {
+    console.log("Reset seed demo: event belum ada; tidak ada data yang dihapus.");
+    return planOnly;
+  }
+
+  const [registrations, payments, buses, dispositions, eventCorrections] = await Promise.all([
+    prisma.registration.findMany({ where: { eventId: event.id }, select: { id: true, notes: true } }),
+    prisma.payment.findMany({ where: { eventId: event.id }, select: { id: true, noteSnapshot: true } }),
+    prisma.bus.findMany({ where: { eventId: event.id }, select: { id: true, label: true } }),
+    prisma.outboundDisposition.count({ where: { eventId: event.id } }),
+    prisma.financialCorrection.count({ where: { eventId: event.id } }),
+  ]);
+  const unownedRegistrations = registrations.filter((row) => !row.notes?.startsWith(SEED_TAG));
+  const unownedPayments = payments.filter((row) => !row.noteSnapshot.startsWith(SEED_TAG));
+  if (unownedRegistrations.length || unownedPayments.length || dispositions || eventCorrections) {
+    throw new Error(`Reset dihentikan karena event demo memiliki data yang bukan fixture seed atau perlu dipertahankan (registrasi ${unownedRegistrations.length}, pembayaran ${unownedPayments.length}, pengecualian ${dispositions}, koreksi event ${eventCorrections}). Tidak ada data yang dihapus.`);
+  }
+
+  const registrationIds = registrations.map((row) => row.id);
+  const journeyRows = await prisma.journey.findMany({ where: { registrationId: { in: registrationIds } }, select: { id: true } });
+  const journeyIds = journeyRows.map((row) => row.id);
+  const legacyRows = await prisma.legacyPaymentReconciliation.findMany({ where: { registrationId: { in: registrationIds } }, select: { id: true, note: true } });
+  const unownedLegacyRows = legacyRows.filter((row) => !row.note?.startsWith(SEED_TAG));
+  if (unownedLegacyRows.length) {
+    throw new Error(`Reset dihentikan: ada ${unownedLegacyRows.length} rekonsiliasi legacy non-seed pada registrasi demo. Tidak ada data yang dihapus.`);
+  }
+  const paymentIds = payments.map((row) => row.id);
+  const allocations = await prisma.paymentAllocation.findMany({
+    where: { OR: [{ paymentId: { in: paymentIds } }, { journeyId: { in: journeyIds } }] },
+    select: { id: true, paymentId: true },
+  });
+  const nonSeedPaymentAllocations = allocations.filter((row) => !paymentIds.includes(row.paymentId));
+  if (nonSeedPaymentAllocations.length) {
+    throw new Error(`Reset dihentikan: ditemukan ${nonSeedPaymentAllocations.length} alokasi dari pembayaran non-seed pada perjalanan demo. Tidak ada data yang dihapus.`);
+  }
+  const allocationIds = allocations.map((row) => row.id);
+  const balanceRows = await prisma.kordaBalanceEntry.findMany({
+    where: { sourcePaymentAllocationId: { in: allocationIds } },
+    select: { id: true, sourceRefundId: true, entryType: true, reason: true },
+  });
+  const unownedBalanceRows = balanceRows.filter((row) => !row.reason?.startsWith(SEED_TAG));
+  if (unownedBalanceRows.length) {
+    throw new Error(`Reset dihentikan: ada ${unownedBalanceRows.length} entri Saldo Lain non-seed terkait fixture demo. Tidak ada data yang dihapus.`);
+  }
+  const relatedCorrections = await prisma.financialCorrection.count({
+    where: { OR: [{ paymentAllocationId: { in: allocationIds } }, { balanceSourceEntryId: { in: balanceRows.map((row) => row.id) } }] },
+  });
+  if (relatedCorrections) {
+    throw new Error(`Reset dihentikan: ditemukan ${relatedCorrections} koreksi keuangan terkait data demo. Koreksi harus direkonsiliasi tersendiri; tidak ada data yang dihapus.`);
+  }
+  const refundRows = await prisma.refund.findMany({
+    where: { OR: [{ paymentAllocationId: { in: allocationIds } }, { balanceSourceEntryId: { in: balanceRows.map((row) => row.id) } }] },
+    select: { id: true, reason: true },
+  });
+  const unownedRefunds = refundRows.filter((row) => !row.reason.startsWith(SEED_TAG));
+  if (unownedRefunds.length) {
+    throw new Error(`Reset dihentikan: ada ${unownedRefunds.length} refund non-seed terkait fixture demo. Tidak ada data yang dihapus.`);
+  }
+  const refundIds = refundRows.map((row) => row.id);
+  const refundDebitRows = await prisma.kordaBalanceEntry.findMany({ where: { sourceRefundId: { in: refundIds } }, select: { id: true } });
+  const debitEntryIds = refundDebitRows.map((row) => row.id);
+  const creditEntryIds = balanceRows.filter((row) => row.entryType === "CREDIT").map((row) => row.id);
+  const financialAuditIds = (await prisma.financialAuditEntry.findMany({
+    where: { eventId: event.id }, select: { id: true, paymentId: true, refundId: true, correctionId: true, disbursementId: true },
+  })).filter((row) => paymentIds.includes(row.paymentId ?? "") || refundIds.includes(row.refundId ?? ""));
+  const unrelatedAudits = await prisma.financialAuditEntry.count({
+    where: { eventId: event.id, NOT: { OR: [{ paymentId: { in: paymentIds } }, { refundId: { in: refundIds } }] } },
+  });
+  const evidenceCount = await prisma.evidenceFile.count({ where: { OR: [{ paymentId: { in: paymentIds } }, { refundId: { in: refundIds } }] } });
+  if (unrelatedAudits || evidenceCount) {
+    throw new Error(`Reset dihentikan: ada ${unrelatedAudits} audit finansial lain atau ${evidenceCount} bukti yang harus dipertahankan/dibersihkan terpisah. Tidak ada data yang dihapus.`);
+  }
+
+  const taggedExternal = await prisma.externalParticipant.findMany({
+    where: { name: { startsWith: SEED_TAG } }, select: { id: true },
+  });
+  const taggedExternalIds = taggedExternal.map((row) => row.id);
+  const externalOutsideEvent = await prisma.registration.count({
+    where: { externalParticipantId: { in: taggedExternalIds }, eventId: { not: event.id } },
+  });
+  if (externalOutsideEvent) {
+    throw new Error(`Reset dihentikan: ${externalOutsideEvent} profil eksternal seed dipakai di event lain. Tidak ada data yang dihapus.`);
+  }
+
+  const report = {
+    eventPreserved: 1,
+    registrations: registrationIds.length,
+    journeys: journeyIds.length,
+    payments: paymentIds.length,
+    allocations: allocationIds.length,
+    refunds: refundIds.length,
+    balanceEntries: debitEntryIds.length + creditEntryIds.length,
+    financialAuditEntries: financialAuditIds.length,
+    legacyReconciliations: legacyRows.length,
+    seedBuses: buses.filter((row) => row.label.startsWith(SEED_TAG)).length,
+    retainedUnmarkedBuses: buses.filter((row) => !row.label.startsWith(SEED_TAG)).length,
+    externalParticipants: taggedExternalIds.length,
+    dropPoints: 0,
+  };
+  console.log("Reset fixture [DEMO SEED] pada database development. Akan dihapus:");
+  for (const [name, count] of Object.entries(report)) console.log(`  ${name}: ${count}`);
+  if (planOnly) {
+    console.log("Mode pemeriksaan saja; database tidak diubah. Jalankan dengan --reset-demo untuk menghapus angka di atas dan membuat ulang fixture.");
+    return true;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.financialAuditEntry.deleteMany({ where: { id: { in: financialAuditIds.map((row) => row.id) } } });
+    await tx.kordaBalanceEntry.deleteMany({ where: { id: { in: debitEntryIds } } });
+    await tx.refund.deleteMany({ where: { id: { in: refundIds } } });
+    await tx.kordaBalanceEntry.deleteMany({ where: { id: { in: creditEntryIds } } });
+    await tx.paymentAllocation.deleteMany({ where: { id: { in: allocationIds } } });
+    await tx.payment.deleteMany({ where: { id: { in: paymentIds } } });
+    await tx.legacyPaymentReconciliation.deleteMany({ where: { registrationId: { in: registrationIds }, note: { startsWith: SEED_TAG } } });
+    await tx.registration.deleteMany({ where: { id: { in: registrationIds } } });
+    await tx.bus.deleteMany({ where: { eventId: event.id, label: { startsWith: SEED_TAG } } });
+    await tx.externalParticipant.deleteMany({ where: { id: { in: taggedExternalIds } } });
+  });
+  console.log("Reset fixture demo selesai. Event dan bus yang tidak bertanda seed dipertahankan; akun, santri/region, Korda, harga titik turun, dan data di luar fixture demo tidak dihapus.");
+  return false;
+}
+
+async function verifyDemoSeed() {
+  const event = await prisma.event.findFirst({ where: { name: EVENT_NAME }, select: { id: true } });
+  if (!event) throw new Error("Event seed demo belum ada.");
+  const [registrations, journeys, payments, refunds] = await Promise.all([
+    prisma.registration.count({ where: { eventId: event.id, notes: { startsWith: SEED_TAG } } }),
+    prisma.journey.findMany({
+      where: { registration: { eventId: event.id, notes: { startsWith: SEED_TAG } } },
+      select: { id: true, direction: true, tariffSnapshot: true, dropPoint: { select: { price: true } } },
+    }),
+    prisma.payment.findMany({ where: { eventId: event.id, noteSnapshot: { startsWith: SEED_TAG } }, select: { id: true, amount: true, allocations: { select: { amount: true } } } }),
+    prisma.refund.count({ where: { reason: { startsWith: SEED_TAG }, OR: [{ paymentAllocation: { journey: { registration: { eventId: event.id } } } }, { balanceSourceEntry: { sourcePaymentAllocation: { payment: { eventId: event.id } } } }] } }),
+  ]);
+  const invalidTariffs = journeys.filter((journey) =>
+    !journey.dropPoint || journey.tariffSnapshot !== getJourneyTariff(journey.dropPoint.price, journey.direction),
+  );
+  const invalidPaymentAllocations = payments.filter((payment) => payment.allocations.reduce((sum, row) => sum + row.amount, 0) !== payment.amount);
+  console.log("Verifikasi seed demo (read-only):");
+  console.log(`  Registrasi: ${registrations}; Journey: ${journeys.length}; pembayaran: ${payments.length}; refund seed: ${refunds}`);
+  console.log(`  Snapshot tarif tidak sesuai harga paket/arah: ${invalidTariffs.length}`);
+  console.log(`  Total alokasi tidak sama dengan nominal pembayaran: ${invalidPaymentAllocations.length}`);
+  if (invalidTariffs.length || invalidPaymentAllocations.length) {
+    throw new Error("Verifikasi seed demo gagal; tidak ada data yang diubah.");
+  }
+  console.log("Verifikasi seed demo lulus.");
+}
+
 async function ensureExternalParticipants(actorId: string, kordas: Array<{ id: string; name: string }>) {
   const participants: Array<{ id: string; name: string; destinationId: string; destinationName: string }> = [];
   for (let index = 0; index < 20; index += 1) {
@@ -94,7 +252,37 @@ async function ensureExternalParticipants(actorId: string, kordas: Array<{ id: s
 }
 
 async function main() {
+  if (process.argv.includes("--verify-demo")) {
+    await verifyDemoSeed();
+    return;
+  }
+  if (process.argv.includes("--plan-reset-demo")) {
+    await resetDemoEventIfRequested();
+    return;
+  }
   const actor = await getActorUserId();
+  const eligibleStudentCount = await prisma.student.count({
+    where: { status: true, regionalStatus: { in: ["AUTO_MAPPED", "VERIFIED"] }, provinceId: { not: null }, regencyId: { not: null }, regency: { is: { kordaId: { not: null } } } },
+  });
+  if (!eligibleStudentCount) throw new Error("Tidak ada santri aktif dengan region dan Korda asal valid. Seed demo tidak di-reset.");
+  if (await resetDemoEventIfRequested()) return;
+  if (!process.argv.includes("--reset-demo")) {
+    const existingEvent = await prisma.event.findFirst({ where: { name: EVENT_NAME }, select: { id: true } });
+    if (existingEvent) {
+      const existingJourneys = await prisma.journey.findMany({
+        where: { registration: { eventId: existingEvent.id } },
+        select: { direction: true, tariffSnapshot: true, dropPoint: { select: { price: true } }, registration: { select: { notes: true } } },
+      });
+      const outdatedSeedCount = existingJourneys.filter((journey) =>
+        journey.registration.notes?.startsWith(SEED_TAG)
+        && journey.dropPoint
+        && journey.tariffSnapshot !== getJourneyTariff(journey.dropPoint.price, journey.direction),
+      ).length;
+      if (outdatedSeedCount) {
+        throw new Error(`${outdatedSeedCount} tarif snapshot data demo masih memakai aturan lama. Jalankan pnpm seed:demo -- --reset-demo untuk reset fixture demo di database development lalu membuat ulang seed.`);
+      }
+    }
+  }
   const event = await ensureEvent();
   const allKordas = await ensureDemoKorda();
   const destinationKordas = allKordas.slice(0, 12);
@@ -160,10 +348,10 @@ async function main() {
         dropPointId: point.id,
         locationNameSnapshot: point.name,
         travelDate: direction === JourneyDirection.OUTBOUND ? new Date("2026-11-01T00:00:00+07:00") : new Date("2026-11-15T00:00:00+07:00"),
-        tariffSnapshot: point.price,
+        tariffSnapshot: getJourneyTariff(point.price, direction),
         status: "REGISTERED",
       }, select: { id: true } });
-      journeysToPay.push({ id: journey.id, registrationId: registration.id, studentId: student.id, externalParticipantId: null, participantName: student.name, originKordaId: student.regency?.korda?.id ?? null, originName: student.regency?.korda?.name ?? null, destinationId: destination.id, destinationName: destination.name, direction, tariff: point.price });
+      journeysToPay.push({ id: journey.id, registrationId: registration.id, studentId: student.id, externalParticipantId: null, participantName: student.name, originKordaId: student.regency?.korda?.id ?? null, originName: student.regency?.korda?.name ?? null, destinationId: destination.id, destinationName: destination.name, direction, tariff: getJourneyTariff(point.price, direction) });
     }
   }
 
@@ -184,8 +372,8 @@ async function main() {
     for (const direction of [JourneyDirection.OUTBOUND, JourneyDirection.RETURN]) {
       if (await prisma.journey.findUnique({ where: { registrationId_direction: { registrationId: registration.id, direction } }, select: { id: true } })) continue;
       const point = pointByKorda.get(participant.destinationId)![0]!;
-      const journey = await prisma.journey.create({ data: { registrationId: registration.id, direction, destinationKordaId: participant.destinationId, destinationKordaNameSnapshot: participant.destinationName, dropPointId: point.id, locationNameSnapshot: point.name, travelDate: direction === JourneyDirection.OUTBOUND ? new Date("2026-11-01T00:00:00+07:00") : new Date("2026-11-15T00:00:00+07:00"), tariffSnapshot: point.price }, select: { id: true } });
-      journeysToPay.push({ id: journey.id, registrationId: registration.id, studentId: null, externalParticipantId: participant.id, participantName: participant.name, originKordaId: null, originName: null, destinationId: participant.destinationId, destinationName: participant.destinationName, direction, tariff: point.price });
+      const journey = await prisma.journey.create({ data: { registrationId: registration.id, direction, destinationKordaId: participant.destinationId, destinationKordaNameSnapshot: participant.destinationName, dropPointId: point.id, locationNameSnapshot: point.name, travelDate: direction === JourneyDirection.OUTBOUND ? new Date("2026-11-01T00:00:00+07:00") : new Date("2026-11-15T00:00:00+07:00"), tariffSnapshot: getJourneyTariff(point.price, direction) }, select: { id: true } });
+      journeysToPay.push({ id: journey.id, registrationId: registration.id, studentId: null, externalParticipantId: participant.id, participantName: participant.name, originKordaId: null, originName: null, destinationId: participant.destinationId, destinationName: participant.destinationName, direction, tariff: getJourneyTariff(point.price, direction) });
     }
   }
 

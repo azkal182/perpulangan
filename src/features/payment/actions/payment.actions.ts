@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ensureKordaInScope, getRegionalAccessScope } from "@/server/access-scope";
-import { allowedEvidenceMime, createSignedEvidenceUpload, deleteEvidenceObject, verifyEvidenceObject } from "../services/supabase-storage";
+import { allowedEvidenceMime, createEvidenceCleanupToken, createSignedEvidenceUpload, deleteEvidenceObject, isValidEvidenceCleanupToken, isValidEvidenceStorageKey, verifyEvidenceObject } from "../services/supabase-storage";
 
 export type PaymentAllocationInput = {
   journeyId: string;
@@ -22,9 +22,21 @@ export async function createEvidenceUploadAction(input: { name: string; mimeType
     const storageKey = `evidence/${id}.${extension}`;
     const signed = await createSignedEvidenceUpload(storageKey);
     if (!signed.token) throw new Error("Supabase tidak mengembalikan token upload.");
-    return { success: true as const, id, storageKey, signedUrl: signed.signedUrl, token: signed.token };
+    return { success: true as const, id, storageKey, signedUrl: signed.signedUrl, token: signed.token, cleanupToken: createEvidenceCleanupToken(scope.userId, storageKey) };
   } catch (error) {
     return { success: false as const, error: error instanceof Error ? error.message : "Gagal menyiapkan upload bukti." };
+  }
+}
+
+export async function cleanupPaymentEvidenceUploadAction(storageKey: string, cleanupToken: string) {
+  try {
+    const scope = await getRegionalAccessScope();
+    if (!scope.userId || !/^evidence\/[0-9a-f-]{36}\.(pdf|jpg|png|webp)$/i.test(storageKey) || !isValidEvidenceCleanupToken(scope.userId, storageKey, cleanupToken)) return { success: false };
+    if (await prisma.evidenceFile.findUnique({ where: { storageKey }, select: { id: true } })) return { success: false };
+    await deleteEvidenceObject(storageKey);
+    return { success: true };
+  } catch {
+    return { success: false };
   }
 }
 
@@ -85,8 +97,9 @@ export async function recordFamilyPaymentAction(formData: FormData) {
     const generatedNote = resolved.map(({ journey, name, row }) => `${name} / ${journey.direction === "OUTBOUND" ? "Pulang" : "Kembali"} — tagihan Rp${row.journeyAmount.toLocaleString("id-ID")}${row.balanceAmount ? `, Saldo Lain Rp${row.balanceAmount.toLocaleString("id-ID")}` : ""} (${journey.destinationKorda.name})`).join("; ");
     const evidenceFieldsPresent = [evidenceId, evidenceStorageKey].some(Boolean);
     let verifiedEvidenceSha256: string | null = null;
+    if (!evidenceId || !evidenceStorageKey) return { success: false, error: "Bukti transfer wajib diunggah saat pembayaran dicatat." };
     if (evidenceFieldsPresent) {
-      if (!evidenceId || !evidenceStorageKey || !evidenceStorageKey.startsWith(`evidence/${evidenceId}.`)) return { success: false, error: "Metadata bukti tidak lengkap atau tidak valid." };
+      if (!evidenceId || !evidenceStorageKey || !isValidEvidenceStorageKey(evidenceStorageKey, evidenceId, evidenceMime)) return { success: false, error: "Metadata bukti tidak lengkap atau tidak valid." };
       verifiedEvidenceSha256 = await verifyEvidenceObject(evidenceStorageKey, evidenceMime, evidenceSize);
       storageKeyToCleanup = evidenceStorageKey;
     }

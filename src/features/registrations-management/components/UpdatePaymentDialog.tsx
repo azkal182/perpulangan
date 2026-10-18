@@ -60,8 +60,8 @@ export function UpdatePaymentDialog({
 
   if (!registration) return null;
 
-  const outboundPrice = registration.outboundDropPoint?.price || 0;
-  const returnPrice = registration.returnDropPoint?.price || 0;
+  const outboundPrice = registration.outboundTariffSnapshot || 0;
+  const returnPrice = registration.returnTariffSnapshot || 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -36,12 +36,14 @@ export interface RegistrationWithDetails {
   outboundDate: Date | null;
   outboundPaid: boolean;
   outboundPaymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | "UNKNOWN" | null;
+  outboundTariffSnapshot: number | null;
   returnKorda: { id: string; name: string } | null;
   returnDropPoint: { id: string; name: string; price: number } | null;
   returnBus: { id: string; label: string } | null;
   returnDate: Date | null;
   returnPaid: boolean;
   returnPaymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | "UNKNOWN" | null;
+  returnTariffSnapshot: number | null;
   status: RegistrationStatus;
   kordaChanged: boolean;
   kordaChangeConfirmed: boolean;
@@ -214,6 +216,8 @@ export async function getFilteredRegistrations(
   return {
     data: data.map((registration) => ({
       ...registration,
+      outboundTariffSnapshot: registration.journeys.find((row) => row.direction === "OUTBOUND")?.tariffSnapshot ?? null,
+      returnTariffSnapshot: registration.journeys.find((row) => row.direction === "RETURN")?.tariffSnapshot ?? null,
       outboundPaymentStatus: (() => { if (visibleKordaIds && (!registration.outboundKordaId || !visibleKordaIds.has(registration.outboundKordaId))) return null; const journey = registration.journeys.find((row) => row.direction === "OUTBOUND"); if (!journey) return "UNPAID" as const; if (journey.tariffSnapshot == null) return "UNKNOWN" as const; const paid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0); return paid <= 0 ? "UNPAID" as const : paid < journey.tariffSnapshot ? "PARTIAL" as const : "PAID" as const; })(),
       returnPaymentStatus: (() => { if (visibleKordaIds && (!registration.returnKordaId || !visibleKordaIds.has(registration.returnKordaId))) return null; const journey = registration.journeys.find((row) => row.direction === "RETURN"); if (!journey) return "UNPAID" as const; if (journey.tariffSnapshot == null) return "UNKNOWN" as const; const paid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0); return paid <= 0 ? "UNPAID" as const : paid < journey.tariffSnapshot ? "PARTIAL" as const : "PAID" as const; })(),
       outboundPaid: (() => { const journey = registration.journeys.find((row) => row.direction === "OUTBOUND"); return journey?.tariffSnapshot != null && journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0) >= journey.tariffSnapshot; })(),
@@ -228,12 +232,12 @@ export async function getFilteredRegistrations(
       ...(visibleKordaIds && (!registration.outboundKordaId || !visibleKordaIds.has(registration.outboundKordaId)) ? {
         outboundKordaId: null,
         outboundKorda: null, outboundDropPoint: null, outboundBus: null,
-        outboundDate: null, outboundPaid: false,
+        outboundDate: null, outboundPaid: false, outboundTariffSnapshot: null,
       } : {}),
       ...(visibleKordaIds && (!registration.returnKordaId || !visibleKordaIds.has(registration.returnKordaId)) ? {
         returnKordaId: null,
         returnKorda: null, returnDropPoint: null, returnBus: null,
-        returnDate: null, returnPaid: false,
+        returnDate: null, returnPaid: false, returnTariffSnapshot: null,
       } : {}),
     })) as RegistrationWithDetails[],
     total,

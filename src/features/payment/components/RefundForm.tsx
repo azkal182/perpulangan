@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { createRefundEvidenceUploadAction, recordRefundAction } from "../actions/refund.actions";
+import { cleanupRefundEvidenceUploadAction, createRefundEvidenceUploadAction, recordRefundAction } from "../actions/refund.actions";
 
 type RefundOption = { id: string; sourceType: "journey" | "balance"; label: string; remaining: number };
 
@@ -13,16 +13,17 @@ export function RefundForm({ options }: { options: RefundOption[] }) {
     startTransition(async () => {
       const evidence = formData.get("evidence");
       formData.delete("evidence");
+      let cleanupToken = "";
       if (evidence instanceof File && evidence.size > 0) {
         const upload = await createRefundEvidenceUploadAction({ name: evidence.name, mimeType: evidence.type, sizeBytes: evidence.size });
         if (!upload.success) { toast.error(upload.error); return; }
-        const body = new FormData(); body.append("", evidence);
-        const uploaded = await fetch(upload.signedUrl, { method: "PUT", body });
-        if (!uploaded.ok) { toast.error("Upload bukti refund ke Supabase gagal. Coba unggah kembali."); return; }
+        cleanupToken = upload.cleanupToken;
+        const uploaded = await fetch(upload.signedUrl, { method: "PUT", headers: { "Content-Type": evidence.type }, body: evidence });
+        if (!uploaded.ok) { await cleanupRefundEvidenceUploadAction(upload.storageKey, cleanupToken); toast.error("Upload bukti refund ke Supabase gagal. Coba unggah kembali."); return; }
         formData.set("evidenceId", upload.id); formData.set("evidenceStorageKey", upload.storageKey); formData.set("evidenceName", evidence.name); formData.set("evidenceMime", evidence.type); formData.set("evidenceSize", String(evidence.size));
       }
       const result = await recordRefundAction(formData);
-      if (!result.success) { toast.error(result.error); return; }
+      if (!result.success) { const storageKey = String(formData.get("evidenceStorageKey") ?? ""); if (storageKey && cleanupToken) await cleanupRefundEvidenceUploadAction(storageKey, cleanupToken); toast.error(result.error); return; }
       toast.success("Refund tercatat. Riwayat pembayaran asal tetap tersimpan.");
       const form = document.getElementById("refund-form") as HTMLFormElement | null; form?.reset();
     });

@@ -11,6 +11,7 @@ Use this skill for product planning, implementation, review, or progress reporti
 
 - Read [`docs/perencanaan-revisi-flow-perpulangan.md`](../../../docs/perencanaan-revisi-flow-perpulangan.md) for approved product rules and implementation baseline.
 - Read [`docs/perencanaan-revisi-roster-pulang-dan-cetak.md`](../../../docs/perencanaan-revisi-roster-pulang-dan-cetak.md) for the approved follow-on Revision 1 (Phases 8–11).
+- Read [`docs/perencanaan-revisi-tarif-dan-registrasi-pembayaran.md`](../../../docs/perencanaan-revisi-tarif-dan-registrasi-pembayaran.md) for the finalized Revision 2 plan (Phases 12–14); implement only when the user explicitly starts that work.
 - Read [`docs/progress-implementasi-perpulangan.md`](../../../docs/progress-implementasi-perpulangan.md) before choosing work. Update it after each meaningful implementation or planning task so progress is visible across conversations.
 - The approved plan takes precedence over older code behavior. Treat existing code as implementation to audit/migrate, not as the product rule.
 - Do not silently alter an approved business rule. If the requested change conflicts with the plan, explain the conflict and ask only for the decision that cannot be inferred.
@@ -39,6 +40,16 @@ Use this skill for product planning, implementation, review, or progress reporti
 - Use canonical order `Korwil → destination Korda → bus → direction-specific drop-off/pickup point → name`. Assign dynamic numbers starting at 1 within each destination Korda. Calculate numbers from the complete eligible print roster before secondary display filters, and share one roster/numbering result among luggage cards, tickets, and attendance sheets. New documents recalculate after roster changes; old PDFs remain snapshots.
 - Pack cards/tickets continuously across Kordas without a mandatory page break per Korda, while showing destination Korda on every item. Support A3+ at 329 × 483 mm. Show NIS on luggage cards and attendance sheets, leave it blank for external participants, and omit it from tickets. The user performs visual PDF inspection manually; do not treat that manual visual check as agent QA.
 
+## Revision 2 invariants — Phases 12–14
+
+- One DropPoint master price is the Pulang–Kembali package price. Do not halve or duplicate production master rows. Compute the direction-specific fare for each Journey snapshot: Pulang gets the floor half and Kembali gets the remaining rupiah, preserving the exact package total. One direction charges only its half; a later second direction adds only its half.
+- Keep tariff display and server snapshot calculation on one shared rule. Master price edits must never rewrite existing Journey snapshots.
+- The current registration form submits one participant at a time; do not re-enable batch registration unless the user asks. Family transfers remain available from `/pembayaran`. Registration may record one participant's payment in the same final submission. When payment is selected, require the transfer amount and evidence; if payment is skipped, create no Payment record. Existing Payment/PaymentAllocation/EvidenceFile/Supabase rules remain authoritative; do not create parallel payment semantics or ask for manual payer name.
+- One evidence object may support one family payment covering multiple children/journeys; system-generated allocation notes remain mandatory. Partial payments identify the target journeys; excess balance must retain explicit ownership where ambiguous.
+- Uploaded evidence is not linked to a payment until final server validation and database transaction succeed. Clean up an uploaded object if finalization fails.
+- Verify the production database has no registrations/journeys/payments before tariff cutover as stated in the plan. If data exists, stop and plan ledger reconciliation; never mass-edit snapshots or financial entries.
+- The demo registration/payment seeder currently avoids deletion. If changing demo snapshots, add an explicit, development-only reset for seed-owned demo records, report what will be removed, then reseed and verify idempotency. Never reset the whole database, master/student/account data, DropPoint prices, or production data as part of demo seeding.
+
 ## Phase workflow
 
 Work one phase at a time by default. A user may explicitly request work across phases. Before coding, inspect the current tracker and repository state, then confirm the requested work fits the active phase. Do not mark a phase complete until its exit criteria and agreed verification are satisfied.
@@ -60,6 +71,12 @@ Phases 1–7 remain closed. Revision 1 is finalized in `docs/perencanaan-revisi-
 - **Phase 9 — Unassigned journey warning.** Add event- and scope-aware `/rombongan` counts and links for registered journeys without bus, separated by direction.
 - **Phase 10 — Canonical print roster and dynamic numbering.** Require direction, select active assigned journeys, use the canonical sort, and compute shared per-destination-Korda numbering before secondary filters.
 - **Phase 11 — Print layout and integrated QA.** Apply roster output to luggage cards, tickets, and attendance; add cross-Korda packing and A3+; enforce NIS rules; record functional verification. The user inspects PDF appearance manually.
+
+Revision 2 is planned in `docs/perencanaan-revisi-tarif-dan-registrasi-pembayaran.md`:
+
+- **Phase 12 — Package tariff per direction.** Preserve package master prices, snapshot each direction's half, safely reset/reseed only demo fixtures in development, and verify the production pre-cutover state.
+- **Phase 13 — Registration and payment in one flow.** Directly submit one participant or review a multi-participant batch, with optional payment and shared evidence at finalization.
+- **Phase 14 — Integrated QA and cutover.** Verify fare/status/ledger consistency, family/partial/overpayment evidence flows, role scope, and deployment conditions.
 
 Dependencies for Revision 1: Phases 8 and 9 are independent; Phase 11 depends on the shared roster/numbering work in Phase 10. Follow the phase order in the tracker unless the user explicitly requests otherwise.
 

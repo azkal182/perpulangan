@@ -15,6 +15,7 @@ type Props = {
   initialKordas: Korda[];
   initialDropPoints: DropPoint[];
   initialRegistrations: Registration[];
+  defaultKordaId?: string | null;
   pageTitle?: string;
   defaultMode?: 'both' | 'return_only';
   lockMode?: boolean;
@@ -26,6 +27,7 @@ export default function RegistrationPageView({
   initialKordas,
   initialDropPoints,
   initialRegistrations,
+  defaultKordaId = null,
   pageTitle = "Pendaftaran Peserta Rombongan",
   defaultMode = "both",
   lockMode = false,
@@ -63,6 +65,7 @@ export default function RegistrationPageView({
               eventName={eventName}
               kordas={initialKordas}
               dropPoints={initialDropPoints}
+              defaultKordaId={defaultKordaId}
               defaultMode={defaultMode}
               lockMode={lockMode}
             />

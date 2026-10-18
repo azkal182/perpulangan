@@ -75,7 +75,7 @@ export function DropPointDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Tambah Titik Turun" : "Edit Titik Turun"}</DialogTitle>
-          <DialogDescription>Isi nama titik turun dan harga (IDR).</DialogDescription>
+          <DialogDescription>Isi nama titik turun dan harga paket Pulang–Kembali (IDR). Tarif tiap arah dihitung otomatis.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -108,14 +108,14 @@ export function DropPointDialog({
           </div>
 
           <div className="space-y-1">
-            <div className="text-sm font-medium">Harga (IDR)</div>
+            <div className="text-sm font-medium">Harga Paket Pulang–Kembali (IDR)</div>
             <Input
               inputMode="numeric"
               value={priceStr}
               onChange={(e) => setPriceStr(e.target.value)}
               placeholder="Contoh: 150000"
             />
-            <div className="text-xs text-muted-foreground">Disimpan sebagai number (tanpa format).</div>
+            <div className="text-xs text-muted-foreground">Tarif Pulang dan Kembali masing-masing dibagi otomatis, tanpa mengubah harga master ini.</div>
           </div>
         </div>
 

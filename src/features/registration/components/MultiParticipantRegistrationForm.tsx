@@ -19,27 +19,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Autocomplete } from "@/components/AutoComplete";
-import { Trash2, UserPlus } from "lucide-react";
 import type { Korda } from "../types";
 import type { DropPoint } from "@/features/drop-points/types";
 import {
   checkStudentAlreadyRegistered,
-  createRegistration,
+  cleanupRegistrationEvidenceUploadAction,
+  createRegistrationEvidenceUploadAction,
+  finalizeRegistrationBatchAction,
 } from "../actions/registration.action";
 import {
   searchStudents,
   type StudentBasic,
 } from "@/features/santri/actions/students.action";
 import { createExternalParticipantFromRegistration, searchCompleteExternalParticipants } from "@/features/santri/actions/external-participant.actions";
+import { getJourneyTariff } from "@/features/drop-points/domain/package-tariff";
 import { toast } from "sonner";
 
 type Props = {
@@ -50,9 +44,11 @@ type Props = {
   defaultMode?: "both" | "outbound_only" | "return_only"; // Initial mode
   lockMode?: boolean; // If true, hide mode selector
   enableUnsavedGuard?: boolean; // Prevent accidental navigation while draft exists
+  defaultKordaId?: string | null;
 };
 
 type ParticipantDraft = {
+  draftKey?: string;
   student: StudentBasic;
   externalParticipantId?: string;
   outboundDropPoint: DropPoint | null; // Nullable for return-only
@@ -75,11 +71,6 @@ function useUnsavedChangesGuard(params: {
   React.useEffect(() => {
     shouldBlockRef.current = shouldBlock;
   }, [shouldBlock]);
-
-  const allowNextNavigation = React.useCallback(() => {
-    bypassRef.current = true;
-    shouldBlockRef.current = false;
-  }, []);
 
   React.useEffect(() => {
     if (!enabled || typeof window === "undefined") {
@@ -212,7 +203,6 @@ function useUnsavedChangesGuard(params: {
     };
   }, [enabled, message]);
 
-  return { allowNextNavigation };
 }
 
 export function MultiParticipantRegistrationForm({
@@ -222,20 +212,20 @@ export function MultiParticipantRegistrationForm({
   defaultMode = "both",
   lockMode = false,
   enableUnsavedGuard = false,
+  defaultKordaId = null,
 }: Props) {
   // Registration mode: 'both' or 'return_only'
   const [registrationMode, setRegistrationMode] = React.useState<
     "both" | "outbound_only" | "return_only"
   >(defaultMode);
 
-  const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(
-    null,
-  );
+  const [selectedKordaId, setSelectedKordaId] = React.useState<string | null>(defaultKordaId);
   const [selectedStudentId, setSelectedStudentId] = React.useState<
     string | null
   >(null);
   const [selectedStudent, setSelectedStudent] =
     React.useState<StudentBasic | null>(null);
+  const [participantDrafts, setParticipantDrafts] = React.useState<ParticipantDraft[]>([]);
   const [participantType, setParticipantType] = React.useState<"student" | "external">("student");
   const [showExternalDraft, setShowExternalDraft] = React.useState(false);
   const [externalDraftName, setExternalDraftName] = React.useState("");
@@ -243,50 +233,43 @@ export function MultiParticipantRegistrationForm({
   const [externalDraftAddress, setExternalDraftAddress] = React.useState("");
 
   // Separate korda for outbound and return
-  const [selectedOutboundKordaId, setSelectedOutboundKordaId] = React.useState<
-    string | null
-  >(null);
-  const [selectedReturnKordaId, setSelectedReturnKordaId] = React.useState<
-    string | null
-  >(null);
+  const [selectedOutboundKordaId, setSelectedOutboundKordaId] = React.useState<string | null>(defaultKordaId);
+  const [selectedReturnKordaId, setSelectedReturnKordaId] = React.useState<string | null>(defaultKordaId);
 
   const [selectedOutboundDropPointId, setSelectedOutboundDropPointId] =
     React.useState<string | null>(null);
   const [selectedReturnDropPointId, setSelectedReturnDropPointId] =
     React.useState<string | null>(null);
-  const [participants, setParticipants] = React.useState<ParticipantDraft[]>(
-    [],
-  );
+  const [recordPaymentNow, setRecordPaymentNow] = React.useState(false);
+  const [paymentAmount, setPaymentAmount] = React.useState("");
+  const [paymentAmountEdited, setPaymentAmountEdited] = React.useState(false);
+  const [paymentEvidence, setPaymentEvidence] = React.useState<File | null>(null);
+  const [balanceOwnerKey, setBalanceOwnerKey] = React.useState("");
+  const [customizePaymentAllocation, setCustomizePaymentAllocation] = React.useState(false);
+  const [customPaymentAllocations, setCustomPaymentAllocations] = React.useState<Record<string, string>>({});
+  const [lastSubmissionSummary, setLastSubmissionSummary] = React.useState<{ names: string[]; paid: boolean; amount: number } | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const studentSelectionRequestRef = React.useRef(0);
+  const draftKeyCounterRef = React.useRef(0);
 
   const hasDraftInput = React.useMemo(() => {
     const hasSelectionDraft =
-      !!selectedKordaId ||
       !!selectedStudentId ||
       !!selectedStudent ||
-      !!selectedOutboundKordaId ||
-      !!selectedReturnKordaId ||
       !!selectedOutboundDropPointId ||
       !!selectedReturnDropPointId;
 
-    const hasModeChange = registrationMode !== defaultMode;
-
-    return participants.length > 0 || hasSelectionDraft || hasModeChange;
+    const hasParticipantDrafts = participantDrafts.length > 0;
+    return hasSelectionDraft || hasParticipantDrafts;
   }, [
-    defaultMode,
-    participants.length,
-    registrationMode,
-    selectedKordaId,
+    participantDrafts.length,
     selectedOutboundDropPointId,
-    selectedOutboundKordaId,
     selectedReturnDropPointId,
-    selectedReturnKordaId,
     selectedStudent,
     selectedStudentId,
   ]);
 
-  const { allowNextNavigation } = useUnsavedChangesGuard({
+  useUnsavedChangesGuard({
     enabled: enableUnsavedGuard,
     shouldBlock: hasDraftInput && !submitting,
     message: UNSAVED_WARNING_MESSAGE,
@@ -335,9 +318,20 @@ export function MultiParticipantRegistrationForm({
   );
 
   const selectDestinationKorda = (kordaId: string | null) => {
-    setSelectedKordaId(kordaId || null);
-    setSelectedOutboundKordaId(kordaId || null);
-    setSelectedReturnKordaId(kordaId || null);
+    const nextKordaId = kordaId || null;
+    if (nextKordaId !== selectedKordaId) {
+      setSelectedStudentId(null);
+      setSelectedStudent(null);
+      setSelectedOutboundDropPointId(null);
+      setSelectedReturnDropPointId(null);
+      setShowExternalDraft(false);
+      setExternalDraftName(""); setExternalDraftGender(""); setExternalDraftAddress("");
+      setRecordPaymentNow(false); setPaymentEvidence(null); setPaymentAmount(""); setPaymentAmountEdited(false); setBalanceOwnerKey(""); setCustomizePaymentAllocation(false); setCustomPaymentAllocations({});
+      setParticipantDrafts([]);
+    }
+    setSelectedKordaId(nextKordaId);
+    setSelectedOutboundKordaId(nextKordaId);
+    setSelectedReturnKordaId(nextKordaId);
   };
 
   const handleStudentSelection = React.useCallback(
@@ -389,47 +383,6 @@ export function MultiParticipantRegistrationForm({
     [eventId, registrationMode],
   );
 
-  const handleAddParticipant = () => {
-    // Validation based on mode
-    if (!selectedStudent) return;
-    if (
-      registrationMode === "both" &&
-      (!selectedOutboundDropPoint || !selectedReturnDropPoint)
-    )
-      return;
-    if (registrationMode === "outbound_only" && !selectedOutboundDropPoint) return;
-    if (registrationMode === "return_only" && !selectedReturnDropPoint) return;
-
-    // Check if student already added
-    if (participants.some((p) => p.externalParticipantId
-      ? p.externalParticipantId === selectedStudent.externalParticipantId
-      : !selectedStudent.externalParticipantId && p.student.id === selectedStudent.id)) {
-      alert("Siswa sudah ditambahkan");
-      return;
-    }
-
-    setParticipants([
-      ...participants,
-      {
-        student: selectedStudent,
-        ...(selectedStudent.externalParticipantId ? { externalParticipantId: selectedStudent.externalParticipantId } : {}),
-        outboundDropPoint:
-          registrationMode !== "return_only" ? selectedOutboundDropPoint! : null,
-        returnDropPoint: registrationMode === "outbound_only" ? null : selectedReturnDropPoint!,
-        paymentStatus: "unpaid",
-      },
-    ]);
-
-    toast.success("Berhasil ditambahkan");
-    // Reset selections
-    setSelectedStudentId(null);
-    setSelectedStudent(null);
-    setSelectedOutboundKordaId(null);
-    setSelectedReturnKordaId(null);
-    setSelectedOutboundDropPointId(null);
-    setSelectedReturnDropPointId(null);
-  };
-
   const handleCreateExternalDraft = async () => {
     if (!selectedKordaId) {
       toast.error("Pilih Korda tujuan terlebih dahulu.");
@@ -465,32 +418,83 @@ export function MultiParticipantRegistrationForm({
     toast.success("Profil eksternal lengkap dan siap ditambahkan ke registrasi.");
   };
 
-  const handleRemoveParticipant = (studentId: string) => {
-    setParticipants(participants.filter((p) => p.student.id !== studentId));
-    toast.info("Santri berhasil dihapus dari pendaftaran");
+  const canAddParticipant = selectedStudent &&
+    (registrationMode === "both"
+      ? selectedOutboundDropPoint && selectedReturnDropPoint
+      : registrationMode === "outbound_only" ? selectedOutboundDropPoint : selectedReturnDropPoint);
+
+  const currentDraft = React.useMemo<ParticipantDraft | null>(() => selectedStudent && canAddParticipant ? ({
+    student: selectedStudent,
+    ...(selectedStudent.externalParticipantId ? { externalParticipantId: selectedStudent.externalParticipantId } : {}),
+    outboundDropPoint: registrationMode !== "return_only" ? selectedOutboundDropPoint : null,
+    returnDropPoint: registrationMode !== "outbound_only" ? selectedReturnDropPoint : null,
+    paymentStatus: "unpaid",
+  }) : null, [selectedStudent, canAddParticipant, registrationMode, selectedOutboundDropPoint, selectedReturnDropPoint]);
+
+  const paymentTargets = participantDrafts;
+  const paymentJourneys = paymentTargets.flatMap((participant, index) => [
+    ...(participant.outboundDropPoint ? [{ key: `${participant.draftKey ?? index}:OUTBOUND`, participant, direction: "OUTBOUND" as const, tariff: getJourneyTariff(participant.outboundDropPoint.price, "OUTBOUND"), destination: kordas.find((korda) => korda.id === participant.outboundDropPoint!.kordaId)?.name ?? "Korda tujuan" }] : []),
+    ...(participant.returnDropPoint ? [{ key: `${participant.draftKey ?? index}:RETURN`, participant, direction: "RETURN" as const, tariff: getJourneyTariff(participant.returnDropPoint.price, "RETURN"), destination: kordas.find((korda) => korda.id === participant.returnDropPoint!.kordaId)?.name ?? "Korda tujuan" }] : []),
+  ]);
+  const paymentDue = paymentJourneys.reduce((sum, journey) => sum + journey.tariff, 0);
+  const manualAllocationTotal = paymentJourneys.reduce((sum, journey) => sum + (Number(customPaymentAllocations[journey.key]) || 0), 0);
+  const transferAmount = Number(paymentAmount) || 0;
+  const unallocatedPayment = customizePaymentAllocation ? Math.max(0, transferAmount - manualAllocationTotal) : Math.max(0, transferAmount - paymentDue);
+  React.useEffect(() => {
+    if (!paymentAmountEdited) setPaymentAmount(paymentDue ? String(paymentDue) : "");
+  }, [paymentDue, paymentAmountEdited]);
+
+  const addCurrentParticipant = () => {
+    if (!currentDraft) return toast.error("Lengkapi peserta dan pilihan perjalanan terlebih dahulu.");
+    const duplicate = participantDrafts.some((draft) => draft.student.id === currentDraft.student.id);
+    if (duplicate) return toast.error(`${currentDraft.student.name} sudah ada di daftar registrasi ini.`);
+    const draftKey = `participant-${++draftKeyCounterRef.current}`;
+    const nextDraft = { ...currentDraft, draftKey };
+    setParticipantDrafts((current) => [...current, nextDraft]);
+    if (customizePaymentAllocation) {
+      setCustomPaymentAllocations((current) => ({
+        ...current,
+        ...(nextDraft.outboundDropPoint ? { [`${draftKey}:OUTBOUND`]: String(getJourneyTariff(nextDraft.outboundDropPoint.price, "OUTBOUND")) } : {}),
+        ...(nextDraft.returnDropPoint ? { [`${draftKey}:RETURN`]: String(getJourneyTariff(nextDraft.returnDropPoint.price, "RETURN")) } : {}),
+      }));
+    }
+    setSelectedStudentId(null);
+    setSelectedStudent(null);
   };
 
-  const totalPrice = React.useMemo(() => {
-    // Sum of outbound (if exists) and return drop point prices
-    return participants.reduce((sum, p) => {
-      const outboundPrice = p.outboundDropPoint?.price || 0;
-      const returnPrice = p.returnDropPoint?.price || 0;
-      return sum + outboundPrice + returnPrice;
-    }, 0);
-  }, [participants]);
+  const removeParticipant = (draft: ParticipantDraft) => {
+    const remainingDrafts = participantDrafts.filter((item) => item.draftKey !== draft.draftKey);
+    setParticipantDrafts(remainingDrafts);
+    if (!remainingDrafts.length) { setPaymentAmount(""); setPaymentAmountEdited(false); setRecordPaymentNow(false); setPaymentEvidence(null); setCustomizePaymentAllocation(false); setCustomPaymentAllocations({}); setBalanceOwnerKey(""); }
+    setCustomPaymentAllocations((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${draft.draftKey}:`))));
+    if (balanceOwnerKey.startsWith(`${draft.draftKey}:`)) setBalanceOwnerKey("");
+  };
 
   const handleSubmit = async () => {
-    if (participants.length === 0) {
-      alert("Belum ada peserta yang ditambahkan");
-      return;
+    const targetParticipants = participantDrafts;
+    if (!targetParticipants.length) return toast.error("Tambahkan setidaknya satu peserta ke daftar registrasi.");
+    if (recordPaymentNow) {
+      if (!Number.isSafeInteger(Number(paymentAmount)) || Number(paymentAmount) <= 0) return toast.error("Masukkan nominal pembayaran yang valid.");
+      if (!paymentEvidence) return toast.error("Unggah bukti transfer untuk mencatat pembayaran.");
+      if (customizePaymentAllocation && manualAllocationTotal > transferAmount) return toast.error("Total alokasi perjalanan melebihi nominal transfer.");
+      if (unallocatedPayment > 0 && !balanceOwnerKey) return toast.error("Pilih pemilik Saldo Lain untuk kelebihan transfer.");
     }
-
     setSubmitting(true);
+    let uploadedEvidenceKey: string | null = null;
+    let evidenceCleanupToken = "";
     try {
-      // Submit each participant
-      const results = await Promise.all(
-        participants.map((p) => {
-          return createRegistration({
+      let evidence: { id: string; storageKey: string; name: string; mimeType: string; sizeBytes: number } | null = null;
+      if (recordPaymentNow && paymentEvidence) {
+        const upload = await createRegistrationEvidenceUploadAction({ name: paymentEvidence.name, mimeType: paymentEvidence.type, sizeBytes: paymentEvidence.size });
+        if (!upload.success) throw new Error(upload.error);
+        uploadedEvidenceKey = upload.storageKey;
+        evidenceCleanupToken = upload.cleanupToken;
+        const uploaded = await fetch(upload.signedUrl, { method: "PUT", headers: { "Content-Type": paymentEvidence.type }, body: paymentEvidence });
+        if (!uploaded.ok) { await cleanupRegistrationEvidenceUploadAction(upload.storageKey, evidenceCleanupToken); uploadedEvidenceKey = null; throw new Error("Upload bukti ke Supabase gagal. Coba unggah kembali."); }
+        evidence = { id: upload.id, storageKey: upload.storageKey, name: paymentEvidence.name, mimeType: paymentEvidence.type, sizeBytes: paymentEvidence.size };
+      }
+      const result = await finalizeRegistrationBatchAction({
+        registrations: targetParticipants.map((p, index) => ({
             eventId,
             studentId: p.externalParticipantId ? null : p.student.id,
             externalParticipantId: p.externalParticipantId ?? null,
@@ -504,40 +508,38 @@ export function MultiParticipantRegistrationForm({
             kordaChangeConfirmed: true,
             outboundPaid: false,
             returnPaid: false,
-          });
-        }),
-      );
-
-      const failed = results.filter((r) => !r.success);
-      if (failed.length > 0) {
-        alert(
-          `Gagal mendaftarkan ${failed.length} peserta:\n${failed.map((r) => r.error).join("\n")}`,
-        );
-      } else {
-        alert(`Berhasil mendaftarkan ${participants.length} peserta!`);
-        setParticipants([]);
-        allowNextNavigation();
-        window.location.reload();
-      }
+            participantKey: String(index),
+          })),
+        payment: recordPaymentNow ? {
+          amount: Number(paymentAmount),
+          balanceOwnerKey: (() => { const owner = paymentJourneys.find((journey) => journey.key === balanceOwnerKey); return owner ? `${paymentTargets.indexOf(owner.participant)}:${owner.direction}` : null; })(),
+          evidence,
+          ...(customizePaymentAllocation ? { allocations: paymentJourneys.map((journey) => ({ participantKey: String(paymentTargets.indexOf(journey.participant)), direction: journey.direction, journeyAmount: Number(customPaymentAllocations[journey.key]) || 0 })) } : {}),
+        } : null,
+      });
+      if (!result.success) { if (uploadedEvidenceKey) await cleanupRegistrationEvidenceUploadAction(uploadedEvidenceKey, evidenceCleanupToken); uploadedEvidenceKey = null; toast.error(result.error); return; }
+      setLastSubmissionSummary({ names: targetParticipants.map((participant) => participant.student.name), paid: recordPaymentNow, amount: recordPaymentNow ? Number(paymentAmount) : 0 });
+      toast.success(recordPaymentNow ? "Registrasi dan pembayaran berhasil disimpan." : "Registrasi berhasil disimpan.");
+      setPaymentEvidence(null); setRecordPaymentNow(false); setPaymentAmount(""); setPaymentAmountEdited(false); setBalanceOwnerKey(""); setCustomizePaymentAllocation(false); setCustomPaymentAllocations({});
+      setParticipantDrafts([]);
+      setSelectedStudentId(null); setSelectedStudent(null); setSelectedOutboundKordaId(selectedKordaId); setSelectedReturnKordaId(selectedKordaId); setSelectedOutboundDropPointId(null); setSelectedReturnDropPointId(null);
+    } catch (error) {
+      if (uploadedEvidenceKey) await cleanupRegistrationEvidenceUploadAction(uploadedEvidenceKey, evidenceCleanupToken);
+      toast.error(error instanceof Error ? error.message : "Gagal menyelesaikan registrasi.");
     } finally {
       setSubmitting(false);
     }
   };
 
   // Validation based on registration mode
-  const canAddParticipant =
-    selectedStudent &&
-    (registrationMode === "both"
-      ? selectedOutboundDropPoint && selectedReturnDropPoint // Both required
-      : registrationMode === "outbound_only" ? selectedOutboundDropPoint : selectedReturnDropPoint);
-
   return (
     <div className="space-y-6">
+      {lastSubmissionSummary && <Card className="border-emerald-600/30 bg-emerald-50/60 dark:bg-emerald-950/20"><CardContent className="space-y-1 p-4"><p className="font-semibold text-emerald-800 dark:text-emerald-300">Registrasi berhasil disimpan</p><p className="text-sm">{lastSubmissionSummary.names.join(", ")}</p><p className="text-sm text-muted-foreground">{lastSubmissionSummary.paid ? `Pembayaran Rp${lastSubmissionSummary.amount.toLocaleString("id-ID")} juga dicatat.` : "Belum ada pembayaran yang dicatat."} Form siap untuk registrasi berikutnya.</p><Button type="button" variant="ghost" size="sm" onClick={() => setLastSubmissionSummary(null)}>Tutup ringkasan</Button></CardContent></Card>}
       <Card>
         <CardHeader>
           <CardTitle>Daftar Peserta Baru</CardTitle>
           <CardDescription>
-            Pilih Korda, cari siswa, pilih titik turun, lalu tambahkan ke daftar
+            Tambahkan satu atau beberapa peserta untuk Korda tujuan yang sama, lalu simpan sekaligus.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -552,19 +554,19 @@ export function MultiParticipantRegistrationForm({
                 }
               >
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="both" id="mode-both" />
+                <RadioGroupItem value="both" id="mode-both" disabled={participantDrafts.length > 0} />
                   <label htmlFor="mode-both" className="text-sm cursor-pointer">
                     Pulang & Kembali (Normal)
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="outbound_only" id="mode-outbound" />
+                  <RadioGroupItem value="outbound_only" id="mode-outbound" disabled={participantDrafts.length > 0} />
                   <label htmlFor="mode-outbound" className="text-sm cursor-pointer">
                     Perjalanan Pulang saja
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="return_only" id="mode-return" />
+                  <RadioGroupItem value="return_only" id="mode-return" disabled={participantDrafts.length > 0} />
                   <label
                     htmlFor="mode-return"
                     className="text-sm cursor-pointer"
@@ -573,12 +575,13 @@ export function MultiParticipantRegistrationForm({
                   </label>
                 </div>
               </RadioGroup>
+              {participantDrafts.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Hapus seluruh peserta dari daftar terlebih dahulu jika ingin mengganti mode perjalanan.</p>}
             </div>
           )}
 
-          {/* Step 1: Select Korda (Optional) */}
+          {/* Step 1: Select required destination Korda */}
           <div>
-            <Label className="mb-1">1. Korda tujuan</Label>
+            <Label className="mb-1">1. Korda tujuan *</Label>
             <Autocomplete
               items={kordas}
               value={selectedKordaId}
@@ -588,12 +591,14 @@ export function MultiParticipantRegistrationForm({
               placeholder="Pilih Korda tujuan"
               searchPlaceholder="Cari korda..."
               emptyText="Tidak ada korda"
+              disabled={!!defaultKordaId || participantDrafts.length > 0}
             />
             <p className="text-sm text-muted-foreground mt-1">
-              Pilih Korda tujuan untuk mencari peserta. Tujuan ini otomatis dipilih pada bagian perjalanan dan dapat diubah dari sana. Pencarian santri lintas Korda hanya menampilkan identitas minimum dan Korda asal.
+              {defaultKordaId ? "Korda tujuan mengikuti cakupan akun Anda." : participantDrafts.length > 0 ? "Korda tujuan terkunci selama peserta masih ada di daftar." : "Pilih Korda tujuan sebelum mengisi data peserta dan perjalanan."} Pulang dan Kembali dalam satu registrasi menggunakan Korda tujuan ini. Pencarian santri lintas Korda hanya menampilkan identitas minimum dan Korda asal.
             </p>
           </div>
 
+          {selectedKordaId ? <>
           {/* Step 2: Search Student (Async) */}
           <div>
             <Label className="mb-1">2. Jenis peserta</Label>
@@ -688,22 +693,8 @@ export function MultiParticipantRegistrationForm({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label className="mb-1">Pilih Korda *</Label>
-                  <Select
-                  value={selectedOutboundKordaId || ""}
-                  onValueChange={selectDestinationKorda}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih korda pulang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {kordas.map((korda) => (
-                        <SelectItem key={korda.id} value={korda.id}>
-                          {korda.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="mb-1">Korda tujuan</Label>
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm">{kordas.find((korda) => korda.id === selectedKordaId)?.name}</div>
                 </div>
 
                 <div>
@@ -728,15 +719,15 @@ export function MultiParticipantRegistrationForm({
                     <SelectContent>
                       {outboundDropPoints.map((dp) => (
                         <SelectItem key={dp.id} value={dp.id}>
-                          {dp.name} - Rp {dp.price.toLocaleString("id-ID")}
+                          {dp.name} - tarif Pulang Rp {getJourneyTariff(dp.price, "OUTBOUND").toLocaleString("id-ID")}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {selectedOutboundDropPoint && (
                     <p className="text-sm text-muted-foreground mt-1">
-                      Harga: Rp{" "}
-                      {selectedOutboundDropPoint.price.toLocaleString("id-ID")}
+                      Tarif Pulang per peserta: Rp{" "}
+                      {getJourneyTariff(selectedOutboundDropPoint.price, "OUTBOUND").toLocaleString("id-ID")}
                     </p>
                   )}
                 </div>
@@ -753,19 +744,8 @@ export function MultiParticipantRegistrationForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1">Korda tujuan *</Label>
-                  {registrationMode === "return_only" ? (
-                    <Select value={selectedReturnKordaId || ""} onValueChange={selectDestinationKorda}>
-                      <SelectTrigger><SelectValue placeholder="Pilih Korda tujuan" /></SelectTrigger>
-                      <SelectContent>
-                        {kordas.map((korda) => <SelectItem key={korda.id} value={korda.id}>{korda.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="rounded-md border bg-background px-3 py-2 text-sm">
-                      {kordas.find((korda) => korda.id === selectedReturnKordaId)?.name || "Pilih Korda tujuan"}
-                    </div>
-                  )}
-                    <p className="mt-1 text-xs text-muted-foreground">Pulang-pergi hanya dapat memakai satu Korda tujuan.</p>
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm">{kordas.find((korda) => korda.id === selectedKordaId)?.name}</div>
+                  {registrationMode === "both" && <p className="mt-1 text-xs text-muted-foreground">Pulang-pergi hanya dapat memakai satu Korda tujuan.</p>}
                 </div>
 
               <div>
@@ -787,156 +767,57 @@ export function MultiParticipantRegistrationForm({
                   <SelectContent>
                     {returnDropPoints.map((dp) => (
                       <SelectItem key={dp.id} value={dp.id}>
-                        {dp.name} - Rp {dp.price.toLocaleString("id-ID")}
+                        {dp.name} - tarif Kembali Rp {getJourneyTariff(dp.price, "RETURN").toLocaleString("id-ID")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {selectedReturnDropPoint && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Harga: Rp{" "}
-                    {selectedReturnDropPoint.price.toLocaleString("id-ID")}
+                    Tarif Kembali per peserta: Rp{" "}
+                    {getJourneyTariff(selectedReturnDropPoint.price, "RETURN").toLocaleString("id-ID")}
                   </p>
                 )}
               </div>
             </div>
           </div>}
 
-          <p className="rounded bg-muted p-3 text-sm text-muted-foreground">Pembayaran dicatat sebagai transaksi di menu Pembayaran setelah perjalanan berhasil didaftarkan.</p>
+          {participantDrafts.length > 0 && <section className="space-y-3 rounded-lg border bg-background p-4" aria-live="polite">
+            <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">Daftar peserta ({participantDrafts.length})</h3><p className="text-sm text-muted-foreground">Peserta akan diregistrasikan bersama dalam satu submit.</p></div><span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs">{registrationMode === "both" ? "Pulang & Kembali" : registrationMode === "outbound_only" ? "Pulang" : "Kembali"}</span></div>
+            <ul className="divide-y rounded-md border">
+              {participantDrafts.map((draft) => <li key={draft.draftKey} className="flex items-start justify-between gap-3 p-3"><div className="min-w-0"><p className="font-medium">{draft.student.name}</p><p className="text-xs text-muted-foreground">{draft.externalParticipantId ? "Peserta eksternal" : draft.student.nis ? `NIS ${draft.student.nis}` : "Santri"}</p><p className="mt-1 text-sm text-muted-foreground">{[draft.outboundDropPoint && `Pulang: ${draft.outboundDropPoint.name}`, draft.returnDropPoint && `Kembali: ${draft.returnDropPoint.name}`].filter(Boolean).join(" · ")}</p></div><Button type="button" size="sm" variant="ghost" disabled={submitting} onClick={() => removeParticipant(draft)} aria-label={`Hapus ${draft.student.name} dari daftar`}>Hapus</Button></li>)}
+            </ul>
+            {participantDrafts.length > 0 && <p className="text-xs text-muted-foreground">Pilih orang berikutnya di atas untuk menambahkannya. Korda tujuan tetap sama untuk seluruh daftar.</p>}
+          </section>}
 
-          {/* Add Button */}
-          <Button
-            type="button"
-            onClick={handleAddParticipant}
-            disabled={!canAddParticipant || submitting}
-            className="w-full"
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Tambah ke Daftar
+          {paymentTargets.length > 0 && <section className="space-y-4 rounded-lg border bg-background p-4">
+            <div><h3 className="font-semibold">Pembayaran (opsional)</h3><p className="text-sm text-muted-foreground">Centang jika pembayaran sudah dilakukan. Jika dilewati, pembayaran dapat dicatat nanti melalui menu Pembayaran.</p></div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-muted/40 p-3"><input type="checkbox" checked={recordPaymentNow} onChange={(event) => setRecordPaymentNow(event.target.checked)} className="mt-1 size-4 accent-primary" /><span><span className="block text-sm font-medium">Pembayaran sudah dilakukan</span><span className="mt-0.5 block text-xs text-muted-foreground">Centang untuk mengisi nominal dan mengunggah bukti transfer sekarang.</span></span></label>
+            {recordPaymentNow && <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-medium">Nominal transfer <span className="text-destructive">*</span><input required type="number" min="1" step="1" value={paymentAmount} onChange={(event) => { setPaymentAmount(event.target.value); setPaymentAmountEdited(true); }} className="mt-1.5 w-full rounded-md border bg-background px-3 py-2.5" /><span className="mt-1 block text-xs font-normal text-muted-foreground">Default sebesar total tagihan: Rp{paymentDue.toLocaleString("id-ID")}. Nominal lebih kecil dicatat sebagai partial.</span></label>
+                <label className="text-sm font-medium">Bukti transfer <span className="text-destructive">*</span><span className="mt-1.5 block text-xs font-normal text-muted-foreground">PDF/JPG/PNG/WebP · maks. 10 MB</span><input required type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setPaymentEvidence(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border bg-background p-2 text-sm" /></label>
+              </div>
+              <label className="flex cursor-pointer items-start gap-2 text-sm"><input type="checkbox" checked={customizePaymentAllocation} onChange={(event) => { const checked = event.target.checked; setCustomizePaymentAllocation(checked); if (checked) setCustomPaymentAllocations(Object.fromEntries(paymentJourneys.map((journey) => [journey.key, String(journey.tariff)]))); }} className="mt-0.5 size-4 accent-primary" /><span><span className="font-medium">Atur pembayaran partial per perjalanan</span><span className="block text-xs text-muted-foreground">Tentukan perjalanan dan nominal yang menerima alokasi.</span></span></label>
+              {customizePaymentAllocation && <div className="space-y-2 rounded-lg border p-3"><p className="text-sm font-medium">Alokasi tagihan</p>{paymentJourneys.map((journey) => <label key={journey.key} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between"><span>{journey.participant.student.name} · {journey.direction === "OUTBOUND" ? "Pulang" : "Kembali"} · {journey.destination}<span className="block text-xs text-muted-foreground">Tagihan Rp{journey.tariff.toLocaleString("id-ID")}</span></span><input type="number" min="0" max={journey.tariff} step="1" value={customPaymentAllocations[journey.key] ?? String(journey.tariff)} onChange={(event) => setCustomPaymentAllocations((current) => ({ ...current, [journey.key]: event.target.value }))} className="w-full rounded-md border bg-background px-3 py-2 sm:w-44" /></label>)}</div>}
+              {unallocatedPayment > 0 && <label className="block text-sm font-medium">Pemilik Saldo Lain <span className="text-destructive">*</span><select value={balanceOwnerKey} onChange={(event) => setBalanceOwnerKey(event.target.value)} className="mt-1.5 w-full rounded-md border bg-background px-3 py-2.5"><option value="">Pilih peserta dan arah perjalanan</option>{paymentJourneys.map((journey) => <option key={journey.key} value={journey.key}>{journey.participant.student.name} · {journey.direction === "OUTBOUND" ? "Pulang" : "Kembali"} · {journey.destination}</option>)}</select><span className="mt-1 block text-xs font-normal text-muted-foreground">Kelebihan masuk ke Korda tujuan perjalanan yang dipilih.</span></label>}
+              <div className="rounded-md bg-muted/50 p-3 text-sm"><div className="flex justify-between gap-3"><span>Total tagihan</span><strong>Rp{paymentDue.toLocaleString("id-ID")}</strong></div><div className="mt-1 flex justify-between gap-3"><span>Dialokasikan ke tagihan</span><strong>Rp{(customizePaymentAllocation ? manualAllocationTotal : Math.min(transferAmount, paymentDue)).toLocaleString("id-ID")}</strong></div><div className="mt-1 flex justify-between gap-3"><span>Sisa tagihan</span><strong>Rp{Math.max(0, paymentDue - (customizePaymentAllocation ? manualAllocationTotal : Math.min(transferAmount, paymentDue))).toLocaleString("id-ID")}</strong></div><div className="mt-1 flex justify-between gap-3 border-t pt-2"><span>Kelebihan ke Saldo Lain</span><strong>Rp{unallocatedPayment.toLocaleString("id-ID")}</strong></div></div>
+            </div>}
+          </section>}
+
+          <Button type="button" variant={participantDrafts.length > 0 ? "outline" : "default"} onClick={addCurrentParticipant} disabled={!canAddParticipant || submitting || participantDrafts.some((draft) => draft.student.id === selectedStudent?.id)} className="w-full">
+            {participantDrafts.some((draft) => draft.student.id === selectedStudent?.id) ? "Peserta sudah ada di daftar" : "Tambah peserta ke daftar"}
           </Button>
+
+          {participantDrafts.length > 0 && <div className="space-y-2 border-t pt-4">
+            {!recordPaymentNow && <p className="text-sm text-muted-foreground">Total tagihan semua peserta: <strong className="text-foreground">Rp{paymentDue.toLocaleString("id-ID")}</strong></p>}
+            <Button type="button" onClick={() => void handleSubmit()} disabled={submitting} className="w-full">
+              {submitting ? "Menyimpan..." : `Simpan ${participantDrafts.length} peserta${recordPaymentNow ? " dan pembayaran" : ""}`}
+            </Button>
+          </div>}
+          </> : <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-center text-sm text-muted-foreground" role="status">Pilih Korda tujuan terlebih dahulu untuk membuka isian peserta, perjalanan, dan pembayaran.</div>}
         </CardContent>
       </Card>
-
-      {/* Participant Preview */}
-      {participants.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Preview Peserta ({participants.length})</CardTitle>
-            <CardDescription>
-              Daftar peserta yang akan didaftarkan
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama</TableHead>
-                    <TableHead>NIS</TableHead>
-                    <TableHead>Titik Pulang</TableHead>
-                    <TableHead>Titik Kembali</TableHead>
-                    <TableHead>Status Bayar</TableHead>
-                    <TableHead className="text-right">Harga Total</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {participants.map((p) => {
-                    const outboundPrice = p.outboundDropPoint?.price || 0;
-                    const returnPrice = p.returnDropPoint?.price ?? 0;
-                    const totalPrice = outboundPrice + returnPrice;
-
-                    return (
-                      <TableRow key={p.student.id}>
-                        <TableCell className="font-medium">
-                          {p.student.name}
-                          {p.student.regency?.korda?.name && (() => {
-                            const destinationId = p.outboundDropPoint?.kordaId ?? p.returnDropPoint?.kordaId;
-                            const destinationName = kordas.find((korda) => korda.id === destinationId)?.name;
-                            return destinationId && destinationId !== p.student.regency.kordaId ? (
-                              <div className="text-xs font-normal text-muted-foreground">
-                                Lintas Korda · Asal: {p.student.regency.korda.name} · Tujuan: {destinationName ?? "Korda terpilih"}
-                              </div>
-                            ) : null;
-                          })()}
-                        </TableCell>
-                        <TableCell>{p.student.nis}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {p.outboundDropPoint ? (
-                              <>
-                                {p.outboundDropPoint.name}
-                                <div className="text-xs text-muted-foreground">
-                                  Rp{" "}
-                                  {p.outboundDropPoint.price.toLocaleString(
-                                    "id-ID",
-                                  )}
-                                </div>
-                              </>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">
-                                -
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {p.returnDropPoint ? <>
-                              {p.returnDropPoint.name}
-                              <div className="text-xs text-muted-foreground">
-                                Rp {p.returnDropPoint.price.toLocaleString("id-ID")}
-                              </div>
-                            </> : <span className="text-muted-foreground text-xs">-</span>}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">Belum bayar</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          Rp {totalPrice.toLocaleString("id-ID")}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              handleRemoveParticipant(p.student.id)
-                            }
-                            disabled={submitting}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  <TableRow>
-                    <TableCell colSpan={5} className="font-semibold">
-                      Total
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      Rp {totalPrice.toLocaleString("id-ID")}
-                    </TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="w-full mt-4"
-              size="lg"
-            >
-              {submitting
-                ? "Mendaftarkan..."
-                : `Daftar ${participants.length} Peserta`}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

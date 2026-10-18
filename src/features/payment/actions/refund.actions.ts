@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ensureKordaInScope, getRegionalAccessScope } from "@/server/access-scope";
-import { allowedEvidenceMime, createSignedEvidenceUpload, deleteEvidenceObject, verifyEvidenceObject } from "../services/supabase-storage";
+import { allowedEvidenceMime, createEvidenceCleanupToken, createSignedEvidenceUpload, deleteEvidenceObject, isValidEvidenceCleanupToken, isValidEvidenceStorageKey, verifyEvidenceObject } from "../services/supabase-storage";
 
 export async function createRefundEvidenceUploadAction(input: { name: string; mimeType: string; sizeBytes: number }) {
   try {
@@ -16,9 +16,21 @@ export async function createRefundEvidenceUploadAction(input: { name: string; mi
     const storageKey = `evidence/${id}.${extension}`;
     const signed = await createSignedEvidenceUpload(storageKey);
     if (!signed.token) throw new Error("Supabase tidak mengembalikan token upload.");
-    return { success: true as const, id, storageKey, signedUrl: signed.signedUrl };
+    return { success: true as const, id, storageKey, signedUrl: signed.signedUrl, cleanupToken: createEvidenceCleanupToken(scope.userId, storageKey) };
   } catch (error) {
     return { success: false as const, error: error instanceof Error ? error.message : "Gagal menyiapkan upload bukti." };
+  }
+}
+
+export async function cleanupRefundEvidenceUploadAction(storageKey: string, cleanupToken: string) {
+  try {
+    const scope = await getRegionalAccessScope();
+    if (!scope.userId || !/^evidence\/[0-9a-f-]{36}\.(pdf|jpg|png|webp)$/i.test(storageKey) || !isValidEvidenceCleanupToken(scope.userId, storageKey, cleanupToken)) return { success: false };
+    if (await prisma.evidenceFile.findUnique({ where: { storageKey }, select: { id: true } })) return { success: false };
+    await deleteEvidenceObject(storageKey);
+    return { success: true };
+  } catch {
+    return { success: false };
   }
 }
 
@@ -43,7 +55,7 @@ export async function recordRefundAction(formData: FormData) {
     if (Boolean(evidenceId) !== Boolean(evidenceStorageKey)) return { success: false, error: "Metadata bukti refund tidak lengkap." };
     let verifiedEvidenceSha256: string | null = null;
     if (evidenceId && evidenceStorageKey) {
-      if (!evidenceStorageKey.startsWith(`evidence/${evidenceId}.`)) return { success: false, error: "Metadata bukti refund tidak valid." };
+      if (!isValidEvidenceStorageKey(evidenceStorageKey, evidenceId, evidenceMime)) return { success: false, error: "Metadata bukti refund tidak valid." };
       verifiedEvidenceSha256 = await verifyEvidenceObject(evidenceStorageKey, evidenceMime, evidenceSize);
       storageKeyToCleanup = evidenceStorageKey;
     }

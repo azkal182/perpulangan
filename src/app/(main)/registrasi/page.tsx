@@ -3,9 +3,10 @@ import { getKorda } from "@/features/master/actions/korda.action";
 import { getDropPoints } from "@/features/drop-points/actions/drop-point.action";
 import { MultiParticipantRegistrationForm } from "@/features/registration/components/MultiParticipantRegistrationForm";
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
+import { getRegionalAccessScope } from "@/server/access-scope";
 
 export default async function RegistrationPage() {
-  const activeEvent = await getActiveEvent();
+  const [activeEvent, scope] = await Promise.all([getActiveEvent(), getRegionalAccessScope()]);
 
   if (!activeEvent) {
     return (
@@ -59,6 +60,7 @@ export default async function RegistrationPage() {
             kordas={kordas}
             dropPoints={dropPoints}
             defaultMode="both"
+            defaultKordaId={scope.role === "korda" ? scope.kordaId : null}
             enableUnsavedGuard
           />
         </div>
