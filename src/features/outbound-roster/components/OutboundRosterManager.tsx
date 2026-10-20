@@ -83,7 +83,7 @@ export function OutboundRosterManager({ data, canManage, search, page, pageSize,
   const regionText = search ? `Hasil pencarian “${search}”` : "Semua santri dalam cakupan data Anda";
   const activeCount = activeView === "excluded" ? data.counts.excluded : activeView === "registered" ? data.counts.registered : activeView === "history" ? data.counts.history : data.counts.candidates;
   const pageCount = Math.max(1, Math.ceil(activeCount / pageSize));
-  const pageHref = (nextPage: number) => `/data-pulang?${new URLSearchParams({ eventId: data.event.id, ...(search ? { q: search } : {}), view: activeView, page: String(nextPage) }).toString()}`;
+  const pageHref = (nextPage: number) => `/data-pulang?${new URLSearchParams({ ...(search ? { q: search } : {}), view: activeView, page: String(nextPage) }).toString()}`;
   return <>
     <div className="grid gap-3 sm:grid-cols-3">
       <Card><CardContent className="flex items-center gap-3 p-4"><UserRoundX className="size-5 text-amber-600"/><div><p className="text-sm text-muted-foreground">Belum terdaftar Pulang</p><p className="text-2xl font-semibold">{data.counts.candidates}</p></div></CardContent></Card>

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { GlobalEventSelector } from "@/features/event/components/GlobalEventSelector.client";
 
 type BreadcrumbEntry = {
   href: string;
@@ -49,8 +50,9 @@ function buildBreadcrumbs(pathname: string): BreadcrumbEntry[] {
 }
 
 type HeaderUser = { name: string; email: string; image: string };
+type HeaderEvent = { id: string; name: string; status: "DRAFT" | "ACTIVE" | "COMPLETED" };
 
-export function MainHeader({ user }: { user: HeaderUser }) {
+export function MainHeader({ user, events, selectedEventId }: { user: HeaderUser; events: HeaderEvent[]; selectedEventId: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -111,6 +113,8 @@ export function MainHeader({ user }: { user: HeaderUser }) {
         </Breadcrumb>
       </div>
 
+      <div className="flex shrink-0 items-center gap-2">
+      <GlobalEventSelector events={events} selectedEventId={selectedEventId} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -154,6 +158,7 @@ export function MainHeader({ user }: { user: HeaderUser }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </header>
   );
 }

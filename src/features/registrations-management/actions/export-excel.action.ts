@@ -8,6 +8,7 @@ import {
   getRegionalAccessScope,
   registrationScopeWhere,
 } from "@/server/access-scope";
+import { canSelectEvent } from "@/server/event-context";
 import type {
   RegistrationExportKorwilSheet,
   RegistrationExportRow,
@@ -57,6 +58,10 @@ export async function getRegistrationsForExcelExportAction(
       dropPointId,
       search,
     } = params;
+
+    if (!eventId || !(await canSelectEvent(scope, eventId))) {
+      throw new Error("Event tidak ditemukan atau di luar cakupan akses.");
+    }
 
     const where: Prisma.RegistrationWhereInput = {
       eventId,

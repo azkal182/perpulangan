@@ -11,6 +11,8 @@ import { logger } from "@/server/logger";
 import { RegistrationStatus } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
 import { getJourneyTariff } from "@/features/drop-points/domain/package-tariff";
+import { assertEventWritable } from "@/server/event-write-guard";
+import { canSelectEvent } from "@/server/event-context";
 import type { Prisma } from "@/generated/prisma/client";
 import { allowedEvidenceMime, createEvidenceCleanupToken, createSignedEvidenceUpload, deleteEvidenceObject, isValidEvidenceCleanupToken, isValidEvidenceStorageKey, verifyEvidenceObject } from "@/features/payment/services/supabase-storage";
 import {
@@ -149,7 +151,7 @@ export async function createRegistration(data: RegistrationCreateData) {
     }
 
     const event = await prisma.event.findUnique({ where: { id: data.eventId }, select: { id: true, status: true, startDate: true, endDate: true } });
-    if (!event || event.status === "DRAFT") return { success: false, error: "Event tidak ditemukan atau belum dibuka." };
+    if (!event || event.status !== "ACTIVE") return { success: false, error: "Event tidak aktif dan hanya dapat dibaca atau diekspor." };
 
     let originKordaId: string | null = null;
     let originKordaNameSnapshot: string | null = null;
@@ -195,14 +197,12 @@ export async function createRegistration(data: RegistrationCreateData) {
 
     const whereParticipant = data.studentId ? { studentId: data.studentId } : { externalParticipantId: data.externalParticipantId! };
     const existingRegistration = await prisma.registration.findFirst({ where: { eventId: data.eventId, ...whereParticipant }, include: { journeys: true } });
-    if (event.status === "COMPLETED" && (!existingRegistration || requestedJourneys.some((journey) => journey.direction !== "RETURN"))) {
-      return { success: false, error: "Event sudah selesai. Hanya perjalanan Kembali yang belum terdaftar pada peserta/event ini yang dapat ditambahkan." };
-    }
     if (existingRegistration) {
       const existingDirections = new Set(existingRegistration.journeys.map((journey) => journey.direction));
       const missing = snapshots.filter((journey) => !existingDirections.has(journey.direction));
       if (!missing.length) return { success: false, error: "Perjalanan ini sudah terdaftar pada event tersebut." };
       const created = await prisma.$transaction(async (tx) => {
+        await assertEventWritable(tx, data.eventId);
         await tx.journey.createMany({ data: missing.map((journey) => ({ ...journey, registrationId: existingRegistration.id })) });
         const outbound = snapshots.find((journey) => journey.direction === "OUTBOUND");
         const returning = snapshots.find((journey) => journey.direction === "RETURN");
@@ -244,6 +244,7 @@ export async function createRegistration(data: RegistrationCreateData) {
       registrarPhone: data.registrarPhone || "",
     };
     const result = await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, data.eventId);
       const created = await registrationRepository.create(registrationData, tx);
       if (snapshots.some((journey) => journey.direction === "OUTBOUND")) {
         await resolveOutboundDisposition(tx, data.eventId, data.studentId, scope.userId);
@@ -259,17 +260,20 @@ export async function createRegistration(data: RegistrationCreateData) {
       return { success: false, error: error.message };
     }
     logger.error({ err: error, data: { eventId: data.eventId, studentId: data.studentId, externalParticipantId: data.externalParticipantId } }, "createRegistration action failed");
-    return { success: false, error: "Failed to create registration" };
+    return { success: false, error: error instanceof Error ? error.message : "Failed to create registration" };
   }
 }
 
 type RegistrationBatchEntry = RegistrationCreateData & { participantKey: string };
 type RegistrationEvidenceInput = { id: string; storageKey: string; name: string; mimeType: string; sizeBytes: number };
 
-export async function createRegistrationEvidenceUploadAction(input: { name: string; mimeType: string; sizeBytes: number }) {
+export async function createRegistrationEvidenceUploadAction(input: { eventId: string; name: string; mimeType: string; sizeBytes: number }) {
   try {
     const scope = await getRegionalAccessScope();
     if (!scope.userId) throw new Error("Sesi pengguna tidak valid.");
+    if (!(await canSelectEvent(scope, input.eventId))) throw new Error("Event di luar cakupan akses Anda.");
+    const event = await prisma.event.findUnique({ where: { id: input.eventId }, select: { status: true } });
+    if (!event || event.status !== "ACTIVE") throw new Error("Event tidak aktif dan tidak menerima upload bukti baru.");
     if (!allowedEvidenceMime(input.mimeType) || !Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > 10 * 1024 * 1024) throw new Error("Bukti harus PDF, JPG, PNG, atau WebP dengan ukuran maksimal 10 MB.");
     const id = randomUUID();
     const extension = input.mimeType === "application/pdf" ? "pdf" : input.mimeType === "image/jpeg" ? "jpg" : input.mimeType === "image/png" ? "png" : "webp";
@@ -324,7 +328,8 @@ export async function finalizeRegistrationBatchAction(input: {
     const registrar = await prisma.user.findUnique({ where: { id: scope.userId }, select: { name: true } });
     const created = await prisma.$transaction(async (tx) => {
       const event = await tx.event.findUnique({ where: { id: eventId }, select: { id: true, status: true, startDate: true, endDate: true } });
-      if (!event || event.status === "DRAFT") throw new Error("Event tidak ditemukan atau belum dibuka.");
+      if (!event) throw new Error("Event tidak ditemukan.");
+      await assertEventWritable(tx, eventId);
       const newJourneyRows: Array<{ id: string; direction: "OUTBOUND" | "RETURN"; destinationKordaId: string; destinationName: string; participantName: string; originName: string | null; tariff: number; participantKey: string }> = [];
       const madeRegistrations: Array<{ id: string; participantName: string }> = [];
 
@@ -360,7 +365,6 @@ export async function finalizeRegistrationBatchAction(input: {
           snapshots.push({ direction: journey.direction, destinationKordaId: destination.id, destinationKordaNameSnapshot: destination.name, dropPointId: dropPoint.id, locationNameSnapshot: dropPoint.name, travelDate: journey.direction === "OUTBOUND" ? event.startDate : event.endDate, tariffSnapshot: getJourneyTariff(dropPoint.price, journey.direction) });
         }
         const existing = await tx.registration.findFirst({ where: { eventId, ...(data.studentId ? { studentId: data.studentId } : { externalParticipantId: data.externalParticipantId! }) }, include: { journeys: true } });
-        if (event.status === "COMPLETED" && (!existing || requested.some((j) => j.direction !== "RETURN"))) throw new Error("Event selesai; hanya Journey Kembali susulan yang dapat ditambahkan.");
         let registrationId: string;
         let journeyIds: string[];
         if (existing) {

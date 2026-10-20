@@ -12,6 +12,8 @@ import {
   getRegionalAccessScope,
   requireKorwilOrAdmin,
 } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
+import { canSelectEvent } from "@/server/event-context";
 
 export interface BusWithDetails {
   id: string;
@@ -47,13 +49,16 @@ export interface BusWithDetails {
 /**
  * Get buses with filters
  */
-export async function getBuses(params?: {
-  eventId?: string;
+export async function getBuses(params: {
+  eventId: string;
   korwilId?: string;
   kordaId?: string;
 }): Promise<BusWithDetails[]> {
   try {
     const scope = await getRegionalAccessScope();
+    if (!params.eventId || !(await canSelectEvent(scope, params.eventId))) {
+      throw new AccessDeniedError("Event di luar cakupan akses.");
+    }
     if (params?.korwilId) {
       await ensureKorwilInScope(scope, params.korwilId);
     }
@@ -64,9 +69,9 @@ export async function getBuses(params?: {
     const buses = await prisma.bus.findMany({
       where: andWhere(
         {
-          ...(params?.eventId && { eventId: params.eventId }),
-          ...(params?.korwilId && { korwilId: params.korwilId }),
-          ...(params?.kordaId && {
+          eventId: params.eventId,
+          ...(params.korwilId && { korwilId: params.korwilId }),
+          ...(params.kordaId && {
             kordas: {
               some: {
                 kordaId: params.kordaId,
@@ -150,22 +155,17 @@ export async function createBus(data: {
       await ensureKordaInScope(scope, kordaId);
     }
 
-    const eventExists = await prisma.event.count({ where: { id: data.eventId } });
-    if (!eventExists) throw new Error("Event tidak ditemukan");
-
-    // Create bus in database
-    const bus = await prisma.bus.create({
-      data: {
-        label: data.label,
-        capacity: data.capacity,
-        eventId: data.eventId,
-        korwilId: data.korwilId || null,
-        kordas: {
-          create: data.kordaIds.map((kordaId) => ({
-            kordaId,
-          })),
+    const bus = await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, data.eventId);
+      return tx.bus.create({
+        data: {
+          label: data.label,
+          capacity: data.capacity,
+          eventId: data.eventId,
+          korwilId: data.korwilId || null,
+          kordas: { create: data.kordaIds.map((kordaId) => ({ kordaId })) },
         },
-      },
+      });
     });
 
     logger.info({ busId: bus.id }, "bus.created");
@@ -198,7 +198,7 @@ export async function updateBus(
     requireKorwilOrAdmin(scope);
     const existing = await prisma.bus.findFirst({
       where: andWhere({ id }, busScopeWhere(scope)),
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!existing) {
       throw new Error("Bus tidak ditemukan");
@@ -218,6 +218,7 @@ export async function updateBus(
     }
 
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, existing.eventId);
       await tx.$queryRaw`SELECT "id" FROM "Bus" WHERE "id" = ${id} FOR UPDATE`;
       if (data.capacity !== undefined) {
         const [outboundCount, returnCount] = await Promise.all([
@@ -287,7 +288,7 @@ export async function toggleBusActive(id: string): Promise<void> {
     requireKorwilOrAdmin(scope);
     const bus = await prisma.bus.findUnique({
       where: { id },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, eventId: true },
     });
 
     if (!bus) {
@@ -303,10 +304,9 @@ export async function toggleBusActive(id: string): Promise<void> {
 
     const newStatus = !bus.isActive;
 
-    // Update in database
-    await prisma.bus.update({
-      where: { id },
-      data: { isActive: newStatus },
+    await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, bus.eventId);
+      await tx.bus.update({ where: { id }, data: { isActive: newStatus } });
     });
 
     logger.info({ busId: id, isActive: newStatus }, "bus.status.toggled");
@@ -316,7 +316,7 @@ export async function toggleBusActive(id: string): Promise<void> {
       throw new Error(error.message);
     }
     logger.error({ error, busId: id }, "bus.toggleActive.failed");
-    throw new Error("Failed to toggle bus status");
+    throw error instanceof Error ? error : new Error("Failed to toggle bus status");
   }
 }
 
@@ -329,7 +329,7 @@ export async function deleteBus(id: string): Promise<void> {
     requireKorwilOrAdmin(scope);
     const bus = await prisma.bus.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
 
     if (!bus) {
@@ -343,14 +343,11 @@ export async function deleteBus(id: string): Promise<void> {
       throw new AccessDeniedError("Bus di luar cakupan akses");
     }
 
-    const hasAssignments = await prisma.journeyBusAssignment.count({ where: { busId: id } });
-    if (hasAssignments > 0) {
-      throw new Error("Bus masih memiliki penempatan peserta. Hapus penempatan peserta terlebih dahulu.");
-    }
-
-    // Delete from database (cascade deletes BusKorda)
-    await prisma.bus.delete({
-      where: { id },
+    await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, bus.eventId);
+      const hasAssignments = await tx.journeyBusAssignment.count({ where: { busId: id } });
+      if (hasAssignments > 0) throw new Error("Bus masih memiliki penempatan peserta. Hapus penempatan peserta terlebih dahulu.");
+      await tx.bus.delete({ where: { id } });
     });
 
     logger.info({ busId: id }, "bus.deleted");

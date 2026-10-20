@@ -15,6 +15,7 @@ import {
   busScopeWhere,
   getRegionalAccessScope,
 } from "@/server/access-scope";
+import { getEventContext } from "@/server/event-context";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -33,7 +34,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const scope = await getRegionalAccessScope();
   const params = await searchParams;
   const value = (key: string) => typeof params[key] === "string" ? params[key] as string : "";
-  const requestedEvent = value("event");
   const requestedKorda = value("korda");
   const requestedDirection = value("arah");
   const requestedJourneyStatus = value("status");
@@ -47,21 +47,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       ? { korwilId: scope.korwilId ?? "__NO_ACCESS__" }
       : { id: scope.kordaId ?? "__NO_ACCESS__" };
 
-  const [events, kordas] = await Promise.all([
-    prisma.event.findMany({
-      where: {
-        registrations: {
-          some: {
-            journeys: { some: { destinationKorda: { is: regionalKorda } } },
-          },
-        },
-      },
-      orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-      select: { id: true, name: true, startDate: true, endDate: true, status: true },
-    }),
+  const [eventContext, kordas] = await Promise.all([
+    getEventContext(scope),
     prisma.korda.findMany({ where: regionalKorda, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
-  const eventId = events.some((event) => event.id === requestedEvent) ? requestedEvent : "";
+  const events = eventContext.events;
+  const eventId = eventContext.selectedEvent?.id ?? "__NO_EVENT_SELECTED__";
   const kordaId = kordas.some((korda) => korda.id === requestedKorda) ? requestedKorda : "";
   const direction = ["OUTBOUND", "RETURN"].includes(requestedDirection) ? requestedDirection as "OUTBOUND" | "RETURN" : "";
   const journeyStatus = ["REGISTERED", "CANCELLED"].includes(requestedJourneyStatus) ? requestedJourneyStatus as "REGISTERED" | "CANCELLED" : "REGISTERED";
@@ -156,7 +147,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const totalSeats = buses.reduce((sum, bus) => sum + bus.capacity, 0);
   const selectedEvent = events.find((event) => event.id === eventId);
 
-  const reportHref = `/laporan?${new URLSearchParams({ ...(eventId ? { event: eventId } : {}), ...(kordaId ? { korda: kordaId } : {}), ...(direction ? { arah: direction } : {}) }).toString()}`;
+  const reportHref = `/laporan?${new URLSearchParams({ ...(kordaId ? { korda: kordaId } : {}), ...(direction ? { arah: direction } : {}) }).toString()}`;
   const fleetHref = "/rombongan";
 
   return (
@@ -173,8 +164,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         </div>
       </header>
 
+      {!eventContext.selectedEvent && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{events.length ? "Tidak ada event aktif atau event yang dipilih. Pilih event historis dari header untuk membaca data." : "Belum ada event yang tersedia pada cakupan Anda. Admin perlu membuat atau mengaktifkan event."}</p>}
+
       <form className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-8 lg:items-end">
-        <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">Event<select name="event" defaultValue={eventId} className="min-w-0 rounded-md border bg-background px-3 py-2"><option value="">Semua event</option>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label>
         <label className="grid min-w-0 gap-1 text-sm">Arah<select name="arah" defaultValue={direction} className="min-w-0 rounded-md border bg-background px-3 py-2"><option value="">Pulang & Kembali</option><option value="OUTBOUND">Pulang</option><option value="RETURN">Kembali</option></select></label>
         <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">Korda tujuan<select name="korda" defaultValue={kordaId} className="min-w-0 rounded-md border bg-background px-3 py-2"><option value="">Semua Korda dalam cakupan</option>{kordas.map((korda) => <option key={korda.id} value={korda.id}>{korda.name}</option>)}</select></label>
         <label className="grid min-w-0 gap-1 text-sm">Status perjalanan<select name="status" defaultValue={journeyStatus} className="min-w-0 rounded-md border bg-background px-3 py-2"><option value="REGISTERED">Terdaftar</option><option value="CANCELLED">Dibatalkan</option></select></label>

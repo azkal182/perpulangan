@@ -9,6 +9,7 @@ import {
   ensureKordaInScope,
   getRegionalAccessScope,
 } from "@/server/access-scope";
+import { canSelectEvent } from "@/server/event-context";
 
 export interface GetPrintDataParams {
   eventId: string;
@@ -25,6 +26,7 @@ export async function getPrintDataAction(
   try {
     const scope = await getRegionalAccessScope();
     if (!params.eventId) throw new Error("Event wajib dipilih.");
+    if (!(await canSelectEvent(scope, params.eventId))) throw new AccessDeniedError("Event di luar cakupan akses.");
     if (params.journeyType !== "outbound" && params.journeyType !== "return") {
       throw new Error("Pilih arah perjalanan sebelum menyiapkan dokumen.");
     }

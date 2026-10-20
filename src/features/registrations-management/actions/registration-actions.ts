@@ -9,6 +9,7 @@ import {
   getRegionalAccessScope,
   registrationScopeWhere,
 } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
 
 // Update payment status
 export async function updatePaymentStatusAction(params: {
@@ -35,19 +36,22 @@ export async function cancelRegistrationAction(params: {
 
     const existing = await prisma.registration.findFirst({
       where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!existing) {
       return { success: false, error: "Registrasi tidak ditemukan" };
     }
 
-    await prisma.registration.update({
-      where: { id: registrationId },
-      data: {
-        status,
-        cancelledAt: new Date(),
-        cancelReason: reason || null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, existing.eventId);
+      await tx.registration.update({
+        where: { id: registrationId },
+        data: {
+          status,
+          cancelledAt: new Date(),
+          cancelReason: reason || null,
+        },
+      });
     });
 
     revalidatePath("/daftar-peserta");
@@ -69,14 +73,15 @@ export async function deleteRegistrationAction(registrationId: string) {
     const scope = await getRegionalAccessScope();
     const existing = await prisma.registration.findFirst({
       where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!existing) {
       return { success: false, error: "Registrasi tidak ditemukan" };
     }
 
-    await prisma.registration.delete({
-      where: { id: registrationId },
+    await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, existing.eventId);
+      await tx.registration.delete({ where: { id: registrationId } });
     });
 
     revalidatePath("/daftar-peserta");

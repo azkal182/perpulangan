@@ -5,9 +5,13 @@ import {
   getRegistrationStats,
   type RegistrationFilters,
 } from "../repositories/registrations.repository";
+import { canSelectEvent } from "@/server/event-context";
+import { getRegionalAccessScope } from "@/server/access-scope";
 
 export async function getRegistrationsAction(filters: RegistrationFilters) {
   try {
+    const scope = await getRegionalAccessScope();
+    if (!(await canSelectEvent(scope, filters.eventId))) throw new Error("Event di luar cakupan akses.");
     const result = await getFilteredRegistrations(filters);
     return {
       success: true,
@@ -31,6 +35,8 @@ export async function getRegistrationsAction(filters: RegistrationFilters) {
 
 export async function getStatsAction(eventId: string) {
   try {
+    const scope = await getRegionalAccessScope();
+    if (!(await canSelectEvent(scope, eventId))) throw new Error("Event di luar cakupan akses.");
     const stats = await getRegistrationStats(eventId);
     return {
       success: true,

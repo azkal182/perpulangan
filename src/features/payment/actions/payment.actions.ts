@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ensureKordaInScope, getRegionalAccessScope } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
+import { canSelectEvent } from "@/server/event-context";
 import { allowedEvidenceMime, createEvidenceCleanupToken, createSignedEvidenceUpload, deleteEvidenceObject, isValidEvidenceCleanupToken, isValidEvidenceStorageKey, verifyEvidenceObject } from "../services/supabase-storage";
 
 export type PaymentAllocationInput = {
@@ -12,10 +14,13 @@ export type PaymentAllocationInput = {
   balanceAmount: number;
 };
 
-export async function createEvidenceUploadAction(input: { name: string; mimeType: string; sizeBytes: number }) {
+export async function createEvidenceUploadAction(input: { eventId: string; name: string; mimeType: string; sizeBytes: number }) {
   try {
     const scope = await getRegionalAccessScope();
     if (!scope.userId) throw new Error("Sesi pengguna tidak valid.");
+    if (!(await canSelectEvent(scope, input.eventId))) throw new Error("Event di luar cakupan akses Anda.");
+    const event = await prisma.event.findUnique({ where: { id: input.eventId }, select: { status: true } });
+    if (!event || event.status !== "ACTIVE") throw new Error("Event tidak aktif dan tidak menerima upload bukti baru.");
     if (!allowedEvidenceMime(input.mimeType) || !Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > 10 * 1024 * 1024) throw new Error("Bukti harus PDF, JPG, PNG, atau WebP dengan ukuran maksimal 10 MB.");
     const id = randomUUID();
     const extension = input.mimeType === "application/pdf" ? "pdf" : input.mimeType === "image/jpeg" ? "jpg" : input.mimeType === "image/png" ? "png" : "webp";
@@ -67,8 +72,8 @@ export async function recordFamilyPaymentAction(formData: FormData) {
       return { success: false, error: "Total alokasi perjalanan dan Saldo Lain harus sama dengan nominal pembayaran." };
     }
     if (Number.isNaN(new Date(input.paidAt).getTime())) return { success: false, error: "Tanggal pembayaran tidak valid." };
-    const event = await prisma.event.findUnique({ where: { id: input.eventId }, select: { id: true } });
-    if (!event) return { success: false, error: "Event tidak ditemukan." };
+    const event = await prisma.event.findUnique({ where: { id: input.eventId }, select: { id: true, status: true } });
+    if (!event || event.status !== "ACTIVE") return { success: false, error: "Event tidak aktif dan tidak dapat menerima pembayaran." };
 
     const journeys = await prisma.journey.findMany({
       where: { id: { in: input.allocations.map((row) => row.journeyId) }, registration: { eventId: input.eventId } },
@@ -104,6 +109,7 @@ export async function recordFamilyPaymentAction(formData: FormData) {
       storageKeyToCleanup = evidenceStorageKey;
     }
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, input.eventId);
       for (const { row, journey } of resolved) {
         const [alreadyPaid, refunded, corrected] = await Promise.all([
           tx.paymentAllocation.aggregate({ where: { journeyId: journey.id, type: "JOURNEY" }, _sum: { amount: true } }),

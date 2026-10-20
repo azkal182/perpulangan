@@ -8,6 +8,8 @@ import {
 } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
+import { assertEventWritable } from "@/server/event-write-guard";
+import { canSelectEvent } from "@/server/event-context";
 import {
   AccessDeniedError,
   andWhere,
@@ -40,6 +42,7 @@ export async function getOutboundRoster(eventId: string, search?: string, reques
   try {
     const scope = await getRegionalAccessScope();
     if (!eventId) return { success: false as const, error: "Pilih event terlebih dahulu." };
+    if (!(await canSelectEvent(scope, eventId))) return { success: false as const, error: "Event tidak ditemukan atau di luar cakupan akses." };
     const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, status: true } });
     if (!event) return { success: false as const, error: "Event tidak ditemukan." };
 
@@ -127,6 +130,7 @@ export async function createOutboundDisposition(input: { eventId: string; studen
     requireAdmin(scope);
     if (!Object.values(OutboundDispositionReason).includes(input.reason)) return { success: false as const, error: "Pilih alasan pengecualian yang tersedia." };
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, input.eventId);
       const [event, student, outboundJourney, existing] = await Promise.all([
         tx.event.findUnique({ where: { id: input.eventId }, select: { id: true } }),
         tx.student.findUnique({ where: { id: input.studentId }, select: { id: true, status: true } }),
@@ -167,6 +171,7 @@ export async function updateOutboundDisposition(input: { dispositionId: string; 
     const outboundJourney = await prisma.journey.findFirst({ where: { direction: "OUTBOUND", status: "REGISTERED", registration: { eventId: existing.eventId, studentId: existing.studentId, status: { not: "CANCELLED" } } }, select: { id: true } });
     if (outboundJourney) return { success: false as const, error: "Santri sudah terdaftar untuk Pulang. Pengecualian tidak dapat diubah." };
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, existing.eventId);
       await tx.outboundDisposition.update({ where: { id: existing.id }, data: { reason: input.reason, updatedByUserId: scope.userId } });
       await tx.outboundDispositionHistory.create({ data: { dispositionId: existing.id, fromReason: existing.reason, toReason: input.reason, fromStatus: existing.status, toStatus: existing.status, actorUserId: scope.userId } });
     });
@@ -185,6 +190,7 @@ export async function cancelOutboundDisposition(dispositionId: string) {
     const existing = await prisma.outboundDisposition.findUnique({ where: { id: dispositionId } });
     if (!existing || existing.status !== "ACTIVE") return { success: false as const, error: "Pengecualian aktif tidak ditemukan." };
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, existing.eventId);
       await tx.outboundDisposition.update({ where: { id: existing.id }, data: { status: OutboundDispositionStatus.CANCELLED, updatedByUserId: scope.userId } });
       await tx.outboundDispositionHistory.create({ data: { dispositionId: existing.id, fromReason: existing.reason, toReason: existing.reason, fromStatus: existing.status, toStatus: OutboundDispositionStatus.CANCELLED, actorUserId: scope.userId } });
     });

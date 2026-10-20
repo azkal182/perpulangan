@@ -15,6 +15,8 @@ import {
   getRegionalAccessScope,
   registrationScopeWhere,
 } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
+import { canSelectEvent } from "@/server/event-context";
 
 export interface BusPassenger {
   registrationId: string;
@@ -122,8 +124,8 @@ async function validateUnassignedJourneyFilters(
   scope: Awaited<ReturnType<typeof getRegionalAccessScope>>,
   filters: UnassignedJourneyFilters,
 ) {
-  if (!filters.eventId || !(await prisma.event.count({ where: { id: filters.eventId } }))) {
-    throw new Error("Event tidak ditemukan.");
+  if (!filters.eventId || !(await canSelectEvent(scope, filters.eventId))) {
+    throw new AccessDeniedError("Event tidak ditemukan atau di luar cakupan akses.");
   }
   if (filters.korwilId) await ensureKorwilInScope(scope, filters.korwilId);
   if (filters.kordaId) await ensureKordaInScope(scope, filters.kordaId);
@@ -292,6 +294,7 @@ export async function getBusAttendanceManifest(params: {
   try {
     const scope = await getRegionalAccessScope();
     if (!params.eventId) throw new Error("Event wajib dipilih.");
+    if (!(await canSelectEvent(scope, params.eventId))) throw new AccessDeniedError("Event di luar cakupan akses.");
     if (params.korwilId) {
       ensureKorwilInScope(scope, params.korwilId);
     }
@@ -580,6 +583,7 @@ export async function assignToBus(
     if (bus.capacity < 1) throw new Error("Kapasitas bus belum valid. Admin/Korwil harus mengisi kapasitas kursi terlebih dahulu.");
 
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, bus.eventId);
       await tx.$queryRaw`SELECT "id" FROM "Bus" WHERE "id" = ${busId} FOR UPDATE`;
       const current = await tx.journeyBusAssignment.findUnique({
         where: { journeyId: journeyRecord.id },
@@ -634,7 +638,7 @@ export async function assignToBus(
       { error, registrationId, busId, journey },
       "passenger.assign.failed",
     );
-    throw new Error("Gagal assign peserta ke bus");
+    throw error instanceof Error ? error : new Error("Gagal assign peserta ke bus");
   }
 }
 
@@ -655,7 +659,7 @@ export async function unassignFromBus(
         registration: registrationScopeWhere(scope),
         busAssignment: { bus: busScopeWhere(scope) },
       },
-      include: { busAssignment: { include: { bus: { select: { label: true } } } } },
+      include: { registration: { select: { eventId: true } }, busAssignment: { include: { bus: { select: { label: true } } } } },
     });
     if (!existing) {
       throw new AccessDeniedError("Registrasi di luar cakupan akses");
@@ -665,6 +669,7 @@ export async function unassignFromBus(
     const existingAssignment = existing.busAssignment;
     if (existingAssignment?.busId) {
       await prisma.$transaction(async (tx) => {
+        await assertEventWritable(tx, existing.registration.eventId);
         await tx.journeyBusAssignment.update({
           where: { journeyId: existing.id },
           data: {
@@ -698,6 +703,6 @@ export async function unassignFromBus(
       { error, registrationId, journey },
       "passenger.unassign.failed",
     );
-    throw new Error("Gagal hapus peserta dari bus");
+    throw error instanceof Error ? error : new Error("Gagal hapus peserta dari bus");
   }
 }

@@ -1,4 +1,3 @@
-import { getEvent } from "@/features/event/services/event.service";
 import { getKorda } from "@/features/master/actions/korda.action";
 import { getDropPoints } from "@/features/drop-points/actions/drop-point.action";
 import {
@@ -12,6 +11,7 @@ import { RegistrationFilters } from "@/features/registrations-management/compone
 import { RegistrationsTable } from "@/features/registrations-management/components/RegistrationsTable";
 import { PrintButton } from "@/features/registrations-management/components/PrintButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getGlobalEventContext } from "@/server/event-context";
 
 interface PageProps {
   searchParams?: Promise<{
@@ -26,7 +26,7 @@ interface PageProps {
 }
 
 export default async function DaftarPesertaPage({ searchParams }: PageProps) {
-  const activeEvent = await getActiveEvent();
+  const { selectedEvent: activeEvent } = await getGlobalEventContext();
 
   if (!activeEvent) {
     return (
@@ -34,9 +34,9 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
         <RegistrationNavigation />
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">Tidak Ada Event Aktif</h1>
+            <h1 className="text-2xl font-bold mb-2">Tidak Ada Event Terpilih</h1>
             <p className="text-muted-foreground">
-              Silakan aktifkan event terlebih dahulu untuk melihat daftar peserta.
+              Pilih event dari pemilih di header. Jika belum ada event yang tersedia, admin perlu membuat atau mengaktifkan event.
             </p>
           </div>
         </div>
@@ -144,6 +144,7 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
                 total={total}
                 currentPage={page}
                 pageSize={pageSize}
+                canWrite={activeEvent.status === "ACTIVE"}
               />
             </CardContent>
           </Card>
@@ -151,18 +152,4 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
       </div>
     </>
   );
-}
-
-async function getActiveEvent() {
-  try {
-    const result = await getEvent();
-    if (result.success && result.data) {
-      const events = Array.isArray(result.data) ? result.data : [result.data];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return events.find((e: any) => e.status === "ACTIVE");
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }

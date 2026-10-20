@@ -2,14 +2,14 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getEvent } from "@/features/event/services/event.service";
 import { getKorda } from "@/features/master/actions/korda.action";
 import { getDropPoints } from "@/features/drop-points/actions/drop-point.action";
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
 import { PrintWorkspace } from "@/features/registrations-management/components/PrintDialog";
+import { getGlobalEventContext } from "@/server/event-context";
 
 export default async function CetakDokumenPage() {
-  const activeEvent = await getActiveEvent();
+  const { selectedEvent: activeEvent } = await getGlobalEventContext();
 
   if (!activeEvent) {
     return (
@@ -17,9 +17,9 @@ export default async function CetakDokumenPage() {
         <RegistrationNavigation />
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">Tidak Ada Event Aktif</h1>
+            <h1 className="text-2xl font-bold mb-2">Tidak Ada Event Terpilih</h1>
             <p className="text-muted-foreground">
-              Silakan aktifkan event terlebih dahulu untuk mengakses halaman cetak.
+              Pilih event dari pemilih di header. Jika belum ada event yang tersedia, admin perlu membuat atau mengaktifkan event.
             </p>
           </div>
         </div>
@@ -81,18 +81,4 @@ export default async function CetakDokumenPage() {
       </div>
     </>
   );
-}
-
-async function getActiveEvent() {
-  try {
-    const result = await getEvent();
-    if (result.success && result.data) {
-      const events = Array.isArray(result.data) ? result.data : [result.data];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return events.find((e: any) => e.status === "ACTIVE");
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }

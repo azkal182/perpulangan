@@ -14,46 +14,7 @@ import {
   getRegionalAccessScope,
   kordaScopeWhere,
 } from "@/server/access-scope";
-
-/**
- * Get events that have been synced to tracker API (for dropdown)
- */
-export async function getTrackingEvents() {
-  try {
-    const scope = await getRegionalAccessScope();
-    const eventWhere = {
-      trackerEventId: {
-        not: null,
-      },
-      ...(scope.role === "admin"
-        ? {}
-        : {
-            buses: {
-              some: busScopeWhere(scope),
-            },
-          }),
-    };
-
-    const events = await prisma.event.findMany({
-      where: eventWhere,
-      select: {
-        id: true,
-        name: true,
-        trackerEventId: true,
-        startDate: true,
-        endDate: true,
-      },
-      orderBy: {
-        startDate: "desc",
-      },
-    });
-
-    return events;
-  } catch (error) {
-    logger.error({ error }, "tracking.getEvents.failed");
-    return [];
-  }
-}
+import { canSelectEvent } from "@/server/event-context";
 
 /**
  * Get buses for tracking with tracker IDs and korda info
@@ -64,6 +25,7 @@ export async function getBusesForTracking(params: {
 }) {
   try {
     const scope = await getRegionalAccessScope();
+    if (!(await canSelectEvent(scope, params.eventId))) throw new AccessDeniedError("Event di luar cakupan akses.");
     if (params.kordaId) {
       await ensureKordaInScope(scope, params.kordaId);
     }
@@ -139,10 +101,19 @@ export async function getGPSPositions(eventId: string): Promise<{
 }> {
   try {
     const scope = await getRegionalAccessScope();
-    const canAccess = await prisma.bus.count({
-      where: andWhere({ eventId }, busScopeWhere(scope)),
+    if (!(await canSelectEvent(scope, eventId))) {
+      return {
+        success: false,
+        data: [],
+        message: "Event di luar cakupan akses",
+      };
+    }
+    const scopedBuses = await prisma.bus.findMany({
+      where: andWhere({ eventId, trackerId: { not: null } }, busScopeWhere(scope)),
+      select: { trackerId: true },
     });
-    if (!canAccess) {
+    const trackerIds = new Set(scopedBuses.flatMap((bus) => bus.trackerId ? [bus.trackerId] : []));
+    if (!trackerIds.size) {
       return {
         success: false,
         data: [],
@@ -166,12 +137,11 @@ export async function getGPSPositions(eventId: string): Promise<{
 
     // Fetch monitoring data from tracker API
     const positions = await trackerApi.getMonitoring(event.trackerEventId);
-
-    console.log(JSON.stringify(positions, null, 2));
+    const scopedPositions = positions.filter((position) => trackerIds.has(position.id));
 
     return {
       success: true,
-      data: positions,
+      data: scopedPositions,
     };
   } catch (error) {
     logger.error({ error, eventId }, "tracking.getGPSPositions.failed");

@@ -13,6 +13,7 @@ import type { DropPoint } from "@/features/drop-points/types";
 interface RegistrationsManagementViewProps {
   eventId: string;
   eventName: string;
+  canWrite: boolean;
   registrations: RegistrationWithDetails[];
   total: number;
   currentPage: number;
@@ -25,6 +26,7 @@ interface RegistrationsManagementViewProps {
 export function RegistrationsManagementView({
   eventId,
   eventName,
+  canWrite,
   registrations,
   total,
   currentPage,
@@ -49,7 +51,7 @@ export function RegistrationsManagementView({
             <TabsTrigger value="list">
               Daftar Peserta ({total})
             </TabsTrigger>
-            <TabsTrigger value="register">Daftar Baru</TabsTrigger>
+            {canWrite && <TabsTrigger value="register">Daftar Baru</TabsTrigger>}
           </TabsList>
 
           {/* Tab: Daftar Peserta */}
@@ -88,13 +90,14 @@ export function RegistrationsManagementView({
                   total={total}
                   currentPage={currentPage}
                   pageSize={pageSize}
+                  canWrite={canWrite}
                 />
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Tab: Daftar Baru */}
-          <TabsContent value="register">
+          {canWrite && <TabsContent value="register">
             <MultiParticipantRegistrationForm
               eventId={eventId}
               eventName={eventName}
@@ -103,7 +106,7 @@ export function RegistrationsManagementView({
               defaultMode="both"
               lockMode={false}
             />
-          </TabsContent>
+          </TabsContent>}
         </Tabs>
       </div>
     </div>

@@ -12,6 +12,6 @@ const TrackingPage = dynamic(() => import("./TrackingPage.client"), {
   ),
 });
 
-export default function TrackingPageLoader() {
-  return <TrackingPage />;
+export default function TrackingPageLoader({ initialSelectedEventId, initialSelectedEventName }: { initialSelectedEventId: string; initialSelectedEventName: string }) {
+  return <TrackingPage initialSelectedEventId={initialSelectedEventId} initialSelectedEventName={initialSelectedEventName} />;
 }

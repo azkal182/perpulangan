@@ -485,7 +485,7 @@ export function MultiParticipantRegistrationForm({
     try {
       let evidence: { id: string; storageKey: string; name: string; mimeType: string; sizeBytes: number } | null = null;
       if (recordPaymentNow && paymentEvidence) {
-        const upload = await createRegistrationEvidenceUploadAction({ name: paymentEvidence.name, mimeType: paymentEvidence.type, sizeBytes: paymentEvidence.size });
+        const upload = await createRegistrationEvidenceUploadAction({ eventId, name: paymentEvidence.name, mimeType: paymentEvidence.type, sizeBytes: paymentEvidence.size });
         if (!upload.success) throw new Error(upload.error);
         uploadedEvidenceKey = upload.storageKey;
         evidenceCleanupToken = upload.cleanupToken;

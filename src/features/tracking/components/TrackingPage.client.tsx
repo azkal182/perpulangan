@@ -6,7 +6,6 @@ import { useState, useEffect } from "react";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  getTrackingEvents,
   getBusesForTracking,
   getGPSPositions,
   getKordasForFilter,
@@ -15,16 +14,15 @@ import type { MonitoringData } from "@/services/tracker-api.service";
 import { BusListSidebar } from "./BusListSidebar";
 import { TrackingMap } from "./TrackingMap";
 
-type Event = Awaited<ReturnType<typeof getTrackingEvents>>[0];
 type Bus = Awaited<ReturnType<typeof getBusesForTracking>>[0];
 type Korda = Awaited<ReturnType<typeof getKordasForFilter>>[0];
 
-export default function TrackingPage() {
-  const [events, setEvents] = useState<Event[]>([]);
+export default function TrackingPage({ initialSelectedEventId, initialSelectedEventName }: { initialSelectedEventId: string; initialSelectedEventName: string }) {
   const [buses, setBuses] = useState<Bus[]>([]);
   const [kordas, setKordas] = useState<Korda[]>([]);
   
-  const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [selectedEventId, setSelectedEventId] = useState<string>(initialSelectedEventId);
+  const [selectedEventName, setSelectedEventName] = useState(initialSelectedEventName);
   const [selectedKordaId, setSelectedKordaId] = useState<string | undefined>(undefined);
   const [selectedBusIds, setSelectedBusIds] = useState<Set<string>>(new Set());
   
@@ -41,6 +39,11 @@ export default function TrackingPage() {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    setSelectedEventId(initialSelectedEventId);
+    setSelectedEventName(initialSelectedEventName);
+  }, [initialSelectedEventId, initialSelectedEventName]);
 
   // Load buses when event or korda filter changes
   useEffect(() => {
@@ -66,18 +69,8 @@ export default function TrackingPage() {
 
   async function loadInitialData() {
     try {
-      const [eventsData, kordasData] = await Promise.all([
-        getTrackingEvents(),
-        getKordasForFilter(),
-      ]);
-      
-      setEvents(eventsData);
+      const kordasData = await getKordasForFilter();
       setKordas(kordasData);
-      
-      // Auto-select first event
-      if (eventsData.length > 0) {
-        setSelectedEventId(eventsData[0].id);
-      }
     } catch (error) {
       console.error("Failed to load initial data:", error);
     } finally {
@@ -175,13 +168,12 @@ export default function TrackingPage() {
         {!isSidebarCollapsed && (
           <div className="max-h-[50vh] overflow-hidden">
             <BusListSidebar
-              events={events}
+              eventName={selectedEventName}
               buses={buses}
               kordas={kordas}
               selectedEventId={selectedEventId}
               selectedKordaId={selectedKordaId}
               selectedBusIds={selectedBusIds}
-              onEventChange={setSelectedEventId}
               onKordaChange={setSelectedKordaId}
               onBusToggle={toggleBusSelection}
               onSelectAll={selectAllBuses}
@@ -196,13 +188,12 @@ export default function TrackingPage() {
       {/* Desktop: Always visible sidebar */}
       <div className="hidden lg:block">
         <BusListSidebar
-          events={events}
+          eventName={selectedEventName}
           buses={buses}
           kordas={kordas}
           selectedEventId={selectedEventId}
           selectedKordaId={selectedKordaId}
           selectedBusIds={selectedBusIds}
-          onEventChange={setSelectedEventId}
           onKordaChange={setSelectedKordaId}
           onBusToggle={toggleBusSelection}
           onSelectAll={selectAllBuses}
@@ -219,4 +210,3 @@ export default function TrackingPage() {
     </div>
   );
 }
-

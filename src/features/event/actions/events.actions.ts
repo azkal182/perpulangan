@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 
 import { failure, success, type Result } from "@/lib/result";
 import prisma from "@/lib/prisma";
@@ -14,6 +15,8 @@ import {
   type EventUpdateInput,
 } from "../validators/event.validator";
 import type { EventItem } from "../types";
+import { EVENT_SELECTION_COOKIE } from "@/server/event-context";
+import { getRegionalAccessScope, requireAdmin } from "@/server/access-scope";
 
 export async function createEvent(
   input: EventCreateInput,
@@ -22,6 +25,8 @@ export async function createEvent(
   if (!parsed.success) return failure("Data event tidak valid.", parsed.error);
 
   try {
+    const scope = await getRegionalAccessScope();
+    requireAdmin(scope);
     const data = parsed.data;
     const startDate = new Date(`${data.startDate}T00:00:00`);
     const endDate = new Date(`${data.endDate}T00:00:00`);
@@ -57,6 +62,17 @@ export async function createEvent(
             status: data.status,
           });
 
+    if (data.status === "ACTIVE") {
+      const store = await cookies();
+      store.set(EVENT_SELECTION_COOKIE, `${scope.userId}:${created.id}`, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
     revalidatePath("/event");
     revalidatePath("/registrasi");
     revalidatePath("/registrasi/kembali-saja");
@@ -76,6 +92,8 @@ export async function updateEvent(
   if (!parsed.success) return failure("Data event tidak valid.", parsed.error);
 
   try {
+    const scope = await getRegionalAccessScope();
+    requireAdmin(scope);
     const data = parsed.data;
     const existing = await eventRepository.findById(data.id);
     if (!existing) return failure("Event tidak ditemukan.");
@@ -115,6 +133,17 @@ export async function updateEvent(
             status: data.status,
           });
 
+    if (data.status === "ACTIVE") {
+      const store = await cookies();
+      store.set(EVENT_SELECTION_COOKIE, `${scope.userId}:${updated.id}`, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
     revalidatePath("/event");
     revalidatePath("/registrasi");
     revalidatePath("/registrasi/kembali-saja");
@@ -134,6 +163,8 @@ export async function deleteEvent(
   if (!parsed.success) return failure("Data event tidak valid.", parsed.error);
 
   try {
+    const scope = await getRegionalAccessScope();
+    requireAdmin(scope);
     const existing = await eventRepository.findById(parsed.data.id);
     if (!existing) return failure("Event tidak ditemukan.");
 

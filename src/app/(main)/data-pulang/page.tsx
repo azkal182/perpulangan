@@ -3,17 +3,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { getOutboundRoster } from "@/features/outbound-roster/actions/outbound-roster.actions";
 import { OutboundRosterManager } from "@/features/outbound-roster/components/OutboundRosterManager";
-import prisma from "@/lib/prisma";
 import { getRegionalAccessScope } from "@/server/access-scope";
+import { getEventContext } from "@/server/event-context";
 
 export const metadata: Metadata = { title: "Data Pulang" };
 
-export default async function DataPulangPage({ searchParams }: { searchParams: Promise<{ eventId?: string; q?: string; page?: string; view?: string }> }) {
+export default async function DataPulangPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; view?: string }> }) {
   const [scope, params] = await Promise.all([getRegionalAccessScope(), searchParams]);
-  const events = await prisma.event.findMany({ select: { id: true, name: true, status: true, startDate: true }, orderBy: [{ startDate: "desc" }, { createdAt: "desc" }] });
-  const selectedEventId = events.some((event) => event.id === params.eventId)
-    ? params.eventId!
-    : (events.find((event) => event.status === "ACTIVE") ?? events[0])?.id ?? "";
+  const eventContext = await getEventContext(scope);
+  const events = eventContext.events;
+  const selectedEventId = eventContext.selectedEvent?.id ?? "";
   const page = Math.max(1, Number(params.page) || 1);
   const result = selectedEventId ? await getOutboundRoster(selectedEventId, params.q, page) : null;
 
@@ -25,23 +24,18 @@ export default async function DataPulangPage({ searchParams }: { searchParams: P
       </header>
       <Card>
         <CardContent className="p-4">
-          {events.length ? (
+          {selectedEventId ? (
             <form action="/data-pulang" className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="grid flex-1 gap-1.5 text-sm font-medium">Event
-                <select name="eventId" defaultValue={selectedEventId} className="h-10 rounded-md border bg-background px-3 font-normal">
-                  {events.map((event) => <option key={event.id} value={event.id}>{event.name}{event.status === "COMPLETED" ? " · Selesai" : event.status === "DRAFT" ? " · Draft" : ""}</option>)}
-                </select>
-              </label>
               <label className="grid flex-1 gap-1.5 text-sm font-medium">Cari santri
                 <input name="q" defaultValue={params.q ?? ""} placeholder="Nama atau NIS" className="h-10 rounded-md border bg-background px-3 font-normal" />
               </label>
               <button type="submit" className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">Tampilkan</button>
             </form>
-          ) : <p className="text-sm text-muted-foreground">Belum ada event.</p>}
+          ) : <p className="text-sm text-muted-foreground">Pilih event di header untuk melihat daftar Pulang. Jika belum ada event yang bisa dipilih, admin perlu membuat atau mengaktifkan event.</p>}
         </CardContent>
       </Card>
       {!events.length ? null : result?.success ? (
-        <OutboundRosterManager data={result} canManage={scope.role === "admin"} search={params.q ?? ""} page={page} pageSize={50} view={params.view ?? "candidates"} />
+        <OutboundRosterManager data={result} canManage={scope.role === "admin" && result.event.status === "ACTIVE"} search={params.q ?? ""} page={page} pageSize={50} view={params.view ?? "candidates"} />
       ) : (
         <Alert variant="destructive"><AlertDescription>{result && !result.success ? result.error : "Pilih event untuk melihat daftar Pulang."}</AlertDescription></Alert>
       )}

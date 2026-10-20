@@ -24,18 +24,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createBus, updateBus, type BusWithDetails } from "../actions/bus.actions";
-import { getAllEvents, getAllKordas, getAllKorwils } from "../actions/helpers.actions";
+import { getAllKordas, getAllKorwils } from "../actions/helpers.actions";
 
 interface BusFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialData?: BusWithDetails | null;
   eventId?: string;
+  eventName: string;
   onSuccess: () => void;
 }
 
-export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSuccess }: BusFormDialogProps) {
-  const [events, setEvents] = useState<Array<{ id: string; name: string; trackerEventId: string | null }>>([]);
+export function BusFormDialog({ open, onOpenChange, initialData, eventId, eventName, onSuccess }: BusFormDialogProps) {
   const [kordas, setKordas] = useState<Array<{ id: string; name: string; korwil: { name: string } | null }>>([]);
   const [korwils, setKorwils] = useState<Array<{ id: string; name: string }>>([]);
   
@@ -73,13 +73,10 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
 
   async function loadData() {
     try {
-      const [eventsData, kordasData, korwilsData] = await Promise.all([
-        getAllEvents(),
+      const [kordasData, korwilsData] = await Promise.all([
         getAllKordas(),
         getAllKorwils(),
       ]);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setEvents(eventsData as any);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setKordas(kordasData as any);
       setKorwils(korwilsData);
@@ -156,25 +153,9 @@ export function BusFormDialog({ open, onOpenChange, initialData, eventId, onSucc
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             )}
-            {/* Event */}
             <div className="space-y-2">
-              <Label>Event *</Label>
-              <Select
-                value={selectedEventId}
-                onValueChange={setSelectedEventId}
-                disabled={!!initialData}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih event" />
-                </SelectTrigger>
-                <SelectContent>
-                  {events.map((event) => (
-                    <SelectItem key={event.id} value={event.id}>
-                    {event.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Event</Label>
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">{eventName || "Belum dipilih"}</p>
             </div>
 
             {/* Korwil */}

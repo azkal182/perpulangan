@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ensureKordaInScope, getRegionalAccessScope } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
 
 export async function recordFinancialCorrectionAction(formData: FormData) {
   try {
@@ -29,6 +30,7 @@ export async function recordFinancialCorrectionAction(formData: FormData) {
         const remaining = source.amount - source.refunds.reduce((sum, row) => sum + row.amount, 0) - source.corrections.reduce((sum, row) => sum + row.amount, 0);
         if (amount > remaining) throw new Error(`Nominal koreksi melebihi dana yang masih dapat dikoreksi (${remaining}).`);
         eventId = source.journey.registration.eventId;
+        await assertEventWritable(tx, eventId);
         participantName = source.participantNameSnapshot;
         await tx.financialCorrection.create({ data: { id, paymentAllocationId, amount, reason, correctedAt, createdByUserId: scope.userId, eventId, kordaScopeId } });
       } else {
@@ -39,6 +41,8 @@ export async function recordFinancialCorrectionAction(formData: FormData) {
         const remaining = source.amount - source.refundsFromSource.reduce((sum, row) => sum + row.amount, 0) - source.correctionsFromSource.reduce((sum, row) => sum + row.amount, 0);
         if (amount > remaining) throw new Error(`Nominal koreksi melebihi saldo yang masih dapat dikoreksi (${remaining}).`);
         eventId = source.sourcePaymentAllocation?.payment.eventId ?? null;
+        if (!eventId) throw new Error("Koreksi Saldo Lain harus terhubung ke event asal.");
+        await assertEventWritable(tx, eventId);
         participantName = source.participantNameSnapshot;
         await tx.financialCorrection.create({ data: { id, balanceSourceEntryId, amount, reason, correctedAt, createdByUserId: scope.userId, eventId, kordaScopeId } });
         await tx.kordaBalanceEntry.create({ data: { ownerKordaId: source.ownerKordaId, originKordaNameSnapshot: source.originKordaNameSnapshot, destinationKordaNameSnapshot: source.destinationKordaNameSnapshot, participantNameSnapshot: source.participantNameSnapshot, payerNameSnapshot: source.payerNameSnapshot, sourceCorrectionId: id, entryType: "CORRECTION", amount: -amount, reason, createdByUserId: scope.userId } });

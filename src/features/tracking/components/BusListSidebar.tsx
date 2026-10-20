@@ -22,24 +22,18 @@ interface Bus {
   kordas: Array<{ id: string; name: string }>;
 }
 
-interface Event {
-  id: string;
-  name: string;
-}
-
 interface Korda {
   id: string;
   name: string;
 }
 
 interface BusListSidebarProps {
-  events: Event[];
+  eventName: string;
   buses: Bus[];
   kordas: Korda[];
   selectedEventId: string;
   selectedKordaId: string | undefined;
   selectedBusIds: Set<string>;
-  onEventChange: (eventId: string) => void;
   onKordaChange: (kordaId: string | undefined) => void;
   onBusToggle: (busId: string) => void;
   onSelectAll: () => void;
@@ -49,13 +43,12 @@ interface BusListSidebarProps {
 }
 
 export function BusListSidebar({
-  events,
+  eventName,
   buses,
   kordas,
   selectedEventId,
   selectedKordaId,
   selectedBusIds,
-  onEventChange,
   onKordaChange,
   onBusToggle,
   onSelectAll,
@@ -68,27 +61,7 @@ export function BusListSidebar({
       <div>
         <h2 className="text-lg font-semibold mb-4">GPS Tracking</h2>
         
-        {/* Event Selector */}
-        <div className="space-y-2 mb-4">
-          <label className="text-sm font-medium">Event</label>
-          <Select value={selectedEventId} onValueChange={onEventChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih event" />
-            </SelectTrigger>
-            <SelectContent>
-              {events.map((event) => (
-                <SelectItem key={event.id} value={event.id}>
-                  {event.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {events.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              Belum ada event yang di-sync. Sync event di halaman Events dulu.
-            </p>
-          )}
-        </div>
+        <p className="mb-4 text-sm text-muted-foreground">Event: <span className="font-medium text-foreground">{eventName || "Belum dipilih"}</span></p>
 
         {/* Korda Filter */}
         {selectedEventId && (

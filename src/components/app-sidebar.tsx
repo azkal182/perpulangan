@@ -17,6 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -39,6 +40,7 @@ type SidebarNavItem = { title: string; url: string; icon: React.ElementType; adm
 export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof Sidebar> & { role: AppRole; user: SidebarUser }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
 
@@ -63,7 +65,7 @@ export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof
           {items.filter((item) => !item.adminOnly || role === "admin").map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title} isActive={isActive(item.url)}>
-                <Link href={item.url}>
+                <Link href={item.url} onClick={() => isMobile && setOpenMobile(false)}>
                   <item.icon />
                   <span>{item.title}</span>
                 </Link>
@@ -100,7 +102,7 @@ export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard">
+              <Link href="/dashboard" onClick={() => isMobile && setOpenMobile(false)}>
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Bus className="size-4" />
                 </div>

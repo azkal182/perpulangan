@@ -38,6 +38,7 @@ interface BusPassengersDialogProps {
   bus: BusWithDetails;
   initialJourney?: "outbound" | "return";
   onPassengerChange: () => void;
+  canWrite: boolean;
 }
 
 function PassengerList({
@@ -46,12 +47,14 @@ function PassengerList({
   journey,
   capacity,
   onPassengerChange,
+  canWrite,
 }: {
   busId: string;
   busLabel: string;
   journey: "outbound" | "return";
   capacity: number;
   onPassengerChange: () => void;
+  canWrite: boolean;
 }) {
   const [passengers, setPassengers] = useState<BusPassenger[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,14 +120,14 @@ function PassengerList({
           )}
           {capacityMissing && <Badge variant="destructive" className="text-xs">Kapasitas belum diatur</Badge>}
         </div>
-        <Button
+        {canWrite && <Button
           size="sm"
           onClick={() => setAddSheetOpen(true)}
           disabled={isFull || capacityMissing}
         >
           <UserPlus className="mr-2 h-4 w-4" />
           Tambah Peserta
-        </Button>
+        </Button>}
       </div>
 
       {/* Passenger list */}
@@ -191,7 +194,7 @@ function PassengerList({
                   </div>
                 )}
               </div>
-              <Button
+              {canWrite && <Button
                 size="icon"
                 variant="ghost"
                 className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -204,13 +207,13 @@ function PassengerList({
                 ) : (
                   <Trash2 className="h-4 w-4" />
                 )}
-              </Button>
+              </Button>}
             </div>
           ))}
         </div>
       )}
 
-      <AddPassengerSheet
+      {canWrite && <AddPassengerSheet
         open={addSheetOpen}
         onOpenChange={setAddSheetOpen}
         busId={busId}
@@ -220,7 +223,7 @@ function PassengerList({
           loadPassengers();
           onPassengerChange();
         }}
-      />
+      />}
       <AlertDialog
         open={confirmingRemoval !== null}
         onOpenChange={(open) => {
@@ -258,6 +261,7 @@ export function BusPassengersDialog({
   bus,
   initialJourney = "return",
   onPassengerChange,
+  canWrite,
 }: BusPassengersDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -295,6 +299,7 @@ export function BusPassengersDialog({
               journey="outbound"
               capacity={bus.capacity}
               onPassengerChange={onPassengerChange}
+              canWrite={canWrite}
             />
           </TabsContent>
 
@@ -305,6 +310,7 @@ export function BusPassengersDialog({
               journey="return"
               capacity={bus.capacity}
               onPassengerChange={onPassengerChange}
+              canWrite={canWrite}
             />
           </TabsContent>
         </Tabs>

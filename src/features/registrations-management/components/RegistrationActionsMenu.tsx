@@ -14,6 +14,7 @@ import type { RegistrationWithDetails } from "../repositories/registrations.repo
 
 interface RegistrationActionsMenuProps {
   registration: RegistrationWithDetails;
+  canWrite: boolean;
   onViewDetail: () => void;
   onUpdatePayment: () => void;
   onCancel: () => void;
@@ -23,6 +24,7 @@ interface RegistrationActionsMenuProps {
 
 export function RegistrationActionsMenu({
   registration,
+  canWrite,
   onViewDetail,
   onCancel,
   onDelete,
@@ -54,38 +56,38 @@ export function RegistrationActionsMenu({
           Lihat Detail
         </DropdownMenuItem>
         
-        <DropdownMenuItem onClick={() => handleAction(() => { window.location.href = "/pembayaran"; })}>
+        {canWrite && <DropdownMenuItem onClick={() => handleAction(() => { window.location.href = "/pembayaran"; })}>
           <DollarSign className="mr-2 h-4 w-4" />
           Update Pembayaran
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
         
-        <DropdownMenuSeparator />
+        {canWrite && <DropdownMenuSeparator />}
         
-        <DropdownMenuItem
+        {canWrite && <DropdownMenuItem
           onClick={() => handleAction(onCancel)}
           disabled={!canCancel}
         >
           <Ban className="mr-2 h-4 w-4" />
           {canCancel ? "Batalkan" : "Sudah Dibatalkan"}
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
         
-        <DropdownMenuItem
+        {canWrite && <DropdownMenuItem
           onClick={() => handleAction(() => { window.location.href = "/pembayaran"; })}
           disabled={!hasPaidJourneys}
         >
           <RefreshCw className="mr-2 h-4 w-4" />
           {hasPaidJourneys ? "Refund" : "Belum Ada Pembayaran"}
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
         
-        <DropdownMenuSeparator />
+        {canWrite && <DropdownMenuSeparator />}
         
-        <DropdownMenuItem
+        {canWrite && <DropdownMenuItem
           onClick={() => handleAction(onDelete)}
           className="text-destructive focus:text-destructive"
         >
           <Trash2 className="mr-2 h-4 w-4" />
           Hapus
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );

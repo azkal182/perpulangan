@@ -4,12 +4,17 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ensureKordaInScope, getRegionalAccessScope } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
+import { canSelectEvent } from "@/server/event-context";
 import { allowedEvidenceMime, createEvidenceCleanupToken, createSignedEvidenceUpload, deleteEvidenceObject, isValidEvidenceCleanupToken, isValidEvidenceStorageKey, verifyEvidenceObject } from "../services/supabase-storage";
 
-export async function createRefundEvidenceUploadAction(input: { name: string; mimeType: string; sizeBytes: number }) {
+export async function createRefundEvidenceUploadAction(input: { eventId: string; name: string; mimeType: string; sizeBytes: number }) {
   try {
     const scope = await getRegionalAccessScope();
     if (!scope.userId) throw new Error("Sesi pengguna tidak valid.");
+    if (!(await canSelectEvent(scope, input.eventId))) throw new Error("Event di luar cakupan akses Anda.");
+    const event = await prisma.event.findUnique({ where: { id: input.eventId }, select: { status: true } });
+    if (!event || event.status !== "ACTIVE") throw new Error("Event tidak aktif dan tidak menerima upload bukti baru.");
     if (!allowedEvidenceMime(input.mimeType) || !Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > 10 * 1024 * 1024) throw new Error("Bukti harus PDF, JPG, PNG, atau WebP dengan ukuran maksimal 10 MB.");
     const id = randomUUID();
     const extension = input.mimeType === "application/pdf" ? "pdf" : input.mimeType === "image/jpeg" ? "jpg" : input.mimeType === "image/png" ? "png" : "webp";
@@ -38,6 +43,8 @@ export async function recordRefundAction(formData: FormData) {
   let storageKeyToCleanup: string | null = null;
   try {
     const scope = await getRegionalAccessScope();
+    const selectedEventId = String(formData.get("eventId") ?? "");
+    if (!selectedEventId) return { success: false, error: "Pilih event terlebih dahulu." };
     const paymentAllocationId = String(formData.get("paymentAllocationId") ?? "") || null;
     const balanceSourceEntryId = String(formData.get("balanceSourceEntryId") ?? "") || null;
     const amount = Math.trunc(Number(formData.get("amount")));
@@ -64,6 +71,7 @@ export async function recordRefundAction(formData: FormData) {
     let eventId: string | null = null;
     let kordaScopeId: string | null = null;
     await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, selectedEventId);
       if (paymentAllocationId) {
         const source = await tx.paymentAllocation.findUnique({ where: { id: paymentAllocationId }, include: { journey: { include: { registration: { select: { eventId: true } } } }, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } });
         if (!source || source.type !== "JOURNEY" || !source.journey) throw new Error("Alokasi pembayaran tidak ditemukan.");
@@ -71,6 +79,7 @@ export async function recordRefundAction(formData: FormData) {
         const alreadyReduced = source.refunds.reduce((sum, row) => sum + row.amount, 0) + source.corrections.reduce((sum, row) => sum + row.amount, 0);
         if (amount > source.amount - alreadyReduced) throw new Error(`Nominal refund melebihi dana tersisa (${source.amount - alreadyReduced}).`);
         eventId = source.journey.registration.eventId; kordaScopeId = source.journey.destinationKordaId;
+        if (eventId !== selectedEventId) throw new Error("Sumber refund tidak sesuai dengan event yang dipilih.");
         await tx.refund.create({ data: { id: refundId, paymentAllocationId, amount, reason, method, refundedAt, createdByUserId: scope.userId } });
       } else {
         const source = await tx.kordaBalanceEntry.findUnique({ where: { id: balanceSourceEntryId! }, include: { sourcePaymentAllocation: true, refundsFromSource: { select: { amount: true } }, correctionsFromSource: { select: { amount: true } } } });
@@ -80,6 +89,7 @@ export async function recordRefundAction(formData: FormData) {
         if (amount > remaining) throw new Error(`Nominal refund melebihi saldo tersisa (${remaining}).`);
         const allocation = source.sourcePaymentAllocationId ? await tx.paymentAllocation.findUnique({ where: { id: source.sourcePaymentAllocationId }, include: { payment: { select: { eventId: true } } } }) : null;
         eventId = allocation?.payment.eventId ?? null; kordaScopeId = source.ownerKordaId;
+        if (eventId !== selectedEventId) throw new Error("Sumber Saldo Lain tidak sesuai dengan event yang dipilih.");
         await tx.refund.create({ data: { id: refundId, balanceSourceEntryId, amount, reason, method, refundedAt, createdByUserId: scope.userId } });
         await tx.kordaBalanceEntry.create({ data: { ownerKordaId: source.ownerKordaId, originKordaNameSnapshot: source.originKordaNameSnapshot, destinationKordaNameSnapshot: source.destinationKordaNameSnapshot, participantNameSnapshot: source.participantNameSnapshot, payerNameSnapshot: source.payerNameSnapshot, sourceRefundId: refundId, entryType: "REFUND", amount, reason, createdByUserId: scope.userId } });
       }

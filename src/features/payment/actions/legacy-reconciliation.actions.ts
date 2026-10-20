@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { ensureKordaInScope, getRegionalAccessScope } from "@/server/access-scope";
+import { assertEventWritable } from "@/server/event-write-guard";
 
 export async function reconcileLegacyPaymentAction(formData: FormData) {
   try {
@@ -20,6 +21,7 @@ export async function reconcileLegacyPaymentAction(formData: FormData) {
         include: { registration: { include: { student: { select: { name: true } }, externalParticipant: { select: { name: true } } } } },
       });
       if (!legacy || legacy.status !== "OPEN") throw new Error("Item rekonsiliasi tidak ditemukan atau sudah diselesaikan.");
+      await assertEventWritable(tx, legacy.registration.eventId);
       const journey = await tx.journey.findUnique({ where: { registrationId_direction: { registrationId: legacy.registrationId, direction: legacy.direction } }, include: { destinationKorda: { select: { id: true, name: true } } } });
       if (!journey) throw new Error("Perjalanan untuk tanda lunas lama tidak ditemukan.");
       await ensureKordaInScope(scope, journey.destinationKordaId, "Rekonsiliasi berada di luar cakupan Korda Anda.");

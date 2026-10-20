@@ -6,7 +6,7 @@ import { cleanupRefundEvidenceUploadAction, createRefundEvidenceUploadAction, re
 
 type RefundOption = { id: string; sourceType: "journey" | "balance"; label: string; remaining: number };
 
-export function RefundForm({ options }: { options: RefundOption[] }) {
+export function RefundForm({ eventId, options }: { eventId: string; options: RefundOption[] }) {
   const [pending, startTransition] = useTransition();
   if (!options.length) return <p className="text-sm text-muted-foreground">Belum ada dana yang tersedia untuk direfund.</p>;
   function submit(formData: FormData) {
@@ -15,7 +15,7 @@ export function RefundForm({ options }: { options: RefundOption[] }) {
       formData.delete("evidence");
       let cleanupToken = "";
       if (evidence instanceof File && evidence.size > 0) {
-        const upload = await createRefundEvidenceUploadAction({ name: evidence.name, mimeType: evidence.type, sizeBytes: evidence.size });
+        const upload = await createRefundEvidenceUploadAction({ eventId, name: evidence.name, mimeType: evidence.type, sizeBytes: evidence.size });
         if (!upload.success) { toast.error(upload.error); return; }
         cleanupToken = upload.cleanupToken;
         const uploaded = await fetch(upload.signedUrl, { method: "PUT", headers: { "Content-Type": evidence.type }, body: evidence });
@@ -29,6 +29,7 @@ export function RefundForm({ options }: { options: RefundOption[] }) {
     });
   }
   return <form id="refund-form" action={submit} className="grid min-w-0 gap-3 sm:grid-cols-2">
+    <input type="hidden" name="eventId" value={eventId} />
     <p className="text-sm text-muted-foreground sm:col-span-2">Refund menjadi transaksi baru dan tidak menghapus pembayaran asal.</p>
     <label className="min-w-0 text-sm">Sumber dana<select name="sourceId" required className="mt-1 w-full min-w-0 rounded border bg-background px-3 py-2" onChange={(event) => { const option = options.find((row) => row.id === event.target.value); const journey = document.getElementById("refund-allocation-id") as HTMLInputElement; const balance = document.getElementById("refund-balance-id") as HTMLInputElement; journey.value = option?.sourceType === "journey" ? option.id : ""; balance.value = option?.sourceType === "balance" ? option.id : ""; const amount = document.getElementById("refund-amount") as HTMLInputElement; amount.max = String(option?.remaining ?? 0); }}><option value="">Pilih sumber</option>{options.map((option) => <option key={option.id} value={option.id}>{option.label} · maks. Rp{option.remaining.toLocaleString("id-ID")}</option>)}</select></label>
     <input id="refund-allocation-id" type="hidden" name="paymentAllocationId" /><input id="refund-balance-id" type="hidden" name="balanceSourceEntryId" />

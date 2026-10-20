@@ -45,7 +45,7 @@ export function FamilyPaymentForm({ eventId, journeys, onSaved }: { eventId: str
       let cleanupToken = "";
       form.set("eventId", eventId); form.set("amount", String(totalSent)); form.set("paidAt", new Date().toISOString()); form.set("allocations", JSON.stringify(allocations));
       if (evidence) {
-        const upload = await createEvidenceUploadAction({ name: evidence.name, mimeType: evidence.type, sizeBytes: evidence.size });
+        const upload = await createEvidenceUploadAction({ eventId, name: evidence.name, mimeType: evidence.type, sizeBytes: evidence.size });
         if (!upload.success) { toast.error(upload.error); return; }
         cleanupToken = upload.cleanupToken;
         const uploaded = await fetch(upload.signedUrl, { method: "PUT", headers: { "Content-Type": evidence.type }, body: evidence });

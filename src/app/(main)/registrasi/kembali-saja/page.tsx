@@ -1,10 +1,10 @@
 import RegistrationPageView from "@/features/registration/registration-page-view";
-import { getEvent } from "@/features/event/services/event.service";
 import { getKorda } from "@/features/master/actions/korda.action";
 import { getDropPoints } from "@/features/drop-points/actions/drop-point.action";
 import { getRegistrations } from "@/features/registration/actions/registration.action";
 import { Metadata } from "next";
 import { getRegionalAccessScope } from "@/server/access-scope";
+import { getEventContext } from "@/server/event-context";
 
 export const metadata: Metadata = {
   title: "Registrasi Kembali Saja | Perpulangan Santri",
@@ -12,15 +12,16 @@ export const metadata: Metadata = {
 };
 
 export default async function ReturnOnlyRegistrationPage() {
-  const [activeEvent, scope] = await Promise.all([getActiveEvent(), getRegionalAccessScope()]);
+  const scope = await getRegionalAccessScope();
+  const { selectedEvent: activeEvent } = await getEventContext(scope);
 
   if (!activeEvent) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Tidak Ada Event Aktif</h1>
+          <h1 className="text-2xl font-bold mb-2">Tidak Ada Event Terpilih</h1>
           <p className="text-muted-foreground">
-            Silakan aktifkan event terlebih dahulu untuk membuka pendaftaran.
+            Pilih event dari pemilih di header. Jika belum ada event yang tersedia, admin perlu membuat atau mengaktifkan event.
           </p>
         </div>
       </div>
@@ -48,7 +49,7 @@ export default async function ReturnOnlyRegistrationPage() {
   const registrations = (registrationsRes.success && registrationsRes.data ? registrationsRes.data : []) as any;
 
   return (
-    <RegistrationPageView
+    activeEvent.status === "ACTIVE" ? <RegistrationPageView
       eventId={activeEvent.id}
       eventName={activeEvent.name}
       initialKordas={kordas}
@@ -58,23 +59,6 @@ export default async function ReturnOnlyRegistrationPage() {
       pageTitle="Registrasi Kembali Saja (Return Only)"
       defaultMode="return_only"
       lockMode={true}
-    />
+    /> : <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">Perubahan perjalanan Kembali hanya dapat dilakukan pada event aktif. Data event ini tetap dapat dilihat melalui daftar peserta.</div>
   );
-}
-
-async function getActiveEvent() {
-  try {
-    const result = await getEvent();
-    if (result.success && result.data) {
-      const events = (Array.isArray(result.data) ? result.data : [result.data]) as Array<{ id: string; name: string; status: string; endDate: Date | string }>;
-      const active = events.find((event) => event.status === "ACTIVE");
-      if (active) return active;
-      return events
-        .filter((event) => event.status === "COMPLETED")
-        .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }

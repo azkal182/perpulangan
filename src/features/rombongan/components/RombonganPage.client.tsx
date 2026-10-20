@@ -53,7 +53,6 @@ import {
   type BusWithDetails,
 } from "../actions/bus.actions";
 import {
-  getAllEvents,
   getAllKordas,
   getAllKorwils,
 } from "../actions/helpers.actions";
@@ -77,15 +76,23 @@ function assignmentsNeedingReview(bus: BusWithDetails) {
   ).length;
 }
 
-export default function RombonganPage({ canManageBuses }: { canManageBuses: boolean }) {
+function busEmptyMessage(canManageBuses: boolean, canWriteEvent: boolean) {
+  if (!canWriteEvent) return "Belum ada bus untuk event ini. Event tidak aktif; pengelolaan armada dinonaktifkan.";
+  if (canManageBuses) return "Belum ada bus. Klik “Tambah Bus” untuk menambahkan.";
+  return "Belum ada bus dalam cakupan Anda.";
+}
+
+export default function RombonganPage({ canManageBuses, initialSelectedEventId, initialSelectedEventStatus, initialSelectedEventName }: { canManageBuses: boolean; initialSelectedEventId: string; initialSelectedEventStatus: "DRAFT" | "ACTIVE" | "COMPLETED" | null; initialSelectedEventName: string }) {
   const [buses, setBuses] = useState<BusWithDetails[]>([]);
-  const [events, setEvents] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedEventName, setSelectedEventName] = useState(initialSelectedEventName);
   const [kordas, setKordas] = useState<Array<{ id: string; name: string }>>([]);
   const [korwils, setKorwils] = useState<Array<{ id: string; name: string }>>(
     [],
   );
 
-  const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [selectedEventId, setSelectedEventId] = useState<string>(initialSelectedEventId);
+  const [selectedEventStatus, setSelectedEventStatus] = useState(initialSelectedEventStatus);
+  const canWriteEvent = selectedEventStatus === "ACTIVE";
   const [selectedKorwilId, setSelectedKorwilId] = useState<string | undefined>(
     undefined,
   );
@@ -113,6 +120,12 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setSelectedEventId(initialSelectedEventId);
+    setSelectedEventStatus(initialSelectedEventStatus);
+    setSelectedEventName(initialSelectedEventName);
+  }, [initialSelectedEventId, initialSelectedEventStatus, initialSelectedEventName]);
 
   // Reload buses when filters change
   useEffect(() => {
@@ -147,19 +160,12 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
 
   async function loadData() {
     try {
-      const [eventsData, kordasData, korwilsData] = await Promise.all([
-        getAllEvents(),
+      const [kordasData, korwilsData] = await Promise.all([
         getAllKordas(),
         getAllKorwils(),
       ]);
-      setEvents(eventsData);
       setKordas(kordasData);
       setKorwils(korwilsData);
-
-      // Auto-select first event
-      if (eventsData.length > 0) {
-        setSelectedEventId(eventsData[0].id);
-      }
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {
@@ -244,9 +250,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
         return;
       }
 
-      const eventName =
-        events.find((eventItem) => eventItem.id === selectedEventId)?.name ??
-        "Event";
+      const eventName = selectedEventName || "Event";
 
       const pdf = buildBusAttendancePdf({
         eventName,
@@ -354,7 +358,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {canManageBuses && <Button
+          {canManageBuses && canWriteEvent && <Button
             onClick={() => {
               setEditingBus(null);
               setIsFormOpen(true);
@@ -369,23 +373,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
 
       {/* Filters */}
       <div className="rounded-lg border bg-card p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="min-w-0 space-y-2">
-            <label className="block text-sm font-medium">Event</label>
-            <Select value={selectedEventId} onValueChange={setSelectedEventId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Pilih event" />
-              </SelectTrigger>
-              <SelectContent>
-                {events.map((event) => (
-                  <SelectItem key={event.id} value={event.id}>
-                    {event.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="min-w-0 space-y-2">
             <label className="block text-sm font-medium">
               Korwil (Opsional)
@@ -480,7 +468,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
       <div className="space-y-3 md:hidden">
         {buses.length === 0 ? (
           <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-            Belum ada bus. Klik &ldquo;Tambah Bus&rdquo; untuk menambahkan.
+            {busEmptyMessage(canManageBuses, canWriteEvent)}
           </div>
         ) : (
           buses.map((bus) => {
@@ -558,14 +546,14 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
                   >
                     Peserta
                   </Button>
-                  {canManageBuses && <Button
+                  {canManageBuses && canWriteEvent && <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleToggleActive(bus.id)}
                   >
                     {bus.isActive ? "Nonaktifkan" : "Aktifkan"}
                   </Button>}
-                  {canManageBuses && <Button
+                  {canManageBuses && canWriteEvent && <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
@@ -575,7 +563,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
                   >
                     Edit
                   </Button>}
-                  {canManageBuses && <Button
+                  {canManageBuses && canWriteEvent && <Button
                     size="sm"
                     variant="destructive"
                                   onClick={() => {
@@ -613,7 +601,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
                   colSpan={7}
                   className="py-8 text-center text-muted-foreground"
                 >
-                  {canManageBuses ? <>Belum ada bus. Klik &ldquo;Tambah Bus&rdquo; untuk menambahkan.</> : "Belum ada bus dalam cakupan Anda."}
+                  {busEmptyMessage(canManageBuses, canWriteEvent)}
                 </TableCell>
               </TableRow>
             ) : (
@@ -663,7 +651,7 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end">
-                      {!canManageBuses ? <Button variant="outline" size="sm" onClick={() => setManagingBus(bus)}>Peserta</Button> :
+                      {!canManageBuses || !canWriteEvent ? <Button variant="outline" size="sm" onClick={() => setManagingBus(bus)}>Peserta</Button> :
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -722,13 +710,14 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
         </Table>
       </div>
 
-      <BusFormDialog
+      {canManageBuses && canWriteEvent && <BusFormDialog
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
         initialData={editingBus}
         eventId={selectedEventId}
+        eventName={selectedEventName}
         onSuccess={loadBuses}
-      />
+      />}
 
       {managingBus && <BusPassengersDialog
           open={!!managingBus}
@@ -738,13 +727,14 @@ export default function RombonganPage({ canManageBuses }: { canManageBuses: bool
           bus={managingBus}
           initialJourney={managingJourney}
           onPassengerChange={loadBuses}
+          canWrite={canWriteEvent}
       />}
       {unassignedDirection && selectedEventId && <UnassignedJourneysDialog
         key={`${selectedEventId}-${unassignedDirection}-${selectedKorwilId ?? "all"}-${selectedKordaId ?? "all"}`}
         open={unassignedDirection !== null}
         onOpenChange={(open) => { if (!open) setUnassignedDirection(null); }}
         eventId={selectedEventId}
-        eventName={events.find((eventItem) => eventItem.id === selectedEventId)?.name ?? "Event"}
+        eventName={selectedEventName || "Event"}
         direction={unassignedDirection}
         korwilId={selectedKorwilId}
         kordaId={selectedKordaId}
