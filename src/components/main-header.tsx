@@ -45,7 +45,7 @@ function buildBreadcrumbs(pathname: string): BreadcrumbEntry[] {
 
   return segments.map((segment, index) => ({
     href: `/${segments.slice(0, index + 1).join("/")}`,
-    label: segmentToLabel(segment),
+    label: segments[0] === "keuangan" && index === 1 ? "Detail Korda" : segmentToLabel(segment),
   }));
 }
 
