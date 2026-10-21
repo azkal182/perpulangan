@@ -559,11 +559,16 @@ export function MultiParticipantRegistrationForm({
                     Pulang & Kembali (Normal)
                   </label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="outbound_only" id="mode-outbound" disabled={participantDrafts.length > 0} />
-                  <label htmlFor="mode-outbound" className="text-sm cursor-pointer">
-                    Perjalanan Pulang saja
-                  </label>
+                <div className="flex items-start space-x-2">
+                  <RadioGroupItem value="outbound_only" id="mode-outbound" disabled />
+                  <div className="space-y-0.5">
+                    <label htmlFor="mode-outbound" className="text-sm text-muted-foreground cursor-not-allowed">
+                      Perjalanan Pulang saja
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Kembali ke pondok harus mengikuti rombongan.
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="return_only" id="mode-return" disabled={participantDrafts.length > 0} />
