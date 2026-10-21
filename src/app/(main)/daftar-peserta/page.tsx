@@ -12,6 +12,7 @@ import { RegistrationsTable } from "@/features/registrations-management/componen
 import { PrintButton } from "@/features/registrations-management/components/PrintButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getGlobalEventContext } from "@/server/event-context";
+import { getRegionalAccessScope } from "@/server/access-scope";
 
 interface PageProps {
   searchParams?: Promise<{
@@ -26,7 +27,7 @@ interface PageProps {
 }
 
 export default async function DaftarPesertaPage({ searchParams }: PageProps) {
-  const { selectedEvent: activeEvent } = await getGlobalEventContext();
+  const [{ selectedEvent: activeEvent }, scope] = await Promise.all([getGlobalEventContext(), getRegionalAccessScope()]);
 
   if (!activeEvent) {
     return (
@@ -145,6 +146,7 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
                 currentPage={page}
                 pageSize={pageSize}
                 canWrite={activeEvent.status === "ACTIVE"}
+                canPurge={scope.role === "admin"}
               />
             </CardContent>
           </Card>

@@ -412,6 +412,7 @@ model Registration {
   externalParticipant          ExternalParticipant?          @relation(fields: [externalParticipantId], references: [id], onDelete: Restrict)
   journeys                     Journey[]
   legacyPaymentReconciliations LegacyPaymentReconciliation[]
+  paymentAllocations           PaymentAllocation[]
 
   // Registration provenance and origin snapshot; destination access is stored on each Journey.
   originKordaId           String?
@@ -652,9 +653,12 @@ model PaymentAllocation {
   refunds                      Refund[]
   corrections                  FinancialCorrection[]
   balanceEntries               KordaBalanceEntry[]
+  registrationId               String?
+  registration                 Registration?         @relation(fields: [registrationId], references: [id], onDelete: Restrict)
 
   @@index([journeyId])
   @@index([balanceOwnerKordaId, createdAt])
+  @@index([registrationId])
 }
 
 // Append-only credit/refund ledger. Current balance is the sum of entries.
@@ -783,6 +787,52 @@ model TreasuryDisbursement {
   auditEntries    FinancialAuditEntry[]
 
   @@index([kordaId, disbursedAt])
+}
+
+enum PurgeEvidenceCleanupStatus {
+  PENDING
+  DELETED
+  FAILED
+}
+
+// Immutable audit for an administrator's permanent registration purge.
+// Participant and finance details are snapshots because source rows are removed.
+model RegistrationPurge {
+  id                    String                      @id @default(uuid())
+  eventId               String
+  eventNameSnapshot     String
+  actorUserId           String
+  actorNameSnapshot     String
+  actorUsernameSnapshot String?
+  reason                String
+  participantCount      Int
+  registrationCount     Int
+  journeyCount          Int
+  paymentCount          Int
+  paymentAmount         Int
+  details               Json
+  financialSnapshot     Json
+  createdAt             DateTime                    @default(now())
+  evidenceCleanup       RegistrationPurgeEvidence[]
+
+  @@index([eventId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model RegistrationPurgeEvidence {
+  id           String                     @id @default(uuid())
+  purgeId      String
+  purge        RegistrationPurge          @relation(fields: [purgeId], references: [id], onDelete: Cascade)
+  storageKey   String                     @unique
+  originalName String
+  status       PurgeEvidenceCleanupStatus @default(PENDING)
+  errorMessage String?
+  attemptedAt  DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime                   @default(now())
+
+  @@index([purgeId, status])
+  @@index([status, createdAt])
 }
 
 // Legacy true booleans are captured as unverified flags only. No amount is

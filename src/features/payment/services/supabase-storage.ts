@@ -105,7 +105,11 @@ export async function createSignedEvidenceDownload(storageKey: string) {
 
 export async function deleteEvidenceObject(storageKey: string) {
   const { url, key, bucket } = config();
-  await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${storageKey.split("/").map(encodeURIComponent).join("/")}`, {
+  const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${storageKey.split("/").map(encodeURIComponent).join("/")}`, {
     method: "DELETE", headers: storageAuthHeaders(key), cache: "no-store",
   });
+  if (!response.ok && response.status !== 404) {
+    const body = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+    throw new Error(body?.message || body?.error || `Supabase menolak penghapusan bukti (HTTP ${response.status}).`);
+  }
 }

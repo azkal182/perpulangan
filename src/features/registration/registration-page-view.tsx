@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MultiParticipantRegistrationForm } from "./components/MultiParticipantRegistrationForm";
 import { RegistrationList } from "./components/RegistrationList";
-import { deleteRegistration } from "./actions/registration.action";
 import type { Registration, Korda } from "./types";
 import type { DropPoint } from "@/features/drop-points/types";
 
@@ -33,15 +32,6 @@ export default function RegistrationPageView({
   lockMode = false,
 }: Props) {
   const registrations = initialRegistrations;
-
-  async function handleDelete(id: string) {
-    const result = await deleteRegistration(id);
-    if (result.success) {
-      window.location.reload();
-    } else {
-      alert(result.error || "Gagal menghapus");
-    }
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,7 +72,6 @@ export default function RegistrationPageView({
               <CardContent>
                 <RegistrationList
                   registrations={registrations}
-                  onDelete={handleDelete}
                 />
               </CardContent>
             </Card>

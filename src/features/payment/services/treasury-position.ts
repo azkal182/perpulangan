@@ -97,6 +97,8 @@ export async function getTreasuryPosition(scope: RegionalAccessScope) {
   }
 
   const totalAssigned = [...positions.values()].reduce((sum, row) => sum + row.assigned, 0);
+  const totalGrossBilled = [...positions.values()].reduce((sum, row) => sum + row.grossBilled, 0);
+  const totalRegistrationEntitlement = [...positions.values()].reduce((sum, row) => sum + row.registrationEntitlement, 0);
   const totalDisbursed = [...positions.values()].reduce((sum, row) => sum + row.disbursed, 0);
   const totalHeldAtCenter = [...positions.values()].reduce((sum, row) => sum + row.heldAtCenter, 0);
   const totalFee = [...positions.values()].reduce((sum, row) => sum + row.fee, 0);
@@ -109,6 +111,9 @@ export async function getTreasuryPosition(scope: RegionalAccessScope) {
     kordas,
     positions: [...positions.values()].sort((a, b) => a.name.localeCompare(b.name, "id")),
     totalAssigned,
+    totalGrossBilled,
+    totalRegistrationEntitlement,
+    totalPaymentReceipts: payments?._sum.amount ?? null,
     totalDisbursed,
     totalHeldAtCenter,
     totalFee,

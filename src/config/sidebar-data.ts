@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Database,
   Home,
+  History,
   MapPin,
   Navigation,
   Printer,
@@ -53,4 +54,5 @@ export const finance = [
 // Administrasi akun dan akses.
 export const administration = [
   { title: "Pengguna", url: "/dashboard/users", icon: Users2 },
+  { title: "Riwayat Hapus Permanen", url: "/riwayat-penghapusan", icon: History, adminOnly: true },
 ];

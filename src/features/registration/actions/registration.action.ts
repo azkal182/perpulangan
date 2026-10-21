@@ -330,7 +330,7 @@ export async function finalizeRegistrationBatchAction(input: {
       const event = await tx.event.findUnique({ where: { id: eventId }, select: { id: true, status: true, startDate: true, endDate: true } });
       if (!event) throw new Error("Event tidak ditemukan.");
       await assertEventWritable(tx, eventId);
-      const newJourneyRows: Array<{ id: string; direction: "OUTBOUND" | "RETURN"; destinationKordaId: string; destinationName: string; participantName: string; originName: string | null; tariff: number; participantKey: string }> = [];
+      const newJourneyRows: Array<{ id: string; registrationId: string; direction: "OUTBOUND" | "RETURN"; destinationKordaId: string; destinationName: string; participantName: string; originName: string | null; tariff: number; participantKey: string }> = [];
       const madeRegistrations: Array<{ id: string; participantName: string }> = [];
 
       for (const data of input.registrations) {
@@ -386,7 +386,7 @@ export async function finalizeRegistrationBatchAction(input: {
         }
         madeRegistrations.push({ id: registrationId, participantName });
         const journeys = await tx.journey.findMany({ where: { id: { in: journeyIds } }, select: { id: true, direction: true, destinationKordaId: true, destinationKordaNameSnapshot: true, tariffSnapshot: true } });
-        for (const journey of journeys) if (journey.tariffSnapshot !== null) newJourneyRows.push({ id: journey.id, direction: journey.direction, destinationKordaId: journey.destinationKordaId, destinationName: journey.destinationKordaNameSnapshot, participantName, originName, tariff: journey.tariffSnapshot, participantKey: data.participantKey });
+        for (const journey of journeys) if (journey.tariffSnapshot !== null) newJourneyRows.push({ id: journey.id, registrationId, direction: journey.direction, destinationKordaId: journey.destinationKordaId, destinationName: journey.destinationKordaNameSnapshot, participantName, originName, tariff: journey.tariffSnapshot, participantKey: data.participantKey });
       }
 
       if (input.payment) {
@@ -423,9 +423,9 @@ export async function finalizeRegistrationBatchAction(input: {
         await tx.payment.create({ data: { id: paymentId, eventId, payerName: "Tidak dicatat", amount, method: "Transfer", paidAt: new Date(), noteSnapshot: generatedNote, createdByUserId: scope.userId } });
         if (evidence && evidenceSha256) await tx.evidenceFile.create({ data: { id: evidence.id, storageKey: evidence.storageKey, originalName: evidence.name.slice(0, 255), mimeType: evidence.mimeType, sizeBytes: evidence.sizeBytes, sha256: evidenceSha256, uploadedByUserId: scope.userId, paymentId } });
         for (const { journey, journeyAmount, balanceAmount } of rows) {
-          if (journeyAmount > 0) await tx.paymentAllocation.create({ data: { paymentId, type: "JOURNEY", journeyId: journey.id, participantNameSnapshot: journey.participantName, originKordaNameSnapshot: journey.originName, destinationKordaNameSnapshot: journey.destinationName, payerNameSnapshot: "Tidak dicatat", amount: journeyAmount, createdByUserId: scope.userId } });
+          if (journeyAmount > 0) await tx.paymentAllocation.create({ data: { paymentId, type: "JOURNEY", journeyId: journey.id, registrationId: journey.registrationId, participantNameSnapshot: journey.participantName, originKordaNameSnapshot: journey.originName, destinationKordaNameSnapshot: journey.destinationName, payerNameSnapshot: "Tidak dicatat", amount: journeyAmount, createdByUserId: scope.userId } });
           if (balanceAmount > 0) {
-            const allocation = await tx.paymentAllocation.create({ data: { paymentId, type: "BALANCE", balanceOwnerKordaId: journey.destinationKordaId, participantNameSnapshot: journey.participantName, originKordaNameSnapshot: journey.originName, destinationKordaNameSnapshot: journey.destinationName, payerNameSnapshot: "Tidak dicatat", amount: balanceAmount, createdByUserId: scope.userId } });
+            const allocation = await tx.paymentAllocation.create({ data: { paymentId, type: "BALANCE", registrationId: journey.registrationId, balanceOwnerKordaId: journey.destinationKordaId, participantNameSnapshot: journey.participantName, originKordaNameSnapshot: journey.originName, destinationKordaNameSnapshot: journey.destinationName, payerNameSnapshot: "Tidak dicatat", amount: balanceAmount, createdByUserId: scope.userId } });
             await tx.kordaBalanceEntry.create({ data: { ownerKordaId: journey.destinationKordaId, originKordaNameSnapshot: journey.originName, destinationKordaNameSnapshot: journey.destinationName, participantNameSnapshot: journey.participantName, payerNameSnapshot: "Tidak dicatat", sourcePaymentAllocationId: allocation.id, entryType: "CREDIT", amount: balanceAmount, createdByUserId: scope.userId } });
           }
         }
@@ -549,31 +549,8 @@ export async function updateRegistration(
 }
 
 export async function deleteRegistration(id: string) {
-  try {
-    const scope = await getRegionalAccessScope();
-    const existing = await registrationRepository.findById(
-      id,
-      registrationScopeWhere(scope),
-    );
-    if (!existing) {
-      return { success: false, error: "Registration not found" };
-    }
-
-    if (scope.role !== "admin") {
-      if (existing.outboundKordaId) await ensureKordaInScope(scope, existing.outboundKordaId, "Registrasi memiliki perjalanan di luar cakupan akses");
-      if (existing.returnKordaId) await ensureKordaInScope(scope, existing.returnKordaId, "Registrasi memiliki perjalanan di luar cakupan akses");
-    }
-
-    const result = await registrationRepository.delete(id);
-    revalidatePath("/registrasi");
-    return { success: true, data: result };
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return { success: false, error: error.message };
-    }
-    logger.error({ err: error, id }, "deleteRegistration action failed");
-    return { success: false, error: "Failed to delete registration" };
-  }
+  void id;
+  return { success: false, error: "Penghapusan langsung dinonaktifkan. Gunakan Hapus Permanen khusus Admin di halaman Daftar Peserta." };
 }
 
 export async function cancelRegistration(

@@ -124,10 +124,10 @@ export async function recordFamilyPaymentAction(formData: FormData) {
       for (const { row, journey, name } of resolved) {
         const originName = journey.registration.originKordaNameSnapshot;
         if (row.journeyAmount > 0) {
-          await tx.paymentAllocation.create({ data: { paymentId, type: "JOURNEY", journeyId: journey.id, participantNameSnapshot: name, originKordaNameSnapshot: originName, destinationKordaNameSnapshot: journey.destinationKorda.name, payerNameSnapshot: payerName, amount: Math.trunc(row.journeyAmount), createdByUserId: scope.userId } });
+          await tx.paymentAllocation.create({ data: { paymentId, type: "JOURNEY", journeyId: journey.id, registrationId: journey.registrationId, participantNameSnapshot: name, originKordaNameSnapshot: originName, destinationKordaNameSnapshot: journey.destinationKorda.name, payerNameSnapshot: payerName, amount: Math.trunc(row.journeyAmount), createdByUserId: scope.userId } });
         }
         if (row.balanceAmount > 0) {
-          const allocation = await tx.paymentAllocation.create({ data: { paymentId, type: "BALANCE", balanceOwnerKordaId: journey.destinationKordaId, participantNameSnapshot: name, originKordaNameSnapshot: originName, destinationKordaNameSnapshot: journey.destinationKorda.name, payerNameSnapshot: payerName, amount: Math.trunc(row.balanceAmount), createdByUserId: scope.userId } });
+          const allocation = await tx.paymentAllocation.create({ data: { paymentId, type: "BALANCE", registrationId: journey.registrationId, balanceOwnerKordaId: journey.destinationKordaId, participantNameSnapshot: name, originKordaNameSnapshot: originName, destinationKordaNameSnapshot: journey.destinationKorda.name, payerNameSnapshot: payerName, amount: Math.trunc(row.balanceAmount), createdByUserId: scope.userId } });
           await tx.kordaBalanceEntry.create({ data: { ownerKordaId: journey.destinationKordaId, originKordaNameSnapshot: originName, destinationKordaNameSnapshot: journey.destinationKorda.name, participantNameSnapshot: name, payerNameSnapshot: payerName, sourcePaymentAllocationId: allocation.id, entryType: "CREDIT", amount: Math.trunc(row.balanceAmount), createdByUserId: scope.userId } });
         }
       }

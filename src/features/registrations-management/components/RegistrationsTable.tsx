@@ -32,6 +32,7 @@ interface RegistrationsTableProps {
   currentPage: number;
   pageSize: number;
   canWrite: boolean;
+  canPurge?: boolean;
 }
 
 type DialogType = "detail" | "payment" | "cancel" | "refund" | "delete" | null;
@@ -42,6 +43,7 @@ export function RegistrationsTable({
   currentPage,
   pageSize,
   canWrite,
+  canPurge = false,
 }: RegistrationsTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -171,6 +173,7 @@ export function RegistrationsTable({
                       <RegistrationActionsMenu
                         registration={reg}
                         canWrite={canWrite}
+                        canPurge={canPurge}
                         onViewDetail={() => openDialog("detail", reg)}
                         onUpdatePayment={() => openDialog("payment", reg)}
                         onCancel={() => openDialog("cancel", reg)}
@@ -205,6 +208,7 @@ export function RegistrationsTable({
                     <RegistrationActionsMenu
                       registration={reg}
                       canWrite={canWrite}
+                      canPurge={canPurge}
                       onViewDetail={() => openDialog("detail", reg)}
                       onUpdatePayment={() => openDialog("payment", reg)}
                       onCancel={() => openDialog("cancel", reg)}

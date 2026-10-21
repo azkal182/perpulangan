@@ -69,32 +69,8 @@ export async function cancelRegistrationAction(params: {
 
 // Delete registration
 export async function deleteRegistrationAction(registrationId: string) {
-  try {
-    const scope = await getRegionalAccessScope();
-    const existing = await prisma.registration.findFirst({
-      where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true, eventId: true },
-    });
-    if (!existing) {
-      return { success: false, error: "Registrasi tidak ditemukan" };
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await assertEventWritable(tx, existing.eventId);
-      await tx.registration.delete({ where: { id: registrationId } });
-    });
-
-    revalidatePath("/daftar-peserta");
-    revalidatePath("/registrasi");
-
-    return { success: true };
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return { success: false, error: error.message };
-    }
-    console.error("Failed to delete registration:", error);
-    return { success: false, error: "Gagal menghapus registrasi" };
-  }
+  void registrationId;
+  return { success: false, error: "Penghapusan langsung dinonaktifkan. Gunakan Hapus Permanen khusus Admin di daftar peserta agar seluruh peserta pembayaran keluarga, saldo, konfirmasi, dan riwayat diproses bersama." };
 }
 
 // Get registration detail

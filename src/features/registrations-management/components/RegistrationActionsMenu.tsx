@@ -15,6 +15,7 @@ import type { RegistrationWithDetails } from "../repositories/registrations.repo
 interface RegistrationActionsMenuProps {
   registration: RegistrationWithDetails;
   canWrite: boolean;
+  canPurge: boolean;
   onViewDetail: () => void;
   onUpdatePayment: () => void;
   onCancel: () => void;
@@ -25,6 +26,7 @@ interface RegistrationActionsMenuProps {
 export function RegistrationActionsMenu({
   registration,
   canWrite,
+  canPurge,
   onViewDetail,
   onCancel,
   onDelete,
@@ -81,12 +83,12 @@ export function RegistrationActionsMenu({
         
         {canWrite && <DropdownMenuSeparator />}
         
-        {canWrite && <DropdownMenuItem
+        {canWrite && canPurge && <DropdownMenuItem
           onClick={() => handleAction(onDelete)}
           className="text-destructive focus:text-destructive"
         >
           <Trash2 className="mr-2 h-4 w-4" />
-          Hapus
+          Hapus Permanen
         </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>

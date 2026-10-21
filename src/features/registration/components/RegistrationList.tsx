@@ -11,19 +11,17 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Trash2, Ban } from "lucide-react";
+import { AlertCircle, Ban } from "lucide-react";
 import type { Registration } from "../types";
 import { CancelRegistrationDialog } from "./CancelRegistrationDialog";
 
 type Props = {
   registrations: Registration[];
-  onDelete: (id: string) => void;
   loading?: boolean;
 };
 
 export function RegistrationList({
   registrations,
-  onDelete,
   loading = false,
 }: Props) {
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
@@ -141,18 +139,6 @@ export function RegistrationList({
                       disabled={loading || reg.status === 'CANCELLED' || reg.status === 'PARTIAL_CANCEL'}
                     >
                       <Ban className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        if (confirm("Yakin hapus pendaftaran ini?")) {
-                          onDelete(reg.id);
-                        }
-                      }}
-                      disabled={loading}
-                    >
-                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </TableCell>

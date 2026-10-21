@@ -2,6 +2,10 @@
 
 Tracker ini mengikuti [perencanaan revisi flow perpulangan](perencanaan-revisi-flow-perpulangan.md), [Perencanaan Revisi 1: Roster Pulang, Armada, dan Cetak](perencanaan-revisi-roster-pulang-dan-cetak.md), dan [Revisi 2: Tarif Paket dan Registrasi dengan Pembayaran](perencanaan-revisi-tarif-dan-registrasi-pembayaran.md). Skill Codex proyek ada di [perpulangan-implementation](../.agents/skills/perpulangan-implementation/SKILL.md).
 
+## Feature lanjutan — purge permanen registrasi dan pembayaran keluarga
+
+Dokumen final: [Perencanaan Hapus Permanen Registrasi dan Pembayaran Keluarga](perencanaan-purge-registrasi-keluarga.md). **Status: Sedang berjalan.** Scope final mencakup penelusuran transitive seluruh peserta dan transaksi keluarga, role Admin saja, event aktif saja, preview dampak, alasan dan frasa konfirmasi, validasi password akun, guard posisi saldo Korda/kas pusat, penolakan jika refund/koreksi atau alokasi lama ambigu, purge DB atomik, audit snapshot khusus, dan cleanup bukti Supabase dengan retry. Migrasi/schema, service preview+purge, dialog konfirmasi, pencegahan bypass lama, dan halaman riwayat sudah ditambahkan. `prisma validate`, generate, TypeScript, ESLint terkait, dan `git diff --check` lulus. Migrasi database belum diterapkan: `prisma migrate status` tidak dapat membaca datasource karena `DATABASE_URL` pada environment ini tidak lolos parsing. QA browser belum dilakukan. Berikutnya periksa koneksi development, terapkan migrasi tanpa reset, lalu QA preview dan guard dengan fixture yang dapat dipulihkan; jangan purge data bisnis nyata saat QA.
+
 ## Perencanaan terpadu — status event dan UX mobile
 
 Satu dokumen mengatur kedua konteks: [Perencanaan Terpadu: Status Event dan UX Mobile](perencanaan-status-event-dan-ux-mobile.md). Dokumen ini final dan disetujui pengguna pada 19 Oktober 2026. Tahap A–C status `Sedang berjalan` sambil melengkapi sebagian QA edge-case. UXM-1, UXM-2, dan UXM-3 selesai untuk lingkup QA agen.
@@ -382,3 +386,20 @@ Tidak ada fase yang dibuka ulang dan tidak ada implementasi dimulai. Rincian tam
 **Verifikasi akhir (20 Okt 2026):** QA browser admin berhasil membuka `/keuangan` dan detail Korda; nilai bruto, fee Rp10.000 per Journey `REGISTERED`, hak bersih, penerimaan aktual, Saldo Kas Korda, dan maksimal pencairan tampil terpisah. Daftar perjalanan dan tautan bukti tampil; bukti tidak dibuka/diunduh. Tidak ada aksi pencairan atau transaksi tulis yang dijalankan. `pnpm exec tsc --noEmit`, ESLint pada file terkait, dan `git diff --check` lulus. Production build dicoba tetapi terhalang unduhan Google Fonts (`Geist` dan `Geist Mono`) dari lingkungan yang tidak memiliki koneksi; ini belum memverifikasi build, bukan kegagalan tipe/lint. Tidak ada perubahan schema atau migrasi database.
 
 **Penyesuaian UX riwayat pembayaran (20 Okt 2026):** sesuai arahan pengguna, riwayat pendaftaran kini dikelompokkan satu kartu per identitas anak, termasuk ringkasan tagihan, penerimaan bersih, dan sisa tagihan. Setiap transaksi keluarga diringkas satu kali pada anak tersebut sebesar nominal alokasinya; pembayaran lebih dari satu menampilkan masing-masing bukti transfer. QA browser baca-saja mengonfirmasi anak dengan dua perjalanan tampil sebagai satu kartu dengan satu riwayat transaksi gabungan (Pulang + Kembali). Data development yang terlihat pada Korda yang diuji tidak memuat anak dengan beberapa transaksi/bukti; kode menggabungkan per Payment ID dan merender seluruh Payment pada kartu anak. TypeScript, ESLint file terkait, dan `git diff --check` lulus. Tidak ada data diubah.
+
+## Implementasi lanjutan — Ringkasan fee pada Laporan dan Keuangan Pusat
+
+**Status:** Selesai untuk development.
+
+- [x] Menambahkan kartu Tagihan Bruto, Fee Pusat, dan Hak Korda setelah Fee di `/laporan`; kartu mengikuti event terpilih dan filter Korda/arah.
+- [x] Menjaga fee dan tagihan sebagai posisi seluruh waktu; filter tanggal tetap hanya memengaruhi aktivitas finansial.
+- [x] Menambahkan ringkasan semua event di `/keuangan`: tagihan bruto, fee, hak bersih pendaftaran, pembayaran masuk tercatat, dan saldo kas pusat.
+- [x] Menambahkan total tagihan bruto dan total hak bersih pada rekap serta kolom bruto/fee/neto pada tabel dan kartu Korda.
+- [x] TypeScript, ESLint file terkait, dan `git diff --check` lulus.
+- [x] QA browser admin baca-saja mengonfirmasi hitungan dan label pada `/laporan` dan `/keuangan`.
+
+**Verifikasi (21 Okt 2026):** Laporan event terpilih menampilkan tagihan bruto Rp32.112.500, fee Rp2.700.000, dan hak Korda setelah fee Rp29.412.500; pengurangan cocok. Keuangan Pusat lintas event menampilkan tagihan bruto Rp32.712.500, fee Rp2.720.000, hak Korda setelah fee Rp29.992.500, serta pembayaran masuk tercatat Rp25.846.875 secara terpisah. Total Korda pada tabel sama dengan ringkasan pusat. QA tidak melakukan operasi finansial tulis. `pnpm exec tsc --noEmit`, ESLint file terkait, dan `git diff --check` lulus. Tidak ada migrasi atau perubahan data.
+
+## Checkpoint — Purge permanen grup registrasi (21 Okt 2026)
+
+Pengguna menyetujui seluruh peserta dan pembayaran yang saling terhubung ikut dipurge, dengan pemeriksaan dana Korda/kas pusat, password Admin, dan riwayat khusus. Implementasi kode dan migration draft telah dibuat; tidak ada data bisnis yang dihapus. `prisma validate`, `prisma generate`, `pnpm exec tsc --noEmit`, ESLint file terkait, dan `git diff --check` lulus. Database belum dimigrasikan karena `DATABASE_URL` di sesi ini invalid untuk Prisma; browser QA menunggu migrasi. Riwayat audit menyimpan snapshot peserta, perjalanan, bus/riwayat penempatan, rekonsiliasi legacy, transaksi/alokasi, proyeksi finansial, alasan, aktor, dan status cleanup bukti tanpa relasi ke baris yang dipurge.

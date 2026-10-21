@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { eventBalanceEntryWhere, getEventContext } from "@/server/event-context";
+import { CENTRAL_FEE_PER_JOURNEY } from "@/features/payment/services/korda-finance-detail";
 
 const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
 const BALANCE_PAGE_SIZE = 50;
@@ -46,23 +47,25 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
     prisma.kordaBalanceEntry.count({ where: balanceScope }),
   ]);
 
-  const groups = new Map<string, { korda: string; direction: string; billed: number; received: number; refunded: number; corrected: number; outstanding: number }>();
+  const groups = new Map<string, { korda: string; direction: string; billed: number; fee: number; received: number; refunded: number; corrected: number; outstanding: number }>();
   const groupFor = (korda: string, dir: string) => {
     const key = `${korda}:${dir}`;
-    if (!groups.has(key)) groups.set(key, { korda, direction: dir, billed: 0, received: 0, refunded: 0, corrected: 0, outstanding: 0 });
+    if (!groups.has(key)) groups.set(key, { korda, direction: dir, billed: 0, fee: 0, received: 0, refunded: 0, corrected: 0, outstanding: 0 });
     return groups.get(key)!;
   };
   for (const journey of journeys) {
     const row = groupFor(journey.destinationKordaNameSnapshot, journey.direction);
     const net = journey.paymentAllocations.reduce((sum, item) => sum + item.amount - item.refunds.reduce((n, refund) => n + refund.amount, 0) - item.corrections.reduce((n, correction) => n + correction.amount, 0), 0);
     row.billed += journey.tariffSnapshot ?? 0;
+    if (journey.tariffSnapshot !== null && journey.tariffSnapshot > 0) row.fee += CENTRAL_FEE_PER_JOURNEY;
     row.outstanding += journey.tariffSnapshot === null ? 0 : Math.max(0, journey.tariffSnapshot - net);
   }
   for (const allocation of allocations) if (allocation.journey) groupFor(allocation.journey.destinationKordaNameSnapshot, allocation.journey.direction).received += allocation.amount;
   for (const refund of refunds) { const journey = refund.paymentAllocation?.journey; if (journey) groupFor(journey.destinationKordaNameSnapshot, journey.direction).refunded += refund.amount; }
   for (const correction of corrections) { const journey = correction.paymentAllocation?.journey; if (journey) groupFor(journey.destinationKordaNameSnapshot, journey.direction).corrected += correction.amount; }
   const reportRows = [...groups.values()].sort((a, b) => a.korda.localeCompare(b.korda, "id") || a.direction.localeCompare(b.direction));
-  const total = reportRows.reduce((sum, row) => ({ billed: sum.billed + row.billed, received: sum.received + row.received, refunded: sum.refunded + row.refunded, corrected: sum.corrected + row.corrected, outstanding: sum.outstanding + row.outstanding }), { billed: 0, received: 0, refunded: 0, corrected: 0, outstanding: 0 });
+  const total = reportRows.reduce((sum, row) => ({ billed: sum.billed + row.billed, fee: sum.fee + row.fee, received: sum.received + row.received, refunded: sum.refunded + row.refunded, corrected: sum.corrected + row.corrected, outstanding: sum.outstanding + row.outstanding }), { billed: 0, fee: 0, received: 0, refunded: 0, corrected: 0, outstanding: 0 });
+  const totalNetEntitlement = Math.max(0, total.billed - total.fee);
   const balanceCredits = balanceTotals.reduce((sum, row) => sum + (row.entryType === "CREDIT" ? Math.abs(row._sum.amount ?? 0) : -Math.abs(row._sum.amount ?? 0)), 0);
   const balancePageCount = Math.max(1, Math.ceil(balanceCount / BALANCE_PAGE_SIZE));
   const balancePageHref = (page: number) => `/laporan?korda=${encodeURIComponent(selectedKordaId)}&arah=${encodeURIComponent(direction)}&dari=${encodeURIComponent(fromValue)}&sampai=${encodeURIComponent(toValue)}&saldoPage=${page}`;
@@ -77,8 +80,8 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
       <label className="grid min-w-0 gap-1 text-sm">Aktivitas sampai<input type="date" name="sampai" defaultValue={toValue} className="w-full min-w-0 max-w-full rounded-md border bg-background px-3 py-2"/></label>
       <button className="rounded-md bg-primary px-4 py-2 text-primary-foreground lg:col-span-5">Tampilkan laporan</button>
     </form>
-    {activityDate && <p className="text-sm text-muted-foreground">Rentang tanggal berlaku untuk penerimaan, refund, koreksi, dan perubahan Saldo Lain. Tagihan dan sisa kewajiban menunjukkan posisi seluruh waktu untuk event/Korda/arah terpilih.</p>}
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[["Tagihan terdaftar", total.billed], ["Penerimaan tercatat", total.received], ["Refund aktual", total.refunded], ["Koreksi alokasi", total.corrected], ["Sisa tagihan", total.outstanding]].map(([label, amount]) => <article key={label} className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><strong className="mt-1 block text-xl">{money(Number(amount))}</strong></article>)}</section>
+    {activityDate && <p className="text-sm text-muted-foreground">Rentang tanggal berlaku untuk penerimaan, refund, koreksi, dan perubahan Saldo Lain. Tagihan, fee, dan hak bersih menunjukkan posisi seluruh waktu untuk event/Korda/arah terpilih.</p>}
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Tagihan bruto terdaftar", total.billed], ["Fee pusat", total.fee], ["Hak Korda setelah fee", totalNetEntitlement], ["Penerimaan tercatat", total.received], ["Refund aktual", total.refunded], ["Koreksi alokasi", total.corrected], ["Sisa tagihan", total.outstanding]].map(([label, amount]) => <article key={label} className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><strong className="mt-1 block text-xl">{money(Number(amount))}</strong></article>)}</section>
     <section className="space-y-3"><div><h2 className="text-lg font-semibold">Rincian per Korda tujuan dan perjalanan</h2><p className="text-sm text-muted-foreground">Penerimaan, refund, dan koreksi ditampilkan terpisah agar perubahan alokasi tidak disamakan dengan uang yang benar-benar masuk atau keluar.</p></div>
       {reportRows.length ? <>
         <div className="grid gap-3 lg:hidden">{reportRows.map((row) => <article key={`${row.korda}:${row.direction}`} className="min-w-0 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words font-semibold">{row.korda}</h3><p className="text-sm text-muted-foreground">{row.direction === "OUTBOUND" ? "Pulang" : "Kembali"}</p></div><span className="rounded-full bg-muted px-2.5 py-1 text-xs">Rincian</span></div><dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 text-sm"><div><dt className="text-muted-foreground">Tagihan</dt><dd className="break-words font-medium">{money(row.billed)}</dd></div><div><dt className="text-muted-foreground">Penerimaan</dt><dd className="break-words font-medium">{money(row.received)}</dd></div><div><dt className="text-muted-foreground">Refund</dt><dd className="break-words">{money(row.refunded)}</dd></div><div><dt className="text-muted-foreground">Koreksi</dt><dd className="break-words">{money(row.corrected)}</dd></div><div><dt className="text-muted-foreground">Penerimaan bersih</dt><dd className="break-words font-semibold">{money(row.received - row.refunded - row.corrected)}</dd></div><div><dt className="text-muted-foreground">Sisa tagihan</dt><dd className="break-words font-medium">{money(row.outstanding)}</dd></div></dl></article>)}</div>
