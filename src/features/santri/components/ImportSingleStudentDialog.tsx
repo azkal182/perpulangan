@@ -273,7 +273,17 @@ export function ImportSingleStudentDialog({
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Catatan</AlertTitle>
                   <AlertDescription>
-                    {preview.skippedIssues.join(", ")} kosong dan akan diperlakukan sebagai data skip.
+                    {preview.skippedIssues.join(", ")} kosong dan data ini akan dilewati saat import.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!preview.dormitory.trim() && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Asrama kosong</AlertTitle>
+                  <AlertDescription>
+                    Santri tetap dapat diimport. Untuk data baru, asrama akan kosong; data asrama lama pada santri yang sudah ada tetap dipertahankan.
                   </AlertDescription>
                 </Alert>
               )}

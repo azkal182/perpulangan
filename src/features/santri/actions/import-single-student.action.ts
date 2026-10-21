@@ -36,18 +36,15 @@ function validateSingleStudentForImport(student: StudentNormalized) {
   if (!student.name) missing.push("name");
   if (!student.gender) missing.push("gender");
   if (!student.ttl) missing.push("ttl");
-  if (!student.dormitory) missing.push("dormitory");
   if (!student.fullAddress) missing.push("fullAddress");
 
   if (missing.length === 0) {
     return { blockingIssues: [] as string[], skippedIssues: [] as string[] };
   }
 
-  const skippedIssues = missing.filter((field) =>
-    field === "nis" || field === "dormitory",
-  );
+  const skippedIssues = missing.filter((field) => field === "nis");
   const blockingIssues = missing.filter(
-    (field) => field !== "nis" && field !== "dormitory",
+    (field) => field !== "nis",
   );
 
   return { blockingIssues, skippedIssues };
@@ -180,7 +177,7 @@ export async function importSingleStudentByIdAction(idApi: string): Promise<{
       };
     }
 
-    const result = await bulkUpsertStudents([normalized]);
+    const result = await bulkUpsertStudents([normalized], { allowMissingDormitory: true });
 
     if (result.processed > 0 && result.failed === 0) {
       return {

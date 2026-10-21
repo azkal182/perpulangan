@@ -73,7 +73,10 @@ function isAktifFromApi(row: StudentDTO): boolean {
 }
 */
 
-function validateStudent(s: StudentNormalized) {
+function validateStudent(
+  s: StudentNormalized,
+  options: { allowMissingDormitory?: boolean } = {},
+) {
   const missing: string[] = [];
   if (!s.idApi) missing.push("idApi");
   if (!s.nis) missing.push("nis");
@@ -81,7 +84,7 @@ function validateStudent(s: StudentNormalized) {
   if (!s.gender) missing.push("gender");
   // status tidak perlu wajib: default false valid
   if (!s.ttl) missing.push("ttl");
-  if (!s.dormitory) missing.push("dormitory");
+  if (!s.dormitory && !options.allowMissingDormitory) missing.push("dormitory");
   //   if (!s.village) missing.push("village");
   if (!s.fullAddress) missing.push("fullAddress");
 
@@ -110,6 +113,7 @@ function prismaErrorMessage(e: unknown) {
 
 export async function bulkUpsertStudents(
   rawRows: StudentNormalized[],
+  options: { allowMissingDormitory?: boolean } = {},
 ): Promise<BulkImportResult> {
   const result: BulkImportResult = {
     total: rawRows?.length ?? 0,
@@ -144,7 +148,7 @@ export async function bulkUpsertStudents(
   const rows: { index: number; data: StudentNormalized }[] = [];
   for (let i = 0; i < rawRows.length; i++) {
     // console.log(JSON.stringify(normalized, null, 2));
-    const validation = validateStudent(rawRows[i]);
+    const validation = validateStudent(rawRows[i], options);
 
     if (validation) {
       if (validation.level === "skip") {
@@ -241,7 +245,7 @@ export async function bulkUpsertStudents(
                 ttl: s.ttl,
                 photoUrl: s.photoUrl,
                 parrentPhone: s.parrentPhone,
-                dormitory: s.dormitory,
+                ...(s.dormitory.trim() ? { dormitory: s.dormitory.trim() } : {}),
                 provinceId: s.provinceId,
                 regencyId: s.regencyId,
                 districtId: s.districtId,
@@ -258,7 +262,7 @@ export async function bulkUpsertStudents(
                 // ttl: s.ttl,
                 photoUrl: s.photoUrl,
                 parrentPhone: s.parrentPhone,
-                dormitory: s.dormitory,
+                ...(s.dormitory.trim() ? { dormitory: s.dormitory.trim() } : {}),
                 provinceId: s.provinceId,
                 regencyId: s.regencyId,
                 districtId: s.districtId,
