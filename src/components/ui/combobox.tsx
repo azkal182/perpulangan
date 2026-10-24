@@ -91,6 +91,7 @@ function ComboboxInput({
 
 function ComboboxContent({
   className,
+  portalContainer,
   side = "bottom",
   sideOffset = 6,
   align = "start",
@@ -101,16 +102,18 @@ function ComboboxContent({
   Pick<
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
-  >) {
-  return (
-    <ComboboxPrimitive.Portal>
+  > & {
+    /** Mount the portal inside a modal container to preserve pointer events. */
+    portalContainer?: HTMLElement | ShadowRoot | React.RefObject<HTMLElement | ShadowRoot | null> | null
+  }) {
+  const positioner = (
       <ComboboxPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className="isolate z-50"
+        className="isolate z-[60] touch-manipulation"
       >
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"
@@ -122,6 +125,11 @@ function ComboboxContent({
           {...props}
         />
       </ComboboxPrimitive.Positioner>
+  )
+
+  return (
+    <ComboboxPrimitive.Portal container={portalContainer}>
+      {positioner}
     </ComboboxPrimitive.Portal>
   )
 }
@@ -130,8 +138,8 @@ function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
   return (
     <ComboboxPrimitive.List
       data-slot="combobox-list"
-      className={cn(
-        "max-h-[min(calc(--spacing(96)---spacing(9)),calc(var(--available-height)---spacing(9)))] scroll-py-1 overflow-y-auto p-1 data-empty:p-0",
+        className={cn(
+        "max-h-[min(calc(--spacing(96)---spacing(9)),calc(var(--available-height)---spacing(9)))] touch-pan-y overscroll-contain scroll-py-1 overflow-y-auto p-1 data-empty:p-0",
         className
       )}
       {...props}
@@ -148,7 +156,7 @@ function ComboboxItem({
     <ComboboxPrimitive.Item
       data-slot="combobox-item"
       className={cn(
-        "data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex min-h-11 w-full cursor-pointer touch-manipulation items-center gap-2 rounded-sm py-2.5 pr-8 pl-3 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

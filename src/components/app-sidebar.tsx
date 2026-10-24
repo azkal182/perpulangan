@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, User2, Bot, Settings, Bus, Loader2 } from "lucide-react";
+import { ChevronDown, Bus, Loader2 } from "lucide-react";
 
 import {
   Sidebar,
@@ -169,19 +169,6 @@ export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User2 className="mr-2 h-4 w-4" />
-                  Account
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Bot className="mr-2 h-4 w-4" />
-                  AI Assistant
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}
                   disabled={isLoggingOut}
@@ -189,10 +176,10 @@ export function AppSidebar({ role, user, ...props }: React.ComponentProps<typeof
                   {isLoggingOut ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Logging out...
+                      Keluar...
                     </>
                   ) : (
-                    "Log out"
+                    "Keluar"
                   )}
                   <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
                 </DropdownMenuItem>

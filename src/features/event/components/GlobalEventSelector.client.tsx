@@ -50,7 +50,7 @@ export function GlobalEventSelector({ events, selectedEventId }: Props) {
           ))}
         </SelectContent>
       </Select>
-      {events.length === 0 && <span className="text-[10px] text-muted-foreground sm:text-xs">Tidak ada event</span>}
+      {events.length === 0 && <span role="status" className="text-[10px] text-muted-foreground sm:text-xs">Belum ada event · hubungi admin</span>}
       {selected?.status === "ACTIVE" && <span className="sr-only">Event aktif</span>}
     </div>
   );

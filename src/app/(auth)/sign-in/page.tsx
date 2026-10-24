@@ -14,10 +14,9 @@ export default function SignInPage() {
   return (
     <Card className="gap-4">
       <CardHeader>
-        <CardTitle className="text-lg tracking-tight">Sign in</CardTitle>
+        <CardTitle className="text-lg tracking-tight">Masuk</CardTitle>
         <CardDescription>
-          Enter your username and password below to <br />
-          log into your account
+          Masukkan username dan password untuk masuk ke akun Anda.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -25,18 +24,7 @@ export default function SignInPage() {
       </CardContent>
       <CardFooter>
         <p className="px-8 text-center text-sm text-muted-foreground">
-          By clicking sign in, you agree to our{" "}
-          <a href="/terms" className="underline underline-offset-4 hover:text-primary">
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a
-            href="/privacy"
-            className="underline underline-offset-4 hover:text-primary"
-          >
-            Privacy Policy
-          </a>
-          .
+          Akses akun dikelola oleh administrator sistem.
         </p>
       </CardFooter>
     </Card>

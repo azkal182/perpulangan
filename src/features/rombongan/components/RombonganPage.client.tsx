@@ -64,6 +64,7 @@ import {
 import { BusFormDialog } from "./BusFormDialog";
 import { BusPassengersDialog } from "./BusPassengersDialog";
 import { UnassignedJourneysDialog } from "./UnassignedJourneysDialog";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 function assignedCount(bus: BusWithDetails, direction: "OUTBOUND" | "RETURN") {
   return bus.journeyAssignments.filter((item) => item.journey.status === "REGISTERED" && item.journey.direction === direction).length;
@@ -290,6 +291,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
 
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden">
+      <EventScopeBanner eventName={selectedEventName} status={selectedEventStatus} />
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Bus className="h-6 w-6 shrink-0" />

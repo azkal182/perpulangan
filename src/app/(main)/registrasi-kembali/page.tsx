@@ -5,6 +5,7 @@ import { RegistrationNavigation } from "@/features/registrations-management/comp
 import type { Metadata } from "next";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { getEventContext } from "@/server/event-context";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 export const metadata: Metadata = {
   title: "Registrasi Kembali | Perpulangan Santri",
@@ -61,6 +62,8 @@ export default async function ReturnOnlyRegistrationPage() {
         </div>
 
         <div className="mx-auto max-w-7xl px-4 py-6">
+          <EventScopeBanner eventName={activeEvent.name} status={activeEvent.status} />
+          <div className="h-4" />
           {activeEvent.status === "ACTIVE" ? <MultiParticipantRegistrationForm
             eventId={activeEvent.id}
             eventName={activeEvent.name}

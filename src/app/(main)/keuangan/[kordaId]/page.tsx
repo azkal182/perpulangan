@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { getKordaFinanceDetail } from "@/features/payment/services/korda-finance-detail";
 import { getTreasuryPosition } from "@/features/payment/services/treasury-position";
+import { FinanceContextNote, FinanceHowToRead } from "@/features/payment/components/FinanceContextNote";
 
 const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
 const dateLabel = (date: Date) => new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(date);
@@ -26,12 +27,15 @@ export default async function KordaFinanceDetailPage({ params }: { params: Promi
       <div><h1 className="text-2xl font-bold tracking-tight">Detail keuangan · {detail.korda.name}</h1><p className="mt-1 text-sm text-muted-foreground">Rincian uang pendaftaran, fee pusat, kelebihan pembayaran, dan pencairan yang tercatat untuk Korda ini.</p></div>
     </header>
 
+    <FinanceContextNote mode="global" />
+    <FinanceHowToRead />
+
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Total tagihan perjalanan</p><strong className="mt-1 block text-xl">{money(summary.grossBilled)}</strong><p className="mt-1 text-xs text-muted-foreground">{summary.billableJourneyCount} perjalanan bertarif</p></article>
       <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Fee pusat</p><strong className="mt-1 block text-xl">{money(summary.feeAmount)}</strong><p className="mt-1 text-xs text-muted-foreground">Rp10.000 untuk tiap tagihan perjalanan</p></article>
       <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Hak bersih pendaftaran</p><strong className="mt-1 block text-xl">{money(summary.netRegistrationEntitlement)}</strong><p className="mt-1 text-xs text-muted-foreground">Total tagihan dikurangi fee pusat</p></article>
       <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Penerimaan pendaftaran aktual</p><strong className="mt-1 block text-xl">{money(summary.registrationReceipts)}</strong><p className="mt-1 text-xs text-muted-foreground">Pembayaran tagihan setelah refund dan koreksi</p></article>
-      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Saldo Lain / kelebihan</p><strong className="mt-1 block text-xl">{money(summary.balanceNet)}</strong><p className="mt-1 text-xs text-muted-foreground">Terpisah dari pendaftaran dan tidak dikenai fee</p></article>
+      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kelebihan pembayaran</p><strong className="mt-1 block text-xl">{money(summary.balanceNet)}</strong><p className="mt-1 text-xs text-muted-foreground">Masih ditahan di pusat untuk Korda ini dan tidak dikenai fee.</p></article>
       <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Sudah dicairkan</p><strong className="mt-1 block text-xl">{money(summary.disbursed)}</strong><p className="mt-1 text-xs text-muted-foreground">Jumlah pencairan aktual yang tercatat</p></article>
       <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Maksimal dapat dicairkan saat ini</p><strong className="mt-1 block text-xl">{money(availableToDisburse)}</strong><p className="mt-1 text-xs text-muted-foreground">Dibatasi penerimaan aktual, hak bersih, dan kas pusat</p></article>
     </section>
@@ -51,8 +55,8 @@ export default async function KordaFinanceDetailPage({ params }: { params: Promi
     </section>
 
     <section className="space-y-3">
-      <div><h2 className="text-lg font-semibold">Riwayat Saldo Lain / kelebihan</h2><p className="text-sm text-muted-foreground">Kelebihan pembayaran menjadi Saldo Lain Korda tujuan. Entri refund atau koreksi mengurangi saldo dan tetap ditampilkan sebagai riwayat.</p></div>
-      {detail.balanceEntries.length ? <div className="grid gap-3">{detail.balanceEntries.map((entry) => <article key={entry.id} className="min-w-0 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words font-semibold">{entry.participant}</h3><p className="text-sm text-muted-foreground">{dateLabel(entry.createdAt)} · {entry.originKorda ? `Asal ${entry.originKorda}` : "Asal tidak tersedia"}</p><p className="mt-1 text-xs text-muted-foreground">{entry.type === "CREDIT" ? "Kelebihan pembayaran masuk" : entry.type === "REFUND" ? "Refund Saldo Lain" : "Koreksi Saldo Lain"}{entry.reason ? ` · ${entry.reason}` : ""}</p></div><strong className={entry.amount >= 0 ? "text-emerald-700" : "text-destructive"}>{entry.amount >= 0 ? "+" : "−"}{money(Math.abs(entry.amount))}</strong></div>
+      <div><h2 className="text-lg font-semibold">Riwayat kelebihan pembayaran</h2><p className="text-sm text-muted-foreground">Kelebihan pembayaran menjadi saldo milik Korda tujuan yang masih ditahan di pusat. Refund atau koreksi mengurangi saldo dan tetap ditampilkan sebagai riwayat.</p></div>
+      {detail.balanceEntries.length ? <div className="grid gap-3">{detail.balanceEntries.map((entry) => <article key={entry.id} className="min-w-0 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words font-semibold">{entry.participant}</h3><p className="text-sm text-muted-foreground">{dateLabel(entry.createdAt)} · {entry.originKorda ? `Asal ${entry.originKorda}` : "Asal tidak tersedia"}</p><p className="mt-1 text-xs text-muted-foreground">{entry.type === "CREDIT" ? "Kelebihan pembayaran masuk" : entry.type === "REFUND" ? "Refund kelebihan pembayaran" : "Koreksi kelebihan pembayaran"}{entry.reason ? ` · ${entry.reason}` : ""}</p></div><strong className={entry.amount >= 0 ? "text-emerald-700" : "text-destructive"}>{entry.amount >= 0 ? "+" : "−"}{money(Math.abs(entry.amount))}</strong></div>
         {(entry.evidence || entry.refundEvidence) && <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 text-sm">{entry.evidence && <a href={`/api/payment-evidence/${entry.evidence.id}`} target="_blank" rel="noreferrer" className="break-all text-primary underline">Bukti pembayaran: {entry.evidence.name}</a>}{entry.refundEvidence && <a href={`/api/payment-evidence/${entry.refundEvidence.id}`} target="_blank" rel="noreferrer" className="break-all text-primary underline">Bukti refund: {entry.refundEvidence.name}</a>}</div>}
       </article>)}</div> : <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">Belum ada Saldo Lain untuk Korda ini.</p>}
     </section>

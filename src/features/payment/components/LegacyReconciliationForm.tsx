@@ -24,7 +24,7 @@ export function LegacyReconciliationForm({ item }: { item: LegacyOption }) {
     <label>Nominal aktual terkonfirmasi<input name="amount" type="number" min="1" required value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
     <label>Tanggal pembayaran<input name="paidAt" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required className="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
     <label className="sm:col-span-2">Catatan verifikasi petugas<input name="note" required maxLength={500} placeholder="Contoh: dicocokkan dengan buku kas tanggal ..." className="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
-    <p className="text-xs text-muted-foreground sm:col-span-2">Nominal tidak diambil dari tarif saat ini. Bagian yang melebihi sisa tagihan akan masuk ke Saldo Lain {item.destination}.</p>
+    <p className="text-xs text-muted-foreground sm:col-span-2">Nominal tidak diambil dari tarif saat ini. Bagian yang melebihi sisa tagihan akan dicatat sebagai kelebihan pembayaran untuk {item.destination}.</p>
     <div className="sm:col-span-2"><button disabled={pending} className="rounded bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50">{pending ? "Menyimpan…" : "Simpan rekonsiliasi"}</button></div>
   </form>;
 }

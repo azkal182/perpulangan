@@ -32,6 +32,28 @@ type BreadcrumbEntry = {
 };
 
 function segmentToLabel(segment: string): string {
+  const labels: Record<string, string> = {
+    dashboard: "Dashboard",
+    users: "Pengguna",
+    event: "Event",
+    registrasi: "Registrasi Pulang",
+    "registrasi-kembali": "Registrasi Kembali",
+    "daftar-peserta": "Daftar Peserta",
+    rombongan: "Rombongan & Armada",
+    tracking: "Tracking",
+    "cetak-dokumen": "Cetak Kartu & Tiket",
+    "data-pulang": "Data Pulang",
+    santri: "Santri",
+    "peserta-eksternal": "Peserta Eksternal",
+    master: "Master Data",
+    pembayaran: "Pembayaran",
+    refund: "Refund",
+    "koreksi-keuangan": "Koreksi Transaksi",
+    laporan: "Laporan Keuangan",
+    keuangan: "Keuangan Pusat",
+    pengaturan: "Pengaturan",
+  };
+  if (labels[segment]) return labels[segment];
   return segment
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());

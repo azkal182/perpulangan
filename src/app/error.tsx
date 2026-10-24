@@ -19,17 +19,17 @@ export default function Error({
     <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
       <div className="space-y-2">
         <h2 className="text-2xl font-bold tracking-tight">
-          Something went wrong!
+          Terjadi kesalahan
         </h2>
         <p className="text-muted-foreground">
-          We apologize for the inconvenience. An unexpected error occurred.
+          Terjadi kendala saat memuat halaman. Silakan coba lagi.
         </p>
       </div>
       <div className="flex gap-4">
         <Button onClick={() => window.location.reload()} variant="outline">
-            Refresh Page
+            Muat ulang halaman
         </Button>
-        <Button onClick={() => reset()}>Try again</Button>
+        <Button onClick={() => reset()}>Coba lagi</Button>
       </div>
     </div>
   );

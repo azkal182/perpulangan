@@ -13,6 +13,7 @@ import { PrintButton } from "@/features/registrations-management/components/Prin
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getGlobalEventContext } from "@/server/event-context";
 import { getRegionalAccessScope } from "@/server/access-scope";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 interface PageProps {
   searchParams?: Promise<{
@@ -111,6 +112,7 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
         </div>
 
         <div className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+          <EventScopeBanner eventName={activeEvent.name} status={activeEvent.status} />
           {/* Stats Cards */}
           {stats && <RegistrationStatsCards stats={stats} />}
 

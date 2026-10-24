@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mabarati",
-  description: "Sistem Perpulangan Mabarati",
+  title: "Perpulangan",
+  description: "Sistem pengelolaan perpulangan santri",
 };
 
 export default function RootLayout({

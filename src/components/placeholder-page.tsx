@@ -11,7 +11,7 @@ export function PlaceholderPage({ title }: { title: string }) {
           {title}
         </h2>
         <p className="text-muted-foreground">
-          This page is currently under construction. Please check back later.
+          Halaman ini sedang disiapkan. Silakan coba lagi nanti.
         </p>
       </div>
     </div>

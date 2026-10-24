@@ -50,7 +50,7 @@ export function AddEntityDialog(props: Props) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto p-4 sm:w-full sm:p-6">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
@@ -62,6 +62,7 @@ export function AddEntityDialog(props: Props) {
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
+            className="min-h-11 text-base sm:text-sm"
             onKeyDown={(e) => {
               if (e.key === "Enter") onSubmit();
             }}

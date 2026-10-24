@@ -25,7 +25,7 @@ export function PaymentParticipantsTable({ eventId, eventName, canWrite, rows }:
 
 function JourneyStatus({ row }: { row?: PaymentJourneyRow }) {
   if (!row) return <span className="text-xs text-muted-foreground">Belum terdaftar</span>;
-  const status = row.tariff===null?"Tarif belum tersedia":row.due===0?"Lunas":row.paid>0?"Partial":"Belum bayar";
+  const status = row.tariff===null?"Tarif belum tersedia":row.due===0?"Lunas":row.paid>0?"Bayar sebagian":"Belum bayar";
   const due = row.due===null?"—":money(row.due);
   return <span className="block min-w-0"><span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${row.due===0?"bg-emerald-100 text-emerald-800":row.due===null?"bg-amber-100 text-amber-800":"bg-amber-50 text-amber-800"}`}>{status}</span><span className="mt-1 block break-words text-xs text-muted-foreground">{row.destination} · {due}</span></span>;
 }

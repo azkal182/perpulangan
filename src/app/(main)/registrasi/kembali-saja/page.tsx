@@ -5,6 +5,7 @@ import { getRegistrations } from "@/features/registration/actions/registration.a
 import { Metadata } from "next";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { getEventContext } from "@/server/event-context";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 export const metadata: Metadata = {
   title: "Registrasi Kembali Saja | Perpulangan Santri",
@@ -49,7 +50,9 @@ export default async function ReturnOnlyRegistrationPage() {
   const registrations = (registrationsRes.success && registrationsRes.data ? registrationsRes.data : []) as any;
 
   return (
-    activeEvent.status === "ACTIVE" ? <RegistrationPageView
+    <>
+    <EventScopeBanner eventName={activeEvent.name} status={activeEvent.status} />
+    {activeEvent.status === "ACTIVE" ? <RegistrationPageView
       eventId={activeEvent.id}
       eventName={activeEvent.name}
       initialKordas={kordas}
@@ -59,6 +62,7 @@ export default async function ReturnOnlyRegistrationPage() {
       pageTitle="Registrasi Kembali Saja (Return Only)"
       defaultMode="return_only"
       lockMode={true}
-    /> : <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">Perubahan perjalanan Kembali hanya dapat dilakukan pada event aktif. Data event ini tetap dapat dilihat melalui daftar peserta.</div>
+    /> : <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">Perubahan perjalanan Kembali hanya dapat dilakukan pada event aktif. Data event ini tetap dapat dilihat melalui daftar peserta.</div>}
+    </>
   );
 }

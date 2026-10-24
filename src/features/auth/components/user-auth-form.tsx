@@ -35,23 +35,23 @@ const formSchema = z.object({
   username: z
     .string()
     .trim()
-    .min(1, 'Please enter your username')
+    .min(1, 'Masukkan username Anda')
     .min(
       USERNAME_MIN_LENGTH,
-      `Username must be at least ${USERNAME_MIN_LENGTH} characters long`,
+      `Username minimal ${USERNAME_MIN_LENGTH} karakter`,
     )
     .max(
       USERNAME_MAX_LENGTH,
-      `Username must be at most ${USERNAME_MAX_LENGTH} characters long`,
+      `Username maksimal ${USERNAME_MAX_LENGTH} karakter`,
     )
     .regex(
       USERNAME_ALLOWED_PATTERN,
-      'Username can only contain letters, numbers, dots, and underscores',
+      'Username hanya boleh berisi huruf, angka, titik, dan garis bawah',
     ),
   password: z
     .string()
-    .min(1, 'Please enter your password')
-    .min(7, 'Password must be at least 7 characters long'),
+    .min(1, 'Masukkan password Anda')
+    .min(7, 'Password minimal 7 karakter'),
 })
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {
@@ -134,7 +134,7 @@ export function UserAuthForm({
                 href="/forgot-password"
                 className="absolute end-0 -top-0.5 text-sm font-medium text-muted-foreground hover:opacity-75"
               >
-                Forgot password?
+                Lupa password?
               </Link>
             </FormItem>
           )}
@@ -142,7 +142,7 @@ export function UserAuthForm({
 
         <Button className="mt-2" disabled={isLoading}>
           {isLoading ? <Loader2 className="animate-spin" /> : <LogIn />}
-          Sign in
+          Masuk
         </Button>
       </form>
     </Form>

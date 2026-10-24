@@ -26,9 +26,6 @@ services:
         condition: service_healthy
     env_file:
       - .env
-    environment:
-      # Override DATABASE_URL to point to the db service
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/perpulangan
     ports:
       - "3000:3000"
     volumes:

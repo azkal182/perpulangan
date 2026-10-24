@@ -4,6 +4,7 @@ import { MultiParticipantRegistrationForm } from "@/features/registration/compon
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { getEventContext } from "@/server/event-context";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 export default async function RegistrationPage() {
   const scope = await getRegionalAccessScope();
@@ -55,6 +56,8 @@ export default async function RegistrationPage() {
         </div>
 
         <div className="mx-auto max-w-7xl px-4 py-6">
+          <EventScopeBanner eventName={activeEvent.name} status={activeEvent.status} />
+          <div className="h-4" />
           {activeEvent.status === "ACTIVE" ? <MultiParticipantRegistrationForm
             eventId={activeEvent.id}
             eventName={activeEvent.name}

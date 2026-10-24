@@ -65,6 +65,7 @@ export function AddKotaDialog({
   const [submitting, setSubmitting] = React.useState(false);
 
   const regencyAnchor = useComboboxAnchor();
+  const pickerContainer = React.useRef<HTMLDivElement>(null);
 
   const usedSet = React.useMemo(
     () => new Set(usedRegencyIds ?? []),
@@ -205,7 +206,10 @@ export function AddKotaDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent>
+      <DialogContent
+        className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-visible overscroll-contain p-4 sm:w-full sm:p-6"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? (
@@ -213,10 +217,12 @@ export function AddKotaDialog({
           ) : null}
         </DialogHeader>
 
+        <div ref={pickerContainer} className="contents">
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="text-sm font-medium">Pilih Provinsi</div>
             <Combobox<ProvinceOption>
+              modal={false}
               items={provinceOptions}
               value={selectedProvince}
               onValueChange={(value) => setSelectedProvince(value ?? null)}
@@ -231,11 +237,11 @@ export function AddKotaDialog({
               <ComboboxInput
                 placeholder="Cari provinsi..."
                 showClear
-                autoFocus
                 disabled={disabled}
+                className="min-h-11 text-base sm:text-sm"
               />
-              <ComboboxContent>
-                <ComboboxList>
+                <ComboboxContent portalContainer={pickerContainer}>
+                <ComboboxList className="!max-h-[min(18rem,45dvh)]">
                   <ComboboxEmpty>{provinceEmptyLabel}</ComboboxEmpty>
                   <ComboboxCollection>
                     {(opt) => (
@@ -253,6 +259,7 @@ export function AddKotaDialog({
             <div className="text-sm font-medium">Pilih Kota (Regency)</div>
             <Combobox<RegencyOption, true>
               multiple
+              modal={false}
               items={filteredOptions}
               value={selected}
               onValueChange={(value) =>
@@ -276,11 +283,15 @@ export function AddKotaDialog({
                       selectedProvince ? "Cari kota..." : "Pilih provinsi dulu"
                     }
                     disabled={disabled || !selectedProvince}
+                    className="min-h-9 py-2 text-base sm:text-sm"
                   />
                 </ComboboxChips>
               </div>
-              <ComboboxContent anchor={regencyAnchor}>
-                <ComboboxList>
+              <ComboboxContent
+                anchor={regencyAnchor}
+                portalContainer={pickerContainer}
+              >
+                <ComboboxList className="!max-h-[min(18rem,45dvh)]">
                   <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
                   <ComboboxCollection>
                     {(opt) => {
@@ -313,6 +324,7 @@ export function AddKotaDialog({
               </ComboboxContent>
             </Combobox>
           </div>
+        </div>
         </div>
 
         <DialogFooter>

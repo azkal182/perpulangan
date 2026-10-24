@@ -51,11 +51,20 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onPointerDownOutside,
   onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const isLayeredPicker = (target: EventTarget | null) =>
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        '[data-slot="popover-content"], [data-slot="combobox-content"], [data-slot="select-content"]',
+      ),
+    );
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -65,12 +74,17 @@ function DialogContent({
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg",
           className
         )}
+        onPointerDownOutside={(event) => {
+          // Combobox/Select menus are portaled outside the dialog DOM. On
+          // touch devices Radix sees their pointerdown as an outside click
+          // and closes the dialog before the option receives the tap.
+          if (isLayeredPicker(event.target)) {
+            event.preventDefault();
+          }
+          onPointerDownOutside?.(event);
+        }}
         onInteractOutside={(event) => {
-          const target = event.target;
-          if (
-            target instanceof Element &&
-            target.closest('[data-slot="popover-content"], [data-slot="combobox-content"]')
-          ) {
+          if (isLayeredPicker(event.target)) {
             event.preventDefault();
           }
           onInteractOutside?.(event);

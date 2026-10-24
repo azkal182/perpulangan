@@ -5,6 +5,7 @@ import { getOutboundRoster } from "@/features/outbound-roster/actions/outbound-r
 import { OutboundRosterManager } from "@/features/outbound-roster/components/OutboundRosterManager";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { getEventContext } from "@/server/event-context";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 export const metadata: Metadata = { title: "Data Pulang" };
 
@@ -22,6 +23,7 @@ export default async function DataPulangPage({ searchParams }: { searchParams: P
         <h1 className="text-2xl font-bold tracking-tight">Data Pulang</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Pantau santri aktif yang belum terdaftar untuk perjalanan Pulang, catat pengecualian, dan lihat santri yang sudah terdaftar untuk event.</p>
       </header>
+      <EventScopeBanner eventName={eventContext.selectedEvent?.name} status={eventContext.selectedEvent?.status} />
       <Card>
         <CardContent className="p-4">
           {selectedEventId ? (

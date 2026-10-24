@@ -16,6 +16,7 @@ import {
   getRegionalAccessScope,
 } from "@/server/access-scope";
 import { getEventContext } from "@/server/event-context";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -163,6 +164,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
           <Link href={reportHref} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"><Wallet className="h-4 w-4" />Laporan keuangan</Link>
         </div>
       </header>
+
+      <EventScopeBanner eventName={selectedEvent?.name} status={selectedEvent?.status} />
 
       {!eventContext.selectedEvent && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{events.length ? "Tidak ada event aktif atau event yang dipilih. Pilih event historis dari header untuk membaca data." : "Belum ada event yang tersedia pada cakupan Anda. Admin perlu membuat atau mengaktifkan event."}</p>}
 

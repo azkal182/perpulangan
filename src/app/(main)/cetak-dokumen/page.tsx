@@ -7,6 +7,7 @@ import { getDropPoints } from "@/features/drop-points/actions/drop-point.action"
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
 import { PrintWorkspace } from "@/features/registrations-management/components/PrintDialog";
 import { getGlobalEventContext } from "@/server/event-context";
+import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 export default async function CetakDokumenPage() {
   const { selectedEvent: activeEvent } = await getGlobalEventContext();
@@ -62,6 +63,8 @@ export default async function CetakDokumenPage() {
         </div>
 
         <div className="mx-auto max-w-4xl px-4 py-6">
+          <EventScopeBanner eventName={activeEvent.name} status={activeEvent.status} />
+          <div className="h-4" />
           <Card>
             <CardHeader>
               <CardTitle>Panel Cetak</CardTitle>

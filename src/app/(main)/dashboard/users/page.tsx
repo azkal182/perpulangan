@@ -848,7 +848,7 @@ export default function UserManagementPage() {
         <div className="flex flex-col items-center gap-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
           <p className="text-sm font-medium text-muted-foreground">
-            Loading...
+          Memuat...
           </p>
         </div>
       </div>
@@ -859,7 +859,7 @@ export default function UserManagementPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p className="text-sm font-medium text-muted-foreground">
-          Redirecting...
+          Mengarahkan...
         </p>
       </div>
     );
@@ -873,9 +873,9 @@ export default function UserManagementPage() {
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
               <div>
-                <h2 className="font-semibold text-destructive">Access Denied</h2>
+                <h2 className="font-semibold text-destructive">Akses ditolak</h2>
                 <p className="mt-1 text-sm text-destructive/80">
-                  You do not have permission to view users.
+                  Anda tidak memiliki izin untuk melihat data pengguna.
                 </p>
               </div>
             </div>
@@ -897,10 +897,10 @@ export default function UserManagementPage() {
                 </div>
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight">
-                    User Management
+                    Manajemen Pengguna
                   </h1>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Manage user roles, access permissions, and credentials
+                    Kelola peran, cakupan akses, dan kredensial pengguna
                   </p>
                 </div>
               </div>
@@ -910,19 +910,19 @@ export default function UserManagementPage() {
                 <DialogTrigger asChild>
                   <Button className="gap-2">
                     <UserPlus className="h-4 w-4" />
-                    Create User
+                    Tambah Pengguna
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
-                    <DialogTitle>Create New User</DialogTitle>
+                    <DialogTitle>Tambah Pengguna Baru</DialogTitle>
                     <DialogDescription>
-                      Add a new user account with assigned role and credentials.
+                      Tambahkan akun pengguna dengan peran dan kredensial yang sesuai.
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleCreateUser} className="space-y-4 pt-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
+                      <Label htmlFor="name">Nama Lengkap</Label>
                       <Input
                         id="name"
                         value={createForm.name}
