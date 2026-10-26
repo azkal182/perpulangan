@@ -1,12 +1,19 @@
 import prisma from "@/lib/prisma";
+import type { FinanceJourneyFilter } from "./treasury-position";
 
 export const CENTRAL_FEE_PER_JOURNEY = 10_000;
 
-export async function getKordaFinanceDetail(kordaId: string) {
+export async function getKordaFinanceDetail(
+  kordaId: string,
+  direction: FinanceJourneyFilter = "both",
+) {
   const [korda, journeys, balanceEntries, disbursements] = await Promise.all([
     prisma.korda.findUnique({ where: { id: kordaId }, select: { id: true, name: true } }),
     prisma.journey.findMany({
-      where: { destinationKordaId: kordaId },
+      where: {
+        destinationKordaId: kordaId,
+        ...(direction === "both" ? {} : { direction: direction === "outbound" ? "OUTBOUND" : "RETURN" }),
+      },
       include: {
         registration: {
           include: {

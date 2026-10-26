@@ -3,7 +3,12 @@ import prisma from "@/lib/prisma";
 import type { RegionalAccessScope } from "@/server/access-scope";
 import { CENTRAL_FEE_PER_JOURNEY } from "./korda-finance-detail";
 
-export async function getTreasuryPosition(scope: RegionalAccessScope) {
+export type FinanceJourneyFilter = "both" | "outbound" | "return";
+
+export async function getTreasuryPosition(
+  scope: RegionalAccessScope,
+  direction: FinanceJourneyFilter = "both",
+) {
   const kordaScope: Prisma.KordaWhereInput = scope.role === "admin"
     ? {}
     : scope.role === "korwil"
@@ -13,7 +18,10 @@ export async function getTreasuryPosition(scope: RegionalAccessScope) {
   const [kordas, journeys, balanceEntries, disbursedByKorda, payments, refunds, allDisbursements] = await Promise.all([
     prisma.korda.findMany({ where: kordaScope, select: { id: true, name: true } }),
     prisma.journey.findMany({
-      where: { destinationKorda: { is: kordaScope } },
+      where: {
+        destinationKorda: { is: kordaScope },
+        ...(direction === "both" ? {} : { direction: direction === "outbound" ? "OUTBOUND" : "RETURN" }),
+      },
       select: {
         destinationKordaId: true,
         status: true,
@@ -36,7 +44,9 @@ export async function getTreasuryPosition(scope: RegionalAccessScope) {
       where: { korda: { is: kordaScope } },
       _sum: { amount: true },
     }),
-    scope.role === "admin" ? prisma.payment.aggregate({ _sum: { amount: true } }) : Promise.resolve(null),
+    scope.role === "admin"
+      ? prisma.payment.aggregate({ _sum: { amount: true } })
+      : Promise.resolve(null),
     scope.role === "admin" ? prisma.refund.aggregate({ _sum: { amount: true } }) : Promise.resolve(null),
     scope.role === "admin" ? prisma.treasuryDisbursement.aggregate({ _sum: { amount: true } }) : Promise.resolve(null),
   ]);
@@ -113,7 +123,9 @@ export async function getTreasuryPosition(scope: RegionalAccessScope) {
     totalAssigned,
     totalGrossBilled,
     totalRegistrationEntitlement,
-    totalPaymentReceipts: payments?._sum.amount ?? null,
+    totalPaymentReceipts: direction === "both"
+      ? payments?._sum.amount ?? null
+      : [...positions.values()].reduce((sum, row) => sum + row.registrationReceived, 0),
     totalDisbursed,
     totalHeldAtCenter,
     totalFee,
