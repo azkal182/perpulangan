@@ -67,7 +67,8 @@ export function RegistrationActionsMenu({
         
         {canWrite && <DropdownMenuItem
           onClick={() => handleAction(onCancel)}
-          disabled={!canCancel}
+          disabled
+          title="Pembatalan dinonaktifkan"
         >
           <Ban className="mr-2 h-4 w-4" />
           {canCancel ? "Batalkan" : "Sudah Dibatalkan"}

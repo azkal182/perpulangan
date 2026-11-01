@@ -80,7 +80,7 @@ export async function getFilteredRegistrations(
   const { page = 1, pageSize = 20, paymentStatus = "all" } = filters;
   const journeyScope = getJourneyScope(scope);
   const finalWhere = andWhere(buildRegistrationWhere(filters, scope), registrationScopeWhere(scope));
-  const registrationInclude: Prisma.RegistrationInclude = {
+  const registrationInclude = {
         student: {
           select: {
             id: true,
@@ -112,7 +112,7 @@ export async function getFilteredRegistrations(
           where: journeyScope,
           select: { direction: true, status: true, destinationKordaId: true, destinationKordaNameSnapshot: true, dropPointId: true, locationNameSnapshot: true, travelDate: true, tariffSnapshot: true, busAssignment: { select: { bus: { select: { id: true, label: true } } } }, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } },
         },
-  };
+  } satisfies Prisma.RegistrationInclude;
   let data: Prisma.RegistrationGetPayload<{ include: typeof registrationInclude }>[];
   let total: number;
 

@@ -41,9 +41,9 @@ declare module "jspdf-autotable" {
     showFoot?: "everyPage" | "lastPage" | "never";
     tableLineColor?: number | number[] | string;
     tableLineWidth?: number;
-    head?: RowInput[][];
-    body?: RowInput[][];
-    foot?: RowInput[][];
+    head?: RowInput[];
+    body?: RowInput[];
+    foot?: RowInput[];
     headStyles?: Partial<Styles>;
     bodyStyles?: Partial<Styles>;
     footStyles?: Partial<Styles>;
