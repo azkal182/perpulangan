@@ -7,7 +7,8 @@ export const PAPER_SIZES = {
 } as const;
 
 export type PaperSize = keyof typeof PAPER_SIZES;
-export type PrintType = "luggage_card" | "ticket";
+export type PrintType = "luggage_card" | "ticket" | "bracelet";
+export const BRACELET_SIZE_MM = { width: 220, height: 20 } as const;
 
 // Color palette for Korda hashing (using Tailwind classes)
 // Expanded to reduce collisions across many korda names.
@@ -264,6 +265,28 @@ export function calculateLayout(
   paperSize: PaperSize,
   printType: PrintType,
 ): LayoutConfig {
+  if (printType === "bracelet") {
+    const sheetWidth = PAPER_SIZES[paperSize].height;
+    const sheetHeight = PAPER_SIZES[paperSize].width;
+    const edgeMargin = 6;
+    const gapX = 1.5;
+    const gapY = 1.5;
+    const columns = Math.max(1, Math.floor((sheetWidth - edgeMargin * 2 + gapX) / (BRACELET_SIZE_MM.width + gapX)));
+    const rows = Math.max(1, Math.floor((sheetHeight - edgeMargin * 2 + gapY) / (BRACELET_SIZE_MM.height + gapY)));
+    const usedWidth = columns * BRACELET_SIZE_MM.width + (columns - 1) * gapX;
+    const usedHeight = rows * BRACELET_SIZE_MM.height + (rows - 1) * gapY;
+    return {
+      columns,
+      rows,
+      cardWidth: BRACELET_SIZE_MM.width,
+      cardHeight: BRACELET_SIZE_MM.height,
+      marginX: (sheetWidth - usedWidth) / 2,
+      marginY: (sheetHeight - usedHeight) / 2,
+      gapX,
+      gapY,
+    };
+  }
+
   void PAPER_SIZES[paperSize]; // retained for potential future use
 
   if (printType === "luggage_card") {

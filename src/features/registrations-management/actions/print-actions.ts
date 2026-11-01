@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
-import type { PrintDataItem } from "../lib/print-utils";
+import type { PrintDataItem, PrintType } from "../lib/print-utils";
 import { buildNumberedPrintRoster } from "../lib/print-roster";
 import {
   AccessDeniedError,
@@ -14,6 +14,7 @@ import { canSelectEvent } from "@/server/event-context";
 export interface GetPrintDataParams {
   eventId: string;
   journeyType: "outbound" | "return";
+  printType: PrintType;
   gender?: "Laki-laki" | "Perempuan";
   kordaIds?: string[];
   dropPointId?: string;
@@ -41,20 +42,22 @@ export async function getPrintDataAction(
         registration: {
           eventId: params.eventId,
         },
-        busAssignment: {
-          is: {
-            busId: { not: null },
-            bus: {
-              is: {
-                ...(scope.role === "korda" ? { kordas: { some: { kordaId: scope.kordaId ?? "__NO_ACCESS__" } } } : {}),
-                ...(scope.role === "korwil" ? { OR: [
-                  { korwilId: scope.korwilId ?? "__NO_ACCESS__" },
-                  { kordas: { some: { korda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } } } },
-                ] } : {}),
+        ...(params.printType === "bracelet" ? {} : {
+          busAssignment: {
+            is: {
+              busId: { not: null },
+              bus: {
+                is: {
+                  ...(scope.role === "korda" ? { kordas: { some: { kordaId: scope.kordaId ?? "__NO_ACCESS__" } } } : {}),
+                  ...(scope.role === "korwil" ? { OR: [
+                    { korwilId: scope.korwilId ?? "__NO_ACCESS__" },
+                    { kordas: { some: { korda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } } } },
+                  ] } : {}),
+                },
               },
             },
           },
-        },
+        }),
         ...(scope.role === "korda"
           ? { destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" }
           : scope.role === "korwil"
@@ -106,7 +109,7 @@ export async function getPrintDataAction(
 
     const completeRoster = buildNumberedPrintRoster(journeys.flatMap((journey) => {
       const bus = journey.busAssignment?.bus;
-      if (!bus) return [];
+      if (!bus && params.printType !== "bracelet") return [];
       const registration = journey.registration;
       const student = registration.student;
       const external = registration.externalParticipant;
@@ -119,8 +122,8 @@ export async function getPrintDataAction(
         destinationKordaName: journey.destinationKorda.name,
         destinationKorwilId: journey.destinationKorda.korwilId,
         korwilName: journey.destinationKorda.korwil?.name ?? null,
-        busId: bus.id,
-        busLabel: bus.label,
+        busId: bus?.id ?? "",
+        busLabel: bus?.label ?? "",
         dropPointId: journey.dropPointId,
         dropPointName: journey.locationNameSnapshot,
         studentNis: student?.nis ?? null,

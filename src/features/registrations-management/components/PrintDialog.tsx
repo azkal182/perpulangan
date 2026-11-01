@@ -49,12 +49,14 @@ interface PrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   eventId: string;
+  eventName: string;
   kordas: Array<{ id: string; name: string }>;
   dropPoints: Array<{ id: string; name: string }>;
 }
 
 interface PrintWorkspaceProps {
   eventId: string;
+  eventName: string;
   kordas: Array<{ id: string; name: string }>;
   dropPoints: Array<{ id: string; name: string }>;
   onClose?: () => void;
@@ -66,6 +68,7 @@ export function PrintDialog({
   open,
   onOpenChange,
   eventId,
+  eventName,
   kordas,
   dropPoints,
 }: PrintDialogProps) {
@@ -73,13 +76,14 @@ export function PrintDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Cetak Kartu & Tiket</DialogTitle>
+          <DialogTitle>Cetak Kartu, Tiket & Gelang</DialogTitle>
           <DialogDescription>
             Pilih jenis dokumen, filter, dan ukuran kertas untuk print
           </DialogDescription>
         </DialogHeader>
         <PrintWorkspace
           eventId={eventId}
+          eventName={eventName}
           kordas={kordas}
           dropPoints={dropPoints}
           onClose={() => onOpenChange(false)}
@@ -92,6 +96,7 @@ export function PrintDialog({
 
 export function PrintWorkspace({
   eventId,
+  eventName,
   kordas,
   dropPoints,
   onClose,
@@ -125,6 +130,7 @@ export function PrintWorkspace({
   const selectedKordaNames = kordas
     .filter((korda) => kordaFilters.includes(korda.id))
     .map((korda) => korda.name);
+  const selectedJourneyType: "outbound" | "return" = journeyFilter === "return" ? "return" : "outbound";
   const kordaFilterLabel =
     selectedKordaNames.length === 0
       ? "Semua"
@@ -167,6 +173,7 @@ export function PrintWorkspace({
       const result = await getPrintDataAction({
         eventId,
         journeyType: journeyFilter,
+        printType,
         gender: genderFilter === "all" ? undefined : genderFilter,
         studentName: nameFilter.trim() || undefined,
         kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
@@ -211,11 +218,13 @@ export function PrintWorkspace({
       });
 
       const layout = calculateLayout(paperSize, printType);
-      const paper = PAPER_SIZES[paperSize];
+      const paper = printType === "bracelet"
+        ? { width: PAPER_SIZES[paperSize].height, height: PAPER_SIZES[paperSize].width }
+        : PAPER_SIZES[paperSize];
 
       // Create PDF
       const pdf = new jsPDF({
-        orientation: "portrait",
+        orientation: printType === "bracelet" ? "landscape" : "portrait",
         unit: "mm",
         format: [paper.width, paper.height],
       });
@@ -240,13 +249,17 @@ export function PrintWorkspace({
             drawLuggageCardToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
             return;
           }
-
-          drawTicketToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
+          if (printType === "ticket") {
+            drawTicketToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
+            return;
+          }
+          drawBraceletToPdf(pdf, item, eventName, selectedJourneyType, x, y, layout.cardWidth, layout.cardHeight);
+          drawBraceletCropMarks(pdf, x, y, layout.cardWidth, layout.cardHeight);
         });
       }
 
       // Download PDF
-      const filename = `${printType === "luggage_card" ? "kartu_barang" : "tiket"}_${paperSize}_${new Date().getTime()}.pdf`;
+      const filename = `${printType === "luggage_card" ? "kartu_barang" : printType === "ticket" ? "tiket" : "gelang_22x2cm"}_${printType === "bracelet" ? "custom" : paperSize}_${new Date().getTime()}.pdf`;
       pdf.save(filename);
 
       toast.dismiss();
@@ -262,7 +275,9 @@ export function PrintWorkspace({
   };
 
   const layout = calculateLayout(paperSize, printType);
-  const paper = PAPER_SIZES[paperSize];
+  const paper = printType === "bracelet"
+    ? { width: PAPER_SIZES[paperSize].height, height: PAPER_SIZES[paperSize].width }
+    : PAPER_SIZES[paperSize];
   const cardsPerPage = layout.columns * layout.rows;
   const previewPages =
     previewData && showPreview ? buildPrintPages(previewData, cardsPerPage) : [];
@@ -327,6 +342,12 @@ export function PrintWorkspace({
             <RadioGroupItem value="ticket" id="ticket" />
             <Label htmlFor="ticket" className="font-normal">
               Tiket Perjalanan
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="bracelet" id="bracelet" />
+            <Label htmlFor="bracelet" className="font-normal">
+              Gelang Santri (22 × 2 cm)
             </Label>
           </div>
         </RadioGroup>
@@ -468,6 +489,7 @@ export function PrintWorkspace({
             <SelectItem value="A3+">A3+ (329 x 483 mm)</SelectItem>
           </SelectContent>
         </Select>
+        {printType === "bracelet" && <p className="text-xs text-muted-foreground">Setiap gelang berukuran 22 × 2 cm dan disusun pada lembar kertas terpilih (landscape).</p>}
       </div>
 
       {/* Preview */}
@@ -531,7 +553,7 @@ export function PrintWorkspace({
                 return (
                   <div
                     key={`${item.id}-${index}`}
-                    className="absolute overflow-hidden"
+                    className={`absolute ${printType === "bracelet" ? "overflow-visible" : "overflow-hidden"}`}
                     style={{
                       left,
                       top,
@@ -539,10 +561,13 @@ export function PrintWorkspace({
                       height: previewCardHeightPx,
                     }}
                   >
+                    {printType === "bracelet" && <PreviewBraceletCropMarks unitPx={mmToPx(1) * previewScale} />}
                     {printType === "luggage_card" ? (
                       <PreviewLuggageCard item={item} />
-                    ) : (
+                    ) : printType === "ticket" ? (
                       <PreviewTicketCard item={item} />
+                    ) : (
+                      <PreviewBracelet item={item} eventName={eventName} journeyType={selectedJourneyType} />
                     )}
                   </div>
                 );
@@ -755,6 +780,29 @@ function truncatePreviewText(
     return text;
   }
   return `${text.slice(0, Math.max(1, maxChars - 3)).trimEnd()}...`;
+}
+
+function wrapPreviewLines(value: string, maxChars: number, maxLines: number): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  let overflow = false;
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (candidate.length <= maxChars) {
+      line = candidate;
+    } else if (lines.length < maxLines - 1) {
+      if (line) lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+      overflow = true;
+      break;
+    }
+  }
+  if (line) lines.push(line);
+  if (overflow && lines.length) lines[lines.length - 1] = truncatePreviewText(lines[lines.length - 1], maxChars);
+  return lines.length ? lines : ["-"];
 }
 
 function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
@@ -1023,6 +1071,52 @@ function PreviewTicketCard({ item }: { item: PrintDataItem }) {
   );
 }
 
+function PreviewBraceletCropMarks({ unitPx }: { unitPx: number }) {
+  const length = unitPx * 0.35;
+  const offset = unitPx * 0.3;
+  const thickness = unitPx * 0.12;
+  const stroke = { position: "absolute" as const, backgroundColor: "#475569" };
+  const marks = [
+    { left: -(offset + length), top: 0, width: length, height: thickness },
+    { left: 0, top: -(offset + length), width: thickness, height: length },
+    { right: -(offset + length), top: 0, width: length, height: thickness },
+    { right: 0, top: -(offset + length), width: thickness, height: length },
+    { left: -(offset + length), bottom: 0, width: length, height: thickness },
+    { left: 0, bottom: -(offset + length), width: thickness, height: length },
+    { right: -(offset + length), bottom: 0, width: length, height: thickness },
+    { right: 0, bottom: -(offset + length), width: thickness, height: length },
+  ];
+  return <div aria-hidden="true" className="pointer-events-none absolute inset-0">{marks.map((mark, index) => <span key={index} style={{ ...stroke, ...mark }} />)}</div>;
+}
+
+function PreviewBracelet({ item, eventName, journeyType }: { item: PrintDataItem; eventName: string; journeyType: "outbound" | "return" }) {
+  const palette = getHexPalette(item.kordaName);
+  const eventText = truncatePreviewText(eventName, 22);
+  const studentName = truncatePreviewText(item.studentName, 30);
+  const kordaLines = wrapPreviewLines(item.kordaName, 15, 2);
+  const journeyLabel = journeyType === "outbound" ? "PULANG" : "KEMBALI";
+  const headerText = contrastTextColor(palette.header);
+  const nameClipId = `bracelet-name-${item.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
+  return (
+    <svg viewBox="0 0 2200 200" className="h-full w-full" preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Preview gelang ${studentName}`}>
+      <defs><clipPath id={nameClipId}><rect x="540" y="80" width="1060" height="88" /></clipPath></defs>
+      <rect x="2" y="2" width="2196" height="196" fill={palette.header} stroke={palette.border} strokeWidth="4" />
+      <rect x="3" y="3" width="480" height="194" fill={palette.text} />
+      <rect x="483" y="3" width="1197" height="194" fill={palette.bg} />
+      <line x1="483" y1="3" x2="483" y2="197" stroke={palette.border} strokeWidth="3" />
+      <line x1="1680" y1="3" x2="1680" y2="197" stroke={palette.border} strokeWidth="3" />
+      <text x="243" y="72" fill="#ffffff" textAnchor="middle" fontSize="19" fontWeight="700" letterSpacing="2">EVENT</text>
+      <text x="243" y="143" fill="#ffffff" textAnchor="middle" fontSize="27" fontWeight="600">{eventText}</text>
+      <text x="540" y="57" fill={palette.text} fontSize="16" fontWeight="700" letterSpacing="2">AKSES PERJALANAN / {journeyLabel}</text>
+      <line x1="540" y1="77" x2="1625" y2="77" stroke={palette.border} strokeWidth="2" />
+      <text x="540" y="145" fill={palette.text} fontSize="69" fontWeight="800" clipPath={`url(#${nameClipId})`}>{studentName}</text>
+      <text x="1940" y="65" fill={headerText} textAnchor="middle" fontSize="19" fontWeight="700" letterSpacing="2">KORDA</text>
+      {kordaLines.map((line, index) => <text key={`${line}-${index}`} x="1940" y={kordaLines.length === 1 ? 143 : 119 + index * 34} fill={headerText} textAnchor="middle" fontSize="32" fontWeight="800">{line}</text>)}
+    </svg>
+  );
+}
+
 function resolveTailwindHex(cls: string, fallback: string): string {
   for (const key of TAILWIND_COLOR_KEYS) {
     if (cls.includes(key)) {
@@ -1152,6 +1246,11 @@ function hexToRgb(hex: string): PdfRgb {
     return [59, 130, 246];
   }
   return [(parsed >> 16) & 255, (parsed >> 8) & 255, parsed & 255];
+}
+
+function contrastTextColor(hex: string): string {
+  const [red, green, blue] = hexToRgb(hex);
+  return 0.299 * red + 0.587 * green + 0.114 * blue > 155 ? "#111827" : "#ffffff";
 }
 
 function blendWithWhite(color: PdfRgb, ratio: number): PdfRgb {
@@ -1622,6 +1721,25 @@ function fitSingleLineText(
   };
 }
 
+function truncateSingleLineText(
+  pdf: jsPDF,
+  value: string | null | undefined,
+  maxWidth: number,
+  fontSize: number,
+  style: PdfFontStyle,
+): FittedTextResult {
+  const text = normalizeText(value);
+  pdf.setFont("helvetica", style);
+  pdf.setFontSize(fontSize);
+  if (pdf.getTextWidth(text) <= maxWidth) return { text, fontSize };
+
+  let shortened = text;
+  while (shortened.length > 0 && pdf.getTextWidth(`${shortened}...`) > maxWidth) {
+    shortened = shortened.slice(0, -1);
+  }
+  return { text: `${shortened}...`, fontSize };
+}
+
 function fitMultilineText(
   pdf: jsPDF,
   value: string | null | undefined,
@@ -1667,6 +1785,85 @@ function fitMultilineText(
     lines: clampedLines,
     fontSize: minSize,
   };
+}
+
+function drawBraceletToPdf(
+  pdf: jsPDF,
+  item: PrintDataItem,
+  eventName: string,
+  journeyType: "outbound" | "return",
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const palette = getPdfPalette(item.kordaName);
+  const headerText = hexToRgb(contrastTextColor(rgbToHex(palette.header)));
+  const eventBlockWidth = 48;
+  const kordaBlockWidth = 52;
+  const nameBlockWidth = width - eventBlockWidth - kordaBlockWidth;
+  const event = fitSingleLineText(pdf, eventName, eventBlockWidth - 8, 7.4, 5.8, "bold");
+  const journeyLabel = journeyType === "outbound" ? "PULANG" : "KEMBALI";
+  const journey = fitSingleLineText(pdf, `AKSES PERJALANAN / ${journeyLabel}`, nameBlockWidth - 14, 5.4, 4.8, "bold");
+  const name = truncateSingleLineText(pdf, item.studentName, nameBlockWidth - 14, 19.5, "bold");
+  const korda = fitMultilineText(pdf, item.kordaName, kordaBlockWidth - 8, 2, 10, 7.2, "bold");
+
+  pdf.setFillColor(...palette.header);
+  pdf.rect(x, y, width, height, "F");
+  pdf.setFillColor(...palette.text);
+  pdf.rect(x, y, eventBlockWidth, height, "F");
+  pdf.setFillColor(...palette.bg);
+  pdf.rect(x + eventBlockWidth, y, nameBlockWidth, height, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.35);
+  pdf.rect(x + 0.15, y + 0.15, width - 0.3, height - 0.3, "S");
+  pdf.line(x + eventBlockWidth, y, x + eventBlockWidth, y + height);
+  pdf.line(x + width - kordaBlockWidth, y, x + width - kordaBlockWidth, y + height);
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.2);
+  pdf.text("EVENT", x + eventBlockWidth / 2, y + 6.1, { align: "center" });
+  pdf.setFontSize(event.fontSize);
+  pdf.text(event.text, x + eventBlockWidth / 2, y + 14.1, { align: "center" });
+
+  pdf.setTextColor(...palette.text);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(journey.fontSize);
+  pdf.text(journey.text, x + eventBlockWidth + 7, y + 5.7);
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.18);
+  pdf.line(x + eventBlockWidth + 7, y + 7.7, x + width - kordaBlockWidth - 7, y + 7.7);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(name.fontSize);
+  pdf.text(name.text, x + eventBlockWidth + 7, y + 15.2);
+
+  pdf.setTextColor(...headerText);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.2);
+  pdf.text("KORDA", x + width - kordaBlockWidth / 2, y + 5.8, { align: "center" });
+  pdf.setFontSize(korda.fontSize);
+  if (korda.lines.length === 1) {
+    pdf.text(korda.lines[0], x + width - kordaBlockWidth / 2, y + 14.1, { align: "center" });
+  } else {
+    pdf.text(korda.lines, x + width - kordaBlockWidth / 2, y + 10.6, { align: "center", lineHeightFactor: 1.1 });
+  }
+}
+
+function drawBraceletCropMarks(pdf: jsPDF, x: number, y: number, width: number, height: number) {
+  const length = 0.35;
+  const offset = 0.3;
+  pdf.setDrawColor(71, 85, 105);
+  pdf.setLineWidth(0.12);
+  pdf.line(x - offset - length, y, x - offset, y);
+  pdf.line(x, y - offset - length, x, y - offset);
+  pdf.line(x + width + offset, y, x + width + offset + length, y);
+  pdf.line(x + width, y - offset - length, x + width, y - offset);
+  pdf.line(x - offset - length, y + height, x - offset, y + height);
+  pdf.line(x, y + height + offset, x, y + height + offset + length);
+  pdf.line(x + width + offset, y + height, x + width + offset + length, y + height);
+  pdf.line(x + width, y + height + offset, x + width, y + height + offset + length);
 }
 
 function drawLuggageCardToPdf(

@@ -50,7 +50,7 @@ export default async function CetakDokumenPage() {
         <div className="border-b">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
             <div>
-              <div className="text-lg font-semibold">Cetak Kartu & Tiket</div>
+              <div className="text-lg font-semibold">Cetak Kartu, Tiket & Gelang</div>
               <div className="text-sm text-muted-foreground">{activeEvent.name}</div>
             </div>
             <Button asChild variant="outline">
@@ -69,12 +69,13 @@ export default async function CetakDokumenPage() {
             <CardHeader>
               <CardTitle>Panel Cetak</CardTitle>
               <CardDescription>
-                Pilih jenis dokumen, filter data, lalu preview sebelum generate PDF.
+                Pilih jenis dokumen, filter data, lalu preview sebelum generate PDF. Gelang dicetak pada ukuran khusus 22 × 2 cm.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <PrintWorkspace
                 eventId={activeEvent.id}
+                eventName={activeEvent.name}
                 kordas={kordas}
                 dropPoints={dropPoints}
               />
