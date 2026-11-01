@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { normalizeExternalParticipantGender } from "@/features/santri/domain/external-participant";
-import type { Prisma, RegistrationStatus } from "@/generated/prisma/client";
+import type { JourneyStatus, Prisma, RegistrationStatus } from "@/generated/prisma/client";
 import {
   andWhere,
   getRegionalAccessScope,
@@ -10,7 +10,8 @@ import {
 export interface RegistrationFilters {
   eventId: string;
   journeyType?: "both" | "return_only" | "outbound_only" | "all";
-  status?: RegistrationStatus | "all";
+  status?: JourneyStatus | "all";
+  paymentStatus?: JourneyPaymentStatus | "all";
   gender?: "Laki-laki" | "Perempuan";
   outboundKordaId?: string;
   returnKordaId?: string;
@@ -18,6 +19,20 @@ export interface RegistrationFilters {
   search?: string; // student name or NIS
   page?: number;
   pageSize?: number;
+}
+
+export type JourneyPaymentStatus = "PAID" | "PARTIAL" | "UNPAID" | "CANCELLED" | "UNKNOWN";
+
+function getJourneyPaymentStatus(journey: {
+  status: JourneyStatus;
+  tariffSnapshot: number | null;
+  paymentAllocations: Array<{ amount: number; refunds: Array<{ amount: number }>; corrections: Array<{ amount: number }> }>;
+}): JourneyPaymentStatus {
+  if (journey.status === "CANCELLED") return "CANCELLED";
+  if (journey.tariffSnapshot == null) return "UNKNOWN";
+  const netPaid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((value, refund) => value + refund.amount, 0) - row.corrections.reduce((value, correction) => value + correction.amount, 0), 0);
+  if (netPaid >= journey.tariffSnapshot) return "PAID";
+  return netPaid > 0 ? "PARTIAL" : "UNPAID";
 }
 
 export interface RegistrationWithDetails {
@@ -35,14 +50,16 @@ export interface RegistrationWithDetails {
   outboundBus: { id: string; label: string } | null;
   outboundDate: Date | null;
   outboundPaid: boolean;
-  outboundPaymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | "UNKNOWN" | null;
+  outboundPaymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | "UNKNOWN" | "CANCELLED" | null;
+  outboundJourneyStatus?: "REGISTERED" | "CANCELLED" | null;
   outboundTariffSnapshot: number | null;
   returnKorda: { id: string; name: string } | null;
   returnDropPoint: { id: string; name: string; price: number } | null;
   returnBus: { id: string; label: string } | null;
   returnDate: Date | null;
   returnPaid: boolean;
-  returnPaymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | "UNKNOWN" | null;
+  returnPaymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | "UNKNOWN" | "CANCELLED" | null;
+  returnJourneyStatus?: "REGISTERED" | "CANCELLED" | null;
   returnTariffSnapshot: number | null;
   status: RegistrationStatus;
   kordaChanged: boolean;
@@ -60,111 +77,10 @@ export async function getFilteredRegistrations(
   filters: RegistrationFilters,
 ): Promise<{ data: RegistrationWithDetails[]; total: number }> {
   const scope = await getRegionalAccessScope();
-  const journeyScope: Prisma.JourneyWhereInput | undefined = scope.role === "admin" ? undefined : scope.role === "korwil" ? { destinationKorda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } } : { destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" };
-  const {
-    eventId,
-    journeyType = "all",
-    status = "all",
-    gender,
-    outboundKordaId,
-    returnKordaId,
-    dropPointId,
-    search,
-    page = 1,
-    pageSize = 20,
-  } = filters;
-
-  // Build where clause
-  const where: Prisma.RegistrationWhereInput = {
-    eventId,
-  };
-
-  // Journey type filter
-  if (journeyType === "both") {
-    where.AND = [
-      { outboundDate: { not: null } },
-      { returnDate: { not: null } },
-    ];
-  } else if (journeyType === "return_only") {
-    where.outboundDate = null;
-    where.returnDate = { not: null };
-  } else if (journeyType === "outbound_only") {
-    where.outboundDate = { not: null };
-    where.returnDate = null;
-  }
-  // 'all' = no filter on dates
-
-  // Status filter
-  if (status !== "all") {
-    where.status = status;
-  }
-
-  // Korda filters (OR logic if both specified)
-  if (outboundKordaId || returnKordaId) {
-    const kordaConditions = [];
-    if (outboundKordaId) {
-      kordaConditions.push({ outboundKordaId });
-    }
-    if (returnKordaId) {
-      kordaConditions.push({ returnKordaId });
-    }
-    if (kordaConditions.length > 1) {
-      where.OR = kordaConditions;
-    } else {
-      Object.assign(where, kordaConditions[0]);
-    }
-  }
-
-  // Drop point filter (OR for outbound/return)
-  if (dropPointId) {
-    where.OR = where.OR || [];
-    where.OR.push(
-      { outboundDropPointId: dropPointId },
-      { returnDropPointId: dropPointId },
-    );
-  }
-
-  const studentConditions: Prisma.StudentWhereInput[] = [];
-  const externalConditions: Prisma.ExternalParticipantWhereInput[] = [];
-  if (gender) {
-    studentConditions.push({ gender });
-    externalConditions.push({ gender });
-  }
-  if (search?.trim()) {
-    studentConditions.push({
-      OR: [
-        { name: { contains: search.trim(), mode: "insensitive" } },
-        { nis: { contains: search.trim(), mode: "insensitive" } },
-      ],
-    });
-    externalConditions.push({
-      OR: [
-        { name: { contains: search.trim(), mode: "insensitive" } },
-        { address: { contains: search.trim(), mode: "insensitive" } },
-      ],
-    });
-  }
-
-  if (studentConditions.length) {
-    const existingAnd = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
-    where.AND = [
-      ...existingAnd,
-      {
-        OR: [
-          { student: { AND: studentConditions } },
-          { externalParticipant: { AND: externalConditions } },
-        ],
-      },
-    ];
-  }
-
-  const finalWhere = andWhere(where, registrationScopeWhere(scope));
-
-  // Execute query with pagination
-  const [data, total] = await Promise.all([
-    prisma.registration.findMany({
-      where: finalWhere,
-      include: {
+  const { page = 1, pageSize = 20, paymentStatus = "all" } = filters;
+  const journeyScope = getJourneyScope(scope);
+  const finalWhere = andWhere(buildRegistrationWhere(filters, scope), registrationScopeWhere(scope));
+  const registrationInclude: Prisma.RegistrationInclude = {
         student: {
           select: {
             id: true,
@@ -194,34 +110,78 @@ export async function getFilteredRegistrations(
         },
         journeys: {
           where: journeyScope,
-          select: { direction: true, tariffSnapshot: true, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } },
+          select: { direction: true, status: true, destinationKordaId: true, destinationKordaNameSnapshot: true, dropPointId: true, locationNameSnapshot: true, travelDate: true, tariffSnapshot: true, busAssignment: { select: { bus: { select: { id: true, label: true } } } }, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } },
         },
+  };
+  let data: Prisma.RegistrationGetPayload<{ include: typeof registrationInclude }>[];
+  let total: number;
+
+  if (paymentStatus === "all") {
+    [data, total] = await Promise.all([
+      prisma.registration.findMany({
+        where: finalWhere,
+        include: registrationInclude,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.registration.count({ where: finalWhere }),
+    ]);
+  } else {
+    const { journeyType = "all", status = "all", outboundKordaId, returnKordaId, dropPointId } = filters;
+    const candidateRows = await prisma.registration.findMany({
+      where: finalWhere,
+      select: {
+        id: true,
+        journeys: { where: journeyScope, select: { direction: true, status: true, destinationKordaId: true, dropPointId: true, tariffSnapshot: true, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } } },
       },
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.registration.count({ where: finalWhere }),
-  ]);
+    });
+    const allowedDirections = journeyType === "outbound_only" ? ["OUTBOUND"]
+      : journeyType === "return_only" ? ["RETURN"]
+        : ["OUTBOUND", "RETURN"];
+    const matchingIds = candidateRows.filter((registration) => registration.journeys.some((journey) => {
+      if (!allowedDirections.includes(journey.direction)) return false;
+      if (status !== "all" && journey.status !== status) return false;
+      const selectedKordaId = journey.direction === "OUTBOUND" ? outboundKordaId : returnKordaId;
+      if (selectedKordaId && journey.destinationKordaId !== selectedKordaId) return false;
+      if (dropPointId && journey.dropPointId !== dropPointId) return false;
+      return getJourneyPaymentStatus(journey) === paymentStatus;
+    })).map((registration) => registration.id);
+    total = matchingIds.length;
+    const pageIds = matchingIds.slice((page - 1) * pageSize, page * pageSize);
+    data = pageIds.length ? await prisma.registration.findMany({
+      where: { id: { in: pageIds } },
+      include: registrationInclude,
+      orderBy: { createdAt: "desc" },
+    }) : [];
+  }
 
-  const visibleKordaIds = scope.role === "admin"
-    ? null
-    : new Set((await prisma.korda.findMany({
-        where: scope.role === "korwil"
-          ? { korwilId: scope.korwilId ?? "__NO_ACCESS__" }
-          : { id: scope.kordaId ?? "__NO_ACCESS__" },
-        select: { id: true },
-      })).map((korda) => korda.id));
-
-  return {
-    data: data.map((registration) => ({
+  const mappedData = data.map((registration) => {
+      const out = registration.journeys.find((row) => row.direction === "OUTBOUND");
+      const back = registration.journeys.find((row) => row.direction === "RETURN");
+      const outboundPaymentStatus = out ? getJourneyPaymentStatus(out) : "UNPAID";
+      const returnPaymentStatus = back ? getJourneyPaymentStatus(back) : "UNPAID";
+      return ({
       ...registration,
-      outboundTariffSnapshot: registration.journeys.find((row) => row.direction === "OUTBOUND")?.tariffSnapshot ?? null,
-      returnTariffSnapshot: registration.journeys.find((row) => row.direction === "RETURN")?.tariffSnapshot ?? null,
-      outboundPaymentStatus: (() => { if (visibleKordaIds && (!registration.outboundKordaId || !visibleKordaIds.has(registration.outboundKordaId))) return null; const journey = registration.journeys.find((row) => row.direction === "OUTBOUND"); if (!journey) return "UNPAID" as const; if (journey.tariffSnapshot == null) return "UNKNOWN" as const; const paid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0); return paid <= 0 ? "UNPAID" as const : paid < journey.tariffSnapshot ? "PARTIAL" as const : "PAID" as const; })(),
-      returnPaymentStatus: (() => { if (visibleKordaIds && (!registration.returnKordaId || !visibleKordaIds.has(registration.returnKordaId))) return null; const journey = registration.journeys.find((row) => row.direction === "RETURN"); if (!journey) return "UNPAID" as const; if (journey.tariffSnapshot == null) return "UNKNOWN" as const; const paid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0); return paid <= 0 ? "UNPAID" as const : paid < journey.tariffSnapshot ? "PARTIAL" as const : "PAID" as const; })(),
-      outboundPaid: (() => { const journey = registration.journeys.find((row) => row.direction === "OUTBOUND"); return journey?.tariffSnapshot != null && journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0) >= journey.tariffSnapshot; })(),
-      returnPaid: (() => { const journey = registration.journeys.find((row) => row.direction === "RETURN"); return journey?.tariffSnapshot != null && journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0) >= journey.tariffSnapshot; })(),
+      outboundKordaId: out?.destinationKordaId ?? null,
+      outboundKorda: out ? { id: out.destinationKordaId, name: out.destinationKordaNameSnapshot } : null,
+      outboundDropPoint: out ? { id: out.dropPointId ?? "", name: out.locationNameSnapshot, price: out.tariffSnapshot ?? 0 } : null,
+      outboundBus: out?.busAssignment?.bus ?? null,
+      outboundDate: out?.travelDate ?? null,
+      outboundJourneyStatus: out?.status ?? null,
+      outboundPaymentStatus,
+      outboundPaid: outboundPaymentStatus === "PAID",
+      outboundTariffSnapshot: out?.tariffSnapshot ?? null,
+      returnKordaId: back?.destinationKordaId ?? null,
+      returnKorda: back ? { id: back.destinationKordaId, name: back.destinationKordaNameSnapshot } : null,
+      returnDropPoint: back ? { id: back.dropPointId ?? "", name: back.locationNameSnapshot, price: back.tariffSnapshot ?? 0 } : null,
+      returnBus: back?.busAssignment?.bus ?? null,
+      returnDate: back?.travelDate ?? null,
+      returnJourneyStatus: back?.status ?? null,
+      returnPaymentStatus,
+      returnPaid: returnPaymentStatus === "PAID",
+      returnTariffSnapshot: back?.tariffSnapshot ?? null,
       student: registration.student ?? {
         id: registration.externalParticipant?.id ?? "",
         name: registration.externalParticipant?.name ?? "Peserta eksternal",
@@ -229,98 +189,131 @@ export async function getFilteredRegistrations(
         gender: normalizeExternalParticipantGender(registration.externalParticipant?.gender),
         ttl: null,
       },
-      ...(visibleKordaIds && (!registration.outboundKordaId || !visibleKordaIds.has(registration.outboundKordaId)) ? {
-        outboundKordaId: null,
-        outboundKorda: null, outboundDropPoint: null, outboundBus: null,
-        outboundDate: null, outboundPaid: false, outboundTariffSnapshot: null,
-      } : {}),
-      ...(visibleKordaIds && (!registration.returnKordaId || !visibleKordaIds.has(registration.returnKordaId)) ? {
-        returnKordaId: null,
-        returnKorda: null, returnDropPoint: null, returnBus: null,
-        returnDate: null, returnPaid: false, returnTariffSnapshot: null,
-      } : {}),
-    })) as RegistrationWithDetails[],
+    }) as RegistrationWithDetails;
+  });
+  return {
+    data: mappedData,
     total,
   };
 }
 
 export interface RegistrationStats {
+  outbound: JourneyParticipantStats;
+  return: JourneyParticipantStats;
+}
+
+function getJourneyScope(scope: Awaited<ReturnType<typeof getRegionalAccessScope>>): Prisma.JourneyWhereInput | undefined {
+  if (scope.role === "admin") return undefined;
+  if (scope.role === "korwil") return { destinationKorda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } };
+  return { destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" };
+}
+
+function buildRegistrationWhere(
+  filters: RegistrationFilters,
+  scope: Awaited<ReturnType<typeof getRegionalAccessScope>>,
+): Prisma.RegistrationWhereInput {
+  const { eventId, journeyType = "all", status = "all", gender, outboundKordaId, returnKordaId, dropPointId, search } = filters;
+  const journeyScope = getJourneyScope(scope);
+  const selectedStatus = status === "all" ? {} : { status };
+  const journeyFor = (direction: "OUTBOUND" | "RETURN"): Prisma.JourneyWhereInput => ({
+    ...(journeyScope ?? {}),
+    direction,
+    ...selectedStatus,
+  });
+  const conditions: Prisma.RegistrationWhereInput[] = [];
+
+  if (journeyType === "both") {
+    conditions.push({ journeys: { some: journeyFor("OUTBOUND") } }, { journeys: { some: journeyFor("RETURN") } });
+  } else if (journeyType === "outbound_only") {
+    conditions.push({ journeys: { some: journeyFor("OUTBOUND") } });
+  } else if (journeyType === "return_only") {
+    conditions.push({ journeys: { some: journeyFor("RETURN") } });
+  } else {
+    conditions.push({ journeys: { some: { ...(journeyScope ?? {}), ...selectedStatus } } });
+  }
+
+  const allowedDirections: Array<"OUTBOUND" | "RETURN"> = journeyType === "outbound_only" ? ["OUTBOUND"]
+    : journeyType === "return_only" ? ["RETURN"]
+      : ["OUTBOUND", "RETURN"];
+  if (outboundKordaId || returnKordaId || dropPointId) {
+    const routeConditions = allowedDirections.flatMap((direction) => {
+      const destinationKordaId = direction === "OUTBOUND" ? outboundKordaId : returnKordaId;
+      if ((outboundKordaId || returnKordaId) && !destinationKordaId && !dropPointId) return [];
+      return [{ ...journeyFor(direction), ...(destinationKordaId ? { destinationKordaId } : {}), ...(dropPointId ? { dropPointId } : {}) }];
+    });
+    if (routeConditions.length) conditions.push({ journeys: { some: { OR: routeConditions } } });
+  }
+
+  const studentConditions: Prisma.StudentWhereInput[] = [];
+  const externalConditions: Prisma.ExternalParticipantWhereInput[] = [];
+  if (gender) {
+    studentConditions.push({ gender });
+    externalConditions.push({ gender });
+  }
+  if (search?.trim()) {
+    studentConditions.push({ OR: [{ name: { contains: search.trim(), mode: "insensitive" } }, { nis: { contains: search.trim(), mode: "insensitive" } }] });
+    externalConditions.push({ OR: [{ name: { contains: search.trim(), mode: "insensitive" } }, { address: { contains: search.trim(), mode: "insensitive" } }] });
+  }
+  if (studentConditions.length) {
+    conditions.push({ OR: [{ student: { AND: studentConditions } }, { externalParticipant: { AND: externalConditions } }] });
+  }
+
+  return { eventId, AND: conditions };
+}
+
+export interface JourneyParticipantStats {
   total: number;
-  byJourneyType: {
-    both: number;
-    returnOnly: number;
-    outboundOnly: number;
-  };
-  byStatus: {
-    confirmed: number;
-    cancelled: number;
-    partialCancel: number;
-    draft: number;
-  };
-  paymentStats: {
-    outboundPaidCount: number;
-    returnPaidCount: number;
-    totalPaidAmount: number;
-  };
+  paid: number;
+  partial: number;
+  unpaid: number;
+  cancelled: number;
+  unknownTariff: number;
 }
 
 export async function getRegistrationStats(
-  eventId: string,
+  filters: RegistrationFilters,
 ): Promise<RegistrationStats> {
   const scope = await getRegionalAccessScope();
-  const journeyScope: Prisma.JourneyWhereInput | undefined = scope.role === "admin" ? undefined : scope.role === "korwil" ? { destinationKorda: { korwilId: scope.korwilId ?? "__NO_ACCESS__" } } : { destinationKordaId: scope.kordaId ?? "__NO_ACCESS__" };
+  const journeyScope = getJourneyScope(scope);
   const allRegistrations = await prisma.registration.findMany({
-    where: andWhere({ eventId }, registrationScopeWhere(scope)),
+    where: andWhere(buildRegistrationWhere(filters, scope), registrationScopeWhere(scope)),
     select: {
-      outboundDate: true,
-      returnDate: true,
-      status: true,
-      journeys: { where: journeyScope, select: { direction: true, tariffSnapshot: true, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } } },
+      journeys: { where: journeyScope, select: { direction: true, status: true, destinationKordaId: true, dropPointId: true, tariffSnapshot: true, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } } },
     },
   });
 
   const stats: RegistrationStats = {
-    total: allRegistrations.length,
-    byJourneyType: {
-      both: 0,
-      returnOnly: 0,
-      outboundOnly: 0,
-    },
-    byStatus: {
-      confirmed: 0,
-      cancelled: 0,
-      partialCancel: 0,
-      draft: 0,
-    },
-    paymentStats: {
-      outboundPaidCount: 0,
-      returnPaidCount: 0,
-      totalPaidAmount: 0,
-    },
+    outbound: { total: 0, paid: 0, partial: 0, unpaid: 0, cancelled: 0, unknownTariff: 0 },
+    return: { total: 0, paid: 0, partial: 0, unpaid: 0, cancelled: 0, unknownTariff: 0 },
   };
 
+  const { journeyType = "all", status = "all", paymentStatus = "all", outboundKordaId, returnKordaId, dropPointId } = filters;
+  const allowedDirections = journeyType === "outbound_only" ? new Set(["OUTBOUND"])
+    : journeyType === "return_only" ? new Set(["RETURN"])
+      : new Set(["OUTBOUND", "RETURN"]);
+
   allRegistrations.forEach((reg) => {
-    // Journey type
-    const hasOutbound = reg.outboundDate != null;
-    const hasReturn = reg.returnDate != null;
-    if (hasOutbound && hasReturn) stats.byJourneyType.both++;
-    else if (!hasOutbound && hasReturn) stats.byJourneyType.returnOnly++;
-    else if (hasOutbound && !hasReturn) stats.byJourneyType.outboundOnly++;
-
-    // Status
-    if (reg.status === "CONFIRMED") stats.byStatus.confirmed++;
-    else if (reg.status === "CANCELLED") stats.byStatus.cancelled++;
-    else if (reg.status === "PARTIAL_CANCEL") stats.byStatus.partialCancel++;
-    else if (reg.status === "DRAFT") stats.byStatus.draft++;
-
-    // Payment
     for (const journey of reg.journeys) {
-      const netPaid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0);
-      stats.paymentStats.totalPaidAmount += netPaid;
-      if (journey.tariffSnapshot != null && netPaid >= journey.tariffSnapshot) {
-        if (journey.direction === "OUTBOUND") stats.paymentStats.outboundPaidCount++;
-        else stats.paymentStats.returnPaidCount++;
+      if (!allowedDirections.has(journey.direction)) continue;
+      if (status !== "all" && journey.status !== status) continue;
+      const selectedKordaId = journey.direction === "OUTBOUND" ? outboundKordaId : returnKordaId;
+      if (selectedKordaId && journey.destinationKordaId !== selectedKordaId) continue;
+      if (dropPointId && journey.dropPointId !== dropPointId) continue;
+      if (paymentStatus !== "all" && getJourneyPaymentStatus(journey) !== paymentStatus) continue;
+      const directionStats = journey.direction === "OUTBOUND" ? stats.outbound : stats.return;
+      if (journey.status === "CANCELLED") {
+        directionStats.cancelled++;
+        continue;
       }
+      directionStats.total++;
+      if (journey.tariffSnapshot == null) {
+        directionStats.unknownTariff++;
+        continue;
+      }
+      const netPaid = journey.paymentAllocations.reduce((sum, row) => sum + row.amount - row.refunds.reduce((refundSum, refund) => refundSum + refund.amount, 0) - row.corrections.reduce((correctionSum, correction) => correctionSum + correction.amount, 0), 0);
+      if (netPaid >= journey.tariffSnapshot) directionStats.paid++;
+      else if (netPaid > 0) directionStats.partial++;
+      else directionStats.unpaid++;
     }
   });
 

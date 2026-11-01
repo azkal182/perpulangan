@@ -5,6 +5,7 @@ import { TreasuryDisbursementForm } from "@/features/payment/components/Treasury
 import { getTreasuryPosition } from "@/features/payment/services/treasury-position";
 import { FinanceContextNote, FinanceHowToRead } from "@/features/payment/components/FinanceContextNote";
 import { TreasuryExportButton } from "@/features/payment/components/TreasuryExportButton.client";
+import { TreasuryPdfExportButton } from "@/features/payment/components/TreasuryPdfExportButton.client";
 import type { FinanceJourneyFilter } from "@/features/payment/services/treasury-position";
 
 const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
@@ -29,6 +30,7 @@ export default async function KeuanganPage({ searchParams }: { searchParams: Pro
   const from = asDate(fromValue);
   const to = asDate(toValue, true);
   const position = await getTreasuryPosition(scope, direction);
+  const globalPosition = direction === "both" ? position : await getTreasuryPosition(scope, "both");
   const chosenKordaId = position.kordas.some((korda) => korda.id === destinationId) ? destinationId : "";
   const history = await prisma.treasuryDisbursement.findMany({
     where: {
@@ -67,21 +69,30 @@ export default async function KeuanganPage({ searchParams }: { searchParams: Pro
             <button className="rounded-md bg-primary px-4 py-2 text-primary-foreground">Terapkan</button>
           </form>
           <TreasuryExportButton direction={direction} />
+          <TreasuryPdfExportButton />
         </div>
       </div>
       {direction !== "both" && <p className="mt-3 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">Kas pusat, pencairan, dan Saldo Lain tetap bersifat global karena belum memiliki atribusi arah perjalanan pada data sumber.</p>}
     </section>
 
-    {scope.role === "admin" && <section className="space-y-3"><div><h2 className="text-lg font-semibold">Ringkasan pendaftaran · semua event</h2><p className="text-sm text-muted-foreground">Tagihan bruto dikurangi fee menunjukkan hak pendaftaran Korda. Pembayaran masuk aktual dan Saldo Lain dicatat terpisah.</p></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Tagihan bruto terdaftar</p><strong className="mt-1 block text-2xl">{money(position.totalGrossBilled)}</strong><p className="mt-1 text-xs text-muted-foreground">Jumlah tarif perjalanan REGISTERED</p></article>
-      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Fee pusat</p><strong className="mt-1 block text-2xl">{money(position.totalFee)}</strong><p className="mt-1 text-xs text-muted-foreground">Rp10.000 per tagihan perjalanan</p></article>
-      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Hak Korda setelah fee</p><strong className="mt-1 block text-2xl">{money(position.totalRegistrationEntitlement)}</strong><p className="mt-1 text-xs text-muted-foreground">Hak pembukuan, belum tentu sudah dapat dicairkan.</p></article>
-      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Pembayaran masuk tercatat</p><strong className="mt-1 block text-2xl">{money(position.totalPaymentReceipts ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">{direction === "both" ? "Total Payment sebelum refund dan pencairan" : "Penerimaan teralokasi ke perjalanan terpilih"}</p></article>
-    </div></section>}
-
-    {scope.role === "admin" && <section className="grid gap-3 sm:grid-cols-2">
-      <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Saldo kas pusat tercatat · global</p><strong className="mt-1 block text-2xl">{money(position.centralBalance ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Pembayaran masuk − refund aktual − pencairan tercatat.</p></article>
-      {direction === "both" ? <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kas pusat di luar hak pencairan Korda</p><strong className={`mt-1 block text-2xl ${unallocated < 0 ? "text-destructive" : ""}`}>{money(unallocated)}</strong><p className="mt-1 text-xs text-muted-foreground">Dapat mencakup fee pusat dan dana yang belum menjadi hak pencairan Korda.</p></article> : <article className="rounded-xl border bg-muted/30 p-4"><p className="text-sm text-muted-foreground">Pencairan aktual</p><p className="mt-1 text-sm">Pilih “Pulang dan pergi” untuk melihat dan mencatat batas pencairan global.</p></article>}
+    {scope.role === "admin" && <section className="space-y-3">
+      <div><h2 className="text-lg font-semibold">Ringkasan keuangan · semua event</h2><p className="mt-1 text-sm text-muted-foreground">Ringkasan ini tetap global saat filter perjalanan diubah. Fee masuk dihitung dari penerimaan bersih yang dialokasikan ke tagihan perjalanan.</p></div>
+      <div className="grid gap-4 xl:grid-cols-[0.8fr_1.6fr_0.8fr]">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Tagihan global</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalGrossBilled)}</strong><p className="mt-1 text-xs text-muted-foreground">Tarif perjalanan berstatus REGISTERED.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Fee tagihan global</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalFee)}</strong><p className="mt-1 text-xs text-muted-foreground">Rp10.000 per perjalanan REGISTERED.</p></article>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2 xl:border-x xl:px-4">
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Uang masuk global (sesuai rek)</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalPaymentReceipts ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Total pembayaran tercatat, sebelum refund dan pencairan.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Fee masuk</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalFeeReceived)}</strong><p className="mt-1 text-xs text-muted-foreground">Bagian fee proporsional dari penerimaan bersih tagihan; tidak termasuk Saldo Lain.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Hak setelah fee</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalRegistrationEntitlement)}</strong><p className="mt-1 text-xs text-muted-foreground">Tagihan global dikurangi fee tagihan; hak pembukuan, bukan kas diterima.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kelebihan pembayaran</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalBalanceCash)}</strong><p className="mt-1 text-xs text-muted-foreground">Saldo Lain bersih yang masih dimiliki Korda tujuan.</p></article>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kas</p><strong className="mt-1 block text-2xl">{money(globalPosition.centralBalance ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Uang masuk dikurangi total pengeluaran.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Total pengeluaran</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalExpenses)}</strong><p className="mt-1 text-xs text-muted-foreground">Refund aktual ditambah pencairan ke Korda.</p></article>
+        </div>
+      </div>
     </section>}
 
     <FinanceHowToRead />

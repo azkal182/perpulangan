@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
-import type { RegistrationStatus } from "@/generated/prisma/client";
 import {
   AccessDeniedError,
   andWhere,
+  ensureKordaInScope,
   getRegionalAccessScope,
   registrationScopeWhere,
 } from "@/server/access-scope";
@@ -24,19 +24,16 @@ export async function updatePaymentStatusAction(params: {
 // Cancel registration
 export async function cancelRegistrationAction(params: {
   registrationId: string;
-  cancelType: "full" | "return_only";
+  cancelType: "full" | "return_only" | "outbound_only";
   reason?: string;
 }) {
   try {
     const scope = await getRegionalAccessScope();
     const { registrationId, cancelType, reason } = params;
 
-    const status: RegistrationStatus =
-      cancelType === "full" ? "CANCELLED" : "PARTIAL_CANCEL";
-
     const existing = await prisma.registration.findFirst({
       where: andWhere({ id: registrationId }, registrationScopeWhere(scope)),
-      select: { id: true, eventId: true },
+      select: { id: true, eventId: true, journeys: { select: { id: true, direction: true, status: true, destinationKordaId: true } } },
     });
     if (!existing) {
       return { success: false, error: "Registrasi tidak ditemukan" };
@@ -44,10 +41,17 @@ export async function cancelRegistrationAction(params: {
 
     await prisma.$transaction(async (tx) => {
       await assertEventWritable(tx, existing.eventId);
+      const selected = existing.journeys.filter((journey) =>
+        journey.status === "REGISTERED" && (cancelType === "full" || (cancelType === "return_only" ? journey.direction === "RETURN" : journey.direction === "OUTBOUND")),
+      );
+      if (!selected.length) throw new Error("Tidak ada perjalanan aktif yang sesuai untuk dibatalkan.");
+      for (const journey of (cancelType === "full" ? existing.journeys : selected)) await ensureKordaInScope(scope, journey.destinationKordaId);
+      await tx.journey.updateMany({ where: { id: { in: selected.map((journey) => journey.id) }, status: "REGISTERED" }, data: { status: "CANCELLED" } });
+      const activeCount = await tx.journey.count({ where: { registrationId, status: "REGISTERED" } });
       await tx.registration.update({
         where: { id: registrationId },
         data: {
-          status,
+          status: activeCount ? "PARTIAL_CANCEL" : "CANCELLED",
           cancelledAt: new Date(),
           cancelReason: reason || null,
         },
@@ -56,6 +60,11 @@ export async function cancelRegistrationAction(params: {
 
     revalidatePath("/daftar-peserta");
     revalidatePath("/registrasi");
+    revalidatePath("/data-pulang");
+    revalidatePath("/rombongan");
+    revalidatePath("/cetak-dokumen");
+    revalidatePath("/laporan");
+    revalidatePath("/keuangan");
 
     return { success: true };
   } catch (error) {

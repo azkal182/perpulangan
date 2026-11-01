@@ -13,11 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
 import type { RegistrationWithDetails } from "../repositories/registrations.repository";
-import {
-  getJourneyType,
-  getJourneyTypeLabel,
-  getStatusColor,
-} from "../lib/helpers";
+import { getJourneyType, getJourneyTypeLabel } from "../lib/helpers";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RegistrationActionsMenu } from "./RegistrationActionsMenu";
 import { RegistrationDetailDialog } from "./RegistrationDetailDialog";
@@ -36,6 +32,30 @@ interface RegistrationsTableProps {
 }
 
 type DialogType = "detail" | "payment" | "cancel" | "refund" | "delete" | null;
+
+function PaymentStatusBadge({ status }: { status: RegistrationWithDetails["outboundPaymentStatus"] }) {
+  if (!status) return null;
+  const labels = {
+    PAID: "Lunas",
+    PARTIAL: "Partial / bayar sebagian",
+    UNPAID: "Belum bayar",
+    UNKNOWN: "Tarif belum tersedia",
+    CANCELLED: "Dibatalkan",
+  };
+  const classes = {
+    PAID: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    PARTIAL: "border-amber-200 bg-amber-50 text-amber-800",
+    UNPAID: "border-rose-200 bg-rose-50 text-rose-700",
+    UNKNOWN: "border-sky-200 bg-sky-50 text-sky-800",
+    CANCELLED: "border-slate-200 bg-slate-100 text-slate-700",
+  };
+  return (
+    <Badge variant="outline" className={`mt-1 inline-flex w-fit items-center text-xs ${classes[status]}`}>
+      {status === "PAID" && <CheckCircle2 aria-hidden="true" className="mr-1 h-3 w-3" />}
+      {labels[status]}
+    </Badge>
+  );
+}
 
 export function RegistrationsTable({
   registrations,
@@ -73,10 +93,9 @@ export function RegistrationsTable({
 
   if (registrations.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="text-muted-foreground">
-          Tidak ada data registrasi ditemukan
-        </div>
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 px-4 py-12 text-center">
+        <div className="font-medium">Tidak ada peserta yang cocok</div>
+        <div className="mt-1 text-sm text-muted-foreground">Coba ubah atau hapus beberapa filter.</div>
       </div>
     );
   }
@@ -90,11 +109,10 @@ export function RegistrationsTable({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">No</TableHead>
-                <TableHead>Siswa</TableHead>
+                <TableHead>Peserta</TableHead>
                 <TableHead>Pulang</TableHead>
                 <TableHead>Kembali</TableHead>
-                <TableHead className="w-32">Jenis</TableHead>
-                <TableHead className="w-32">Status</TableHead>
+                <TableHead className="w-32">Arah perjalanan</TableHead>
                 <TableHead className="w-20">Aksi</TableHead>
               </TableRow>
             </TableHeader>
@@ -107,10 +125,10 @@ export function RegistrationsTable({
                   <TableRow key={reg.id}>
                     <TableCell className="font-medium">{rowNumber}</TableCell>
                     <TableCell>
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-medium">{reg.student.name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {reg.student.nis}
+                          {reg.externalParticipant ? "Peserta eksternal" : reg.student.nis ? `NIS ${reg.student.nis}` : "NIS tidak tersedia"}
                         </div>
                       </div>
                     </TableCell>
@@ -126,10 +144,7 @@ export function RegistrationsTable({
                               Bus: {reg.outboundBus.label}
                             </div>
                           )}
-                          {reg.outboundPaymentStatus && <Badge variant="outline" className={`mt-1 text-xs ${reg.outboundPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
-                            {reg.outboundPaymentStatus === "PAID" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                            {reg.outboundPaymentStatus === "PAID" ? "Sudah bayar" : reg.outboundPaymentStatus === "PARTIAL" ? "Partial" : reg.outboundPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
-                          </Badge>}
+                          <PaymentStatusBadge status={reg.outboundPaymentStatus} />
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -147,10 +162,7 @@ export function RegistrationsTable({
                               Bus: {reg.returnBus.label}
                             </div>
                           )}
-                          {reg.returnPaymentStatus && <Badge variant="outline" className={`mt-1 text-xs ${reg.returnPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
-                            {reg.returnPaymentStatus === "PAID" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                            {reg.returnPaymentStatus === "PAID" ? "Sudah bayar" : reg.returnPaymentStatus === "PARTIAL" ? "Partial" : reg.returnPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
-                          </Badge>}
+                          <PaymentStatusBadge status={reg.returnPaymentStatus} />
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -159,14 +171,6 @@ export function RegistrationsTable({
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
                         {getJourneyTypeLabel(journeyType)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs ${getStatusColor(reg.status)}`}
-                      >
-                        {reg.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -195,12 +199,12 @@ export function RegistrationsTable({
             const rowNumber = startIndex + idx;
 
             return (
-              <div key={reg.id} className="rounded-lg border p-4 space-y-3">
+              <div key={reg.id} className="space-y-4 rounded-lg border bg-card p-4 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="font-medium">{reg.student.name}</div>
+                    <div className="font-medium leading-5">{reg.student.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      NIS: {reg.student.nis}
+                      {reg.externalParticipant ? "Peserta eksternal" : reg.student.nis ? `NIS ${reg.student.nis}` : "NIS tidak tersedia"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -218,9 +222,9 @@ export function RegistrationsTable({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <div className="font-medium mb-1">Pulang</div>
+                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <div className="space-y-1 rounded-md border p-3">
+                    <div className="mb-1 font-semibold">Pulang</div>
                     {reg.outboundKorda ? (
                       <div className="text-muted-foreground space-y-1">
                         <div>{reg.outboundKorda.name}</div>
@@ -228,17 +232,15 @@ export function RegistrationsTable({
                         {reg.outboundBus?.label && (
                           <div className="text-xs">Bus: {reg.outboundBus.label}</div>
                         )}
-                        {reg.outboundPaymentStatus && <Badge variant="outline" className={`text-xs ${reg.outboundPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
-                          {reg.outboundPaymentStatus === "PAID" ? "Sudah bayar" : reg.outboundPaymentStatus === "PARTIAL" ? "Partial" : reg.outboundPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
-                        </Badge>}
+                        <PaymentStatusBadge status={reg.outboundPaymentStatus} />
                       </div>
                     ) : (
                       <div className="text-muted-foreground">-</div>
                     )}
                   </div>
 
-                  <div>
-                    <div className="font-medium mb-1">Kembali</div>
+                  <div className="space-y-1 rounded-md border p-3">
+                    <div className="mb-1 font-semibold">Kembali</div>
                     {reg.returnKorda ? (
                       <div className="text-muted-foreground space-y-1">
                         <div>{reg.returnKorda.name}</div>
@@ -246,9 +248,7 @@ export function RegistrationsTable({
                         {reg.returnBus?.label && (
                           <div className="text-xs">Bus: {reg.returnBus.label}</div>
                         )}
-                        {reg.returnPaymentStatus && <Badge variant="outline" className={`text-xs ${reg.returnPaymentStatus === "PAID" ? "bg-green-50 text-green-700" : ""}`}>
-                          {reg.returnPaymentStatus === "PAID" ? "Sudah bayar" : reg.returnPaymentStatus === "PARTIAL" ? "Partial" : reg.returnPaymentStatus === "UNKNOWN" ? "Tarif belum diketahui" : "Belum bayar"}
-                        </Badge>}
+                        <PaymentStatusBadge status={reg.returnPaymentStatus} />
                       </div>
                     ) : (
                       <div className="text-muted-foreground">-</div>
@@ -260,12 +260,6 @@ export function RegistrationsTable({
                   <Badge variant="outline" className="text-xs">
                     {getJourneyTypeLabel(journeyType)}
                   </Badge>
-                  <Badge
-                    variant="outline"
-                    className={`text-xs ${getStatusColor(reg.status)}`}
-                  >
-                    {reg.status}
-                  </Badge>
                 </div>
               </div>
             );
@@ -276,7 +270,7 @@ export function RegistrationsTable({
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-muted-foreground">
-              Menampilkan {startIndex} - {endIndex} dari {total} registrasi
+              Menampilkan {startIndex}–{endIndex} dari {total} peserta
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -285,7 +279,7 @@ export function RegistrationsTable({
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
               >
-                Previous
+                Sebelumnya
               </Button>
               <div className="flex gap-1">
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
@@ -319,7 +313,7 @@ export function RegistrationsTable({
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
               >
-                Next
+                Berikutnya
               </Button>
             </div>
           </div>

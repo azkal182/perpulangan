@@ -4,7 +4,7 @@ import {
   getRegistrationsAction,
   getStatsAction,
 } from "@/features/registrations-management/actions/registrations-management.actions";
-import type { RegistrationStatus } from "@/generated/prisma/client";
+import type { JourneyStatus } from "@/generated/prisma/client";
 import { RegistrationNavigation } from "@/features/registrations-management/components/RegistrationNavigation";
 import { RegistrationStatsCards } from "@/features/registrations-management/components/RegistrationStatsCards";
 import { RegistrationFilters } from "@/features/registrations-management/components/RegistrationFilters";
@@ -19,6 +19,7 @@ interface PageProps {
   searchParams?: Promise<{
     journeyType?: string;
     status?: string;
+    paymentStatus?: string;
     gender?: string;
     kordaId?: string;
     dropPointId?: string;
@@ -49,7 +50,8 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
   // Parse search params
   const params = await searchParams;
   const journeyType = params?.journeyType || "all";
-  const status = params?.status || "all";
+  const status = params?.status === "REGISTERED" || params?.status === "CANCELLED" ? params.status : "all";
+  const paymentStatus = params?.paymentStatus === "PAID" || params?.paymentStatus === "PARTIAL" || params?.paymentStatus === "UNPAID" || params?.paymentStatus === "CANCELLED" || params?.paymentStatus === "UNKNOWN" ? params.paymentStatus : "all";
   const gender =
     params?.gender === "Laki-laki" || params?.gender === "Perempuan"
       ? params.gender
@@ -68,7 +70,8 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
       getRegistrationsAction({
         eventId: activeEvent.id,
         journeyType: journeyType as "all" | "both" | "return_only" | "outbound_only",
-        status: status as RegistrationStatus | "all",
+        status: status as JourneyStatus | "all",
+        paymentStatus,
         gender,
         outboundKordaId: kordaId,
         returnKordaId: kordaId,
@@ -77,7 +80,17 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
         page,
         pageSize,
       }),
-      getStatsAction(activeEvent.id),
+      getStatsAction({
+        eventId: activeEvent.id,
+        journeyType: journeyType as "all" | "both" | "return_only" | "outbound_only",
+        status: status as JourneyStatus | "all",
+        paymentStatus,
+        gender,
+        outboundKordaId: kordaId,
+        returnKordaId: kordaId,
+        dropPointId,
+        search,
+      }),
     ]);
 
   const kordas =
@@ -101,9 +114,9 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
         {/* Header */}
         <div className="border-b">
           <div className="mx-auto max-w-7xl px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-semibold">Daftar Peserta Terdaftar</div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-lg font-semibold">Daftar Peserta</h1>
                 <div className="text-sm text-muted-foreground">{activeEvent.name}</div>
               </div>
               <PrintButton />
@@ -121,7 +134,7 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
             <CardHeader>
               <CardTitle>Filter Peserta</CardTitle>
               <CardDescription>
-                Filter berdasarkan jenis perjalanan, status, korda, atau drop point
+                Saring peserta menurut arah Pulang/Kembali, status perjalanan dan pembayaran, Korda tujuan, atau titik perjalanan.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -136,10 +149,8 @@ export default async function DaftarPesertaPage({ searchParams }: PageProps) {
           {/* Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Daftar Registrasi</CardTitle>
-              <CardDescription>
-                Total {total} peserta terdaftar
-              </CardDescription>
+              <CardTitle>Rincian Peserta</CardTitle>
+              <CardDescription>{total} peserta pada event terpilih</CardDescription>
             </CardHeader>
             <CardContent>
               <RegistrationsTable

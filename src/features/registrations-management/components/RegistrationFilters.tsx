@@ -24,15 +24,29 @@ interface RegistrationFiltersProps {
   dropPoints: DropPoint[];
 }
 
-type JourneyType = "all" | "both" | "return_only" | "outbound_only";
-type StatusFilter = "all" | "CONFIRMED" | "CANCELLED" | "PARTIAL_CANCEL" | "DRAFT";
+type JourneyType = "all" | "return_only" | "outbound_only";
+type StatusFilter = "all" | "REGISTERED" | "CANCELLED";
+type PaymentStatusFilter = "all" | "PAID" | "PARTIAL" | "UNPAID" | "CANCELLED" | "UNKNOWN";
 type GenderFilter = "all" | "Laki-laki" | "Perempuan";
+type ExportDirection = "OUTBOUND" | "RETURN";
 
 function normalizeGenderFilter(value: string | null): GenderFilter {
   if (value === "Laki-laki" || value === "Perempuan") {
     return value;
   }
   return "all";
+}
+
+function normalizeStatusFilter(value: string | null): StatusFilter {
+  return value === "REGISTERED" || value === "CANCELLED" ? value : "all";
+}
+
+function normalizeJourneyType(value: string | null): JourneyType {
+  return value === "outbound_only" || value === "return_only" ? value : "all";
+}
+
+function normalizePaymentStatusFilter(value: string | null): PaymentStatusFilter {
+  return value === "PAID" || value === "PARTIAL" || value === "UNPAID" || value === "CANCELLED" || value === "UNKNOWN" ? value : "all";
 }
 
 export function RegistrationFilters({
@@ -45,10 +59,13 @@ export function RegistrationFilters({
   const searchParams = useSearchParams();
 
   const [journeyType, setJourneyType] = useState<JourneyType>(
-    (searchParams.get("journeyType") as JourneyType) || "all"
+    normalizeJourneyType(searchParams.get("journeyType"))
   );
   const [status, setStatus] = useState<StatusFilter>(
-    (searchParams.get("status") as StatusFilter) || "all"
+    normalizeStatusFilter(searchParams.get("status")),
+  );
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusFilter>(
+    normalizePaymentStatusFilter(searchParams.get("paymentStatus")),
   );
   const [gender, setGender] = useState<GenderFilter>(
     normalizeGenderFilter(searchParams.get("gender")),
@@ -62,6 +79,7 @@ export function RegistrationFilters({
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportDirection, setExportDirection] = useState<ExportDirection>("OUTBOUND");
 
   // Debounce search
   useEffect(() => {
@@ -75,6 +93,7 @@ export function RegistrationFilters({
     
     if (journeyType !== "all") params.set("journeyType", journeyType);
     if (status !== "all") params.set("status", status);
+    if (paymentStatus !== "all") params.set("paymentStatus", paymentStatus);
     if (gender !== "all") params.set("gender", gender);
     if (kordaId !== "all") params.set("kordaId", kordaId);
     if (dropPointId !== "all") params.set("dropPointId", dropPointId);
@@ -88,6 +107,7 @@ export function RegistrationFilters({
   }, [
     journeyType,
     status,
+    paymentStatus,
     gender,
     kordaId,
     dropPointId,
@@ -99,6 +119,7 @@ export function RegistrationFilters({
   const handleReset = () => {
     setJourneyType("all");
     setStatus("all");
+    setPaymentStatus("all");
     setGender("all");
     setKordaId("all");
     setDropPointId("all");
@@ -109,6 +130,7 @@ export function RegistrationFilters({
   const hasActiveFilters = 
     journeyType !== "all" ||
     status !== "all" ||
+    paymentStatus !== "all" ||
     gender !== "all" ||
     kordaId !== "all" ||
     dropPointId !== "all" ||
@@ -120,7 +142,9 @@ export function RegistrationFilters({
       const result = await getRegistrationsForExcelExportAction({
         eventId,
         journeyType,
+        exportDirection,
         status,
+        paymentStatus,
         gender: gender === "all" ? undefined : gender,
         kordaId: kordaId === "all" ? undefined : kordaId,
         dropPointId: dropPointId === "all" ? undefined : dropPointId,
@@ -138,11 +162,12 @@ export function RegistrationFilters({
       }
 
       const datePart = new Date().toISOString().slice(0, 10);
-      const filename = `daftar_peserta_${datePart}.xls`;
-      downloadRegistrationsExcel(result.data, filename);
+      const directionLabel = exportDirection === "OUTBOUND" ? "pulang" : "kembali";
+      const filename = `daftar_peserta_${directionLabel}_${datePart}.xlsx`;
+      downloadRegistrationsExcel(result.data, filename, directionLabel);
 
       toast.success(
-        `Export berhasil: ${result.totalRows} data (${result.data.length} sheet korwil)`,
+        `Export ${exportDirection === "OUTBOUND" ? "Pulang" : "Kembali"} berhasil: ${result.totalRows} peserta (${result.data.length} sheet korwil)`,
       );
     } catch (error) {
       console.error(error);
@@ -159,7 +184,7 @@ export function RegistrationFilters({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
         <Input
           className="pl-9"
-          placeholder="Cari nama atau NIS siswa..."
+          placeholder="Cari nama atau NIS peserta..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -171,27 +196,39 @@ export function RegistrationFilters({
           {/* Journey Type */}
           <Select value={journeyType} onValueChange={(v) => setJourneyType(v as JourneyType)}>
             <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder="Jenis Perjalanan" />
+              <SelectValue placeholder="Arah perjalanan" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Semua Jenis</SelectItem>
-              <SelectItem value="both">Pulang-Kembali</SelectItem>
-              <SelectItem value="return_only">Kembali Saja</SelectItem>
-              <SelectItem value="outbound_only">Pulang Saja</SelectItem>
+              <SelectItem value="all">Semua arah</SelectItem>
+              <SelectItem value="outbound_only">Pulang</SelectItem>
+              <SelectItem value="return_only">Kembali</SelectItem>
             </SelectContent>
           </Select>
 
-          {/* Status */}
-          <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
-            <SelectTrigger className="w-full sm:w-[140px]">
-              <SelectValue placeholder="Status" />
+          {/* Payment Status */}
+          <Select value={paymentStatus} onValueChange={(v) => setPaymentStatus(v as PaymentStatusFilter)}>
+            <SelectTrigger className="w-full sm:w-[170px]">
+              <SelectValue placeholder="Status pembayaran" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Semua Status</SelectItem>
-              <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
-              <SelectItem value="PARTIAL_CANCEL">Partial Cancel</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="all">Semua pembayaran</SelectItem>
+              <SelectItem value="PAID">Lunas</SelectItem>
+              <SelectItem value="PARTIAL">Bayar sebagian</SelectItem>
+              <SelectItem value="UNPAID">Belum bayar</SelectItem>
+              <SelectItem value="CANCELLED">Perjalanan dibatalkan</SelectItem>
+              <SelectItem value="UNKNOWN">Tarif belum tersedia</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Journey Status */}
+          <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
+            <SelectTrigger className="w-full sm:w-[140px]">
+              <SelectValue placeholder="Status perjalanan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua status</SelectItem>
+              <SelectItem value="REGISTERED">Terdaftar</SelectItem>
+              <SelectItem value="CANCELLED">Dibatalkan</SelectItem>
             </SelectContent>
           </Select>
 
@@ -210,10 +247,10 @@ export function RegistrationFilters({
           {/* Korda */}
           <Select value={kordaId} onValueChange={setKordaId}>
             <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder="Korda" />
+              <SelectValue placeholder="Korda tujuan" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Semua Korda</SelectItem>
+              <SelectItem value="all">Semua Korda tujuan</SelectItem>
               {kordas.map((k) => (
                 <SelectItem key={k.id} value={k.id}>
                   {k.name}
@@ -252,24 +289,35 @@ export function RegistrationFilters({
         </div>
 
         {/* Export Button */}
-        <Button
-          variant="outline"
-          className="w-full sm:w-auto"
-          onClick={handleExportExcel}
-          disabled={exportingExcel}
-        >
-          {exportingExcel ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <FileDown className="mr-2 h-4 w-4" />
-              Export Excel
-            </>
-          )}
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Select value={exportDirection} onValueChange={(value) => setExportDirection(value as ExportDirection)}>
+            <SelectTrigger className="w-full sm:w-[150px]" aria-label="Arah perjalanan untuk export Excel">
+              <SelectValue placeholder="Arah export" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OUTBOUND">Export Pulang</SelectItem>
+              <SelectItem value="RETURN">Export Kembali</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={handleExportExcel}
+            disabled={exportingExcel}
+          >
+            {exportingExcel ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <FileDown className="mr-2 h-4 w-4" />
+                Export Excel
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,9 @@
 import prisma from "@/lib/prisma";
 import { logger } from "@/server/logger";
 import { andWhere, getRegionalAccessScope, studentScopeWhere } from "@/server/access-scope";
+import { getEventContext } from "@/server/event-context";
+
+export type StudentPdfExportFilter = "ALL" | "REGISTERED" | "UNREGISTERED";
 
 export type StudentForPDF = {
   name: string;
@@ -29,14 +32,24 @@ export type KorwilGroupPDF = {
  * Fetch all students grouped by Korwil > Korda > Gender
  * For PDF export
  */
-export async function getStudentsForPDFExport(): Promise<{
+export async function getStudentsForPDFExport(filter: StudentPdfExportFilter): Promise<{
   success: boolean;
   data?: KorwilGroupPDF[];
+  eventName?: string;
   error?: string;
 }> {
   try {
     const scope = await getRegionalAccessScope();
+    const eventContext = await getEventContext(scope);
+    const selectedEvent = eventContext.selectedEvent;
+    if (filter !== "ALL" && !selectedEvent) {
+      return { success: false, error: "Pilih event dari header sebelum mengekspor PDF santri." };
+    }
     logger.debug("Fetching students for PDF export");
+
+    const registeredInEvent = selectedEvent
+      ? { eventId: selectedEvent.id, journeys: { some: { status: "REGISTERED" as const } } }
+      : undefined;
 
     // Fetch all students with their korwil/korda relations
     const students = await prisma.student.findMany({
@@ -45,6 +58,11 @@ export async function getStudentsForPDFExport(): Promise<{
           status: true, // Only active students
         },
         studentScopeWhere(scope),
+        filter === "REGISTERED" && registeredInEvent
+          ? { registrations: { some: registeredInEvent } }
+          : filter === "UNREGISTERED" && registeredInEvent
+            ? { registrations: { none: registeredInEvent } }
+            : undefined,
       ),
       select: {
         id: true,
@@ -194,6 +212,7 @@ export async function getStudentsForPDFExport(): Promise<{
     return {
       success: true,
       data: result,
+      eventName: selectedEvent?.name ?? "Semua data santri",
     };
   } catch (error) {
     logger.error({ err: error }, "Failed to fetch students for PDF export");

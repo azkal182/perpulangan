@@ -39,10 +39,10 @@ export function RegistrationActionsMenu({
   };
 
   // Check if there are any paid journeys for refund
-  const hasPaidJourneys = registration.outboundPaid || registration.returnPaid;
+  const hasPaidJourneys = [registration.outboundPaymentStatus, registration.returnPaymentStatus].some((status) => status === "PAID" || status === "PARTIAL");
   
-  // Can only cancel if not already cancelled
-  const canCancel = registration.status !== "CANCELLED";
+  // Cancellation availability follows active direction rows, not the aggregate parent status.
+  const canCancel = registration.outboundJourneyStatus === "REGISTERED" || registration.returnJourneyStatus === "REGISTERED";
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -74,7 +74,7 @@ export function RegistrationActionsMenu({
         </DropdownMenuItem>}
         
         {canWrite && <DropdownMenuItem
-          onClick={() => handleAction(() => { window.location.href = "/pembayaran"; })}
+          onClick={() => handleAction(() => { window.location.href = "/refund"; })}
           disabled={!hasPaidJourneys}
         >
           <RefreshCw className="mr-2 h-4 w-4" />

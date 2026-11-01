@@ -60,6 +60,7 @@ export async function getTreasuryPosition(
     fee: 0,
     registrationEntitlement: 0,
     registrationReceived: 0,
+    feeReceived: 0,
     balanceCash: 0,
     assigned: 0,
     disbursed: 0,
@@ -81,6 +82,11 @@ export async function getTreasuryPosition(
     if (journey.status !== "REGISTERED" || journey.tariffSnapshot === null || journey.tariffSnapshot <= 0) continue;
     position.grossBilled += journey.tariffSnapshot;
     position.billedJourneyCount += 1;
+    const eligibleReceipt = Math.min(journey.tariffSnapshot, Math.max(0, received));
+    position.feeReceived += Math.min(
+      CENTRAL_FEE_PER_JOURNEY,
+      Math.floor((eligibleReceipt * CENTRAL_FEE_PER_JOURNEY) / journey.tariffSnapshot),
+    );
   }
 
   for (const position of positions.values()) {
@@ -112,7 +118,10 @@ export async function getTreasuryPosition(
   const totalDisbursed = [...positions.values()].reduce((sum, row) => sum + row.disbursed, 0);
   const totalHeldAtCenter = [...positions.values()].reduce((sum, row) => sum + row.heldAtCenter, 0);
   const totalFee = [...positions.values()].reduce((sum, row) => sum + row.fee, 0);
+  const totalFeeReceived = [...positions.values()].reduce((sum, row) => sum + row.feeReceived, 0);
   const totalBalanceCash = [...positions.values()].reduce((sum, row) => sum + row.balanceCash, 0);
+  const totalRefunds = refunds?._sum.amount ?? 0;
+  const totalExpenses = totalRefunds + (allDisbursements?._sum.amount ?? 0);
   const centralBalance = scope.role === "admin"
     ? (payments?._sum.amount ?? 0) - (refunds?._sum.amount ?? 0) - (allDisbursements?._sum.amount ?? 0)
     : null;
@@ -129,7 +138,10 @@ export async function getTreasuryPosition(
     totalDisbursed,
     totalHeldAtCenter,
     totalFee,
+    totalFeeReceived,
     totalBalanceCash,
+    totalRefunds,
+    totalExpenses,
     cancelledJourneyCount: [...positions.values()].reduce((sum, row) => sum + row.cancelledJourneyCount, 0),
     centralBalance,
     unallocatedCentralCash: centralBalance === null ? null : centralBalance - totalHeldAtCenter,

@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FamilyPaymentForm } from "./FamilyPaymentForm";
 
-export type PaymentJourneyRow = { id: string; direction: "OUTBOUND" | "RETURN"; destination: string; tariff: number | null; paid: number; due: number | null; participant: string; origin: string | null };
-export type PaymentParticipantRow = { id: string; name: string; identifier: string; origin: string; journeys: PaymentJourneyRow[]; dueTotal: number; hasMissingTariff: boolean };
+export type PaymentJourneyRow = { id: string; direction: "OUTBOUND" | "RETURN"; korwil: string; destination: string; tariff: number | null; paid: number; due: number | null; participant: string; origin: string | null };
+export type PaymentParticipantRow = { id: string; name: string; identifier: string; origin: string; originKorwil: string; journeys: PaymentJourneyRow[]; dueTotal: number; hasMissingTariff: boolean };
 const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
 
 export function PaymentParticipantsTable({ eventId, eventName, canWrite, rows }: { eventId: string; eventName: string; canWrite: boolean; rows: PaymentParticipantRow[] }) {

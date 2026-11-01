@@ -1,29 +1,32 @@
 import type { RegistrationWithDetails } from "../repositories/registrations.repository";
 
-export type JourneyType = "both" | "return_only" | "outbound_only" | "unknown";
+export type JourneyType = "both" | "return_only" | "outbound_only" | "cancelled" | "unknown";
 
 export function getJourneyType(
   registration: RegistrationWithDetails,
 ): JourneyType {
-  const hasOutbound = registration.outboundDropPoint != null;
-  const hasReturn = registration.returnDropPoint != null;
+  const hasOutbound = registration.outboundJourneyStatus === "REGISTERED";
+  const hasReturn = registration.returnJourneyStatus === "REGISTERED";
 
   if (hasOutbound && hasReturn) return "both";
   if (!hasOutbound && hasReturn) return "return_only";
   if (hasOutbound && !hasReturn) return "outbound_only";
+  if (registration.outboundJourneyStatus || registration.returnJourneyStatus) return "cancelled";
   return "unknown";
 }
 
 export function getJourneyTypeLabel(type: JourneyType): string {
   switch (type) {
     case "both":
-      return "Pulang-Kembali";
+      return "Pulang & Kembali aktif";
     case "return_only":
-      return "Kembali Saja";
+      return "Kembali aktif";
     case "outbound_only":
-      return "Pulang Saja";
+      return "Pulang aktif";
+    case "cancelled":
+      return "Tidak ada perjalanan aktif";
     default:
-      return "Unknown";
+      return "Belum ada data perjalanan";
   }
 }
 

@@ -18,7 +18,7 @@ export function TreasuryExportButton({ direction }: { direction: TreasuryExportD
         return;
       }
       const date = new Date().toISOString().slice(0, 10);
-      downloadTreasuryExcel(result.data, `laporan_keuangan_${direction}_${date}.xls`);
+      downloadTreasuryExcel(result.data, `laporan_keuangan_${direction}_${date}.xlsx`);
       toast.success("Export Excel berhasil dibuat.");
     } catch (error) {
       console.error(error);

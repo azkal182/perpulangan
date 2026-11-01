@@ -37,7 +37,7 @@ function sectionTitle(doc: jsPDF, text: string, y: number): number {
 
 // ─── Page 1: Summary ──────────────────────────────────────────────────────────
 
-function drawSummaryPage(doc: jsPDF, data: KorwilGroupPDF[]) {
+function drawSummaryPage(doc: jsPDF, data: KorwilGroupPDF[], eventName: string, filterLabel: string) {
   let y = MARGIN;
 
   // Title
@@ -54,7 +54,7 @@ function drawSummaryPage(doc: jsPDF, data: KorwilGroupPDF[]) {
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100);
-  doc.text(`Dicetak: ${dateStr}`, PAGE_W / 2, y, { align: "center" });
+  doc.text(`${eventName} · ${filterLabel} · Dicetak: ${dateStr}`, PAGE_W / 2, y, { align: "center", maxWidth: CONTENT_W });
   doc.setTextColor(0);
   y += 10;
 
@@ -372,11 +372,11 @@ function drawDetailPages(doc: jsPDF, data: KorwilGroupPDF[]) {
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
-export function generateStudentsPDF(data: KorwilGroupPDF[]) {
+export function generateStudentsPDF(data: KorwilGroupPDF[], eventName: string, filterLabel: string, fileLabel: string) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   // Page 1: Summary
-  drawSummaryPage(doc, data);
+  drawSummaryPage(doc, data, eventName, filterLabel);
 
   // Pages 2+: Detail per korwil > korda
   drawDetailPages(doc, data);
@@ -385,5 +385,5 @@ export function generateStudentsPDF(data: KorwilGroupPDF[]) {
   drawPageNumber(doc);
 
   const timestamp = new Date().toISOString().split("T")[0];
-  doc.save(`Daftar_Santri_${timestamp}.pdf`);
+  doc.save(`Daftar_Santri_${fileLabel}_${timestamp}.pdf`);
 }

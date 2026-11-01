@@ -6,6 +6,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { getRegionalAccessScope } from "@/server/access-scope";
 import { eventBalanceEntryWhere, getEventContext } from "@/server/event-context";
 import { FinanceContextNote } from "@/features/payment/components/FinanceContextNote";
+import { PaymentPdfExportButton } from "@/features/payment/components/PaymentPdfExportButton.client";
 
 const PAGE_SIZE = 30;
 const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
@@ -29,15 +30,41 @@ export default async function PembayaranPage({ searchParams }: { searchParams: P
   ]);
   const nameCondition: Prisma.RegistrationWhereInput | undefined = search ? { OR: [{ student: { name: { contains: search, mode: "insensitive" } } }, { student: { nis: { contains: search, mode: "insensitive" } } }, { externalParticipant: { name: { contains: search, mode: "insensitive" } } }, { externalParticipant: { address: { contains: search, mode: "insensitive" } } }] } : undefined;
   const baseWhere: Prisma.RegistrationWhereInput = { eventId: selectedEventId, status: "CONFIRMED", ...(nameCondition ? { AND: [nameCondition] } : {}), journeys: { some: payableJourneyScope } };
-  const allMatching = await prisma.registration.findMany({ where: baseWhere, select: { id: true, originKordaNameSnapshot: true, student: { select: { name: true, nis: true } }, externalParticipant: { select: { name: true, address: true } }, journeys: { where: payableJourneyScope, include: { destinationKorda: { select: { id: true, name: true } }, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } } } }, orderBy: [{ student: { name: "asc" } }, { externalParticipant: { name: "asc" } }] });
-  const rows: PaymentParticipantRow[] = allMatching.map((registration) => {
+  const allMatching = await prisma.registration.findMany({
+    where: baseWhere,
+    select: {
+      id: true,
+      originKordaNameSnapshot: true,
+      student: {
+        select: {
+          name: true,
+          nis: true,
+          regency: { select: { korda: { select: { name: true, korwil: { select: { name: true } } } } } },
+        },
+      },
+      externalParticipant: { select: { name: true, address: true } },
+      journeys: {
+        where: payableJourneyScope,
+        include: {
+          destinationKorda: { select: { id: true, name: true, korwil: { select: { name: true } } } },
+          paymentAllocations: {
+            where: { type: "JOURNEY" },
+            select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } },
+          },
+        },
+      },
+    },
+    orderBy: [{ student: { name: "asc" } }, { externalParticipant: { name: "asc" } }],
+  });
+  const allRows: PaymentParticipantRow[] = allMatching.map((registration) => {
     const journeys = registration.journeys.map((journey) => {
       const paid = journey.paymentAllocations.reduce((sum, allocation) => sum + allocation.amount - allocation.refunds.reduce((r, refund) => r + refund.amount, 0) - allocation.corrections.reduce((r, correction) => r + correction.amount, 0), 0);
       const due = journey.tariffSnapshot === null ? null : Math.max(0, journey.tariffSnapshot - paid);
-      return { id: journey.id, direction: journey.direction, destination: journey.destinationKorda.name, tariff: journey.tariffSnapshot, paid, due, participant: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta", origin: registration.originKordaNameSnapshot };
+      return { id: journey.id, direction: journey.direction, korwil: journey.destinationKorda.korwil?.name ?? "Tanpa Korwil", destination: journey.destinationKorda.name, tariff: journey.tariffSnapshot, paid, due, participant: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta", origin: registration.originKordaNameSnapshot };
     });
-    return { id: registration.id, name: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta", identifier: registration.student?.nis ? `NIS ${registration.student.nis}` : registration.externalParticipant?.address ?? "Peserta eksternal", origin: registration.originKordaNameSnapshot ?? "Eksternal", journeys, dueTotal: journeys.reduce((sum, journey) => sum + (journey.due ?? 0), 0), hasMissingTariff: journeys.some((journey) => journey.tariff === null) };
-  }).filter((row) => statusFilter === "ALL" || (statusFilter === "OPEN" ? row.dueTotal > 0 || row.hasMissingTariff : statusFilter === "UNPAID" ? row.journeys.some((journey) => journey.due === journey.tariff && (journey.due ?? 0) > 0) : statusFilter === "PARTIAL" ? row.journeys.some((journey) => journey.paid > 0 && (journey.due ?? 0) > 0) : row.journeys.length > 0 && row.journeys.every((journey) => journey.due === 0)));
+    return { id: registration.id, name: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta", identifier: registration.student?.nis ? `NIS ${registration.student.nis}` : registration.externalParticipant?.address ?? "Peserta eksternal", origin: registration.originKordaNameSnapshot ?? registration.student?.regency?.korda?.name ?? "Eksternal", originKorwil: registration.student?.regency?.korda?.korwil?.name ?? "Tanpa Korwil", journeys, dueTotal: journeys.reduce((sum, journey) => sum + (journey.due ?? 0), 0), hasMissingTariff: journeys.some((journey) => journey.tariff === null) };
+  });
+  const rows = allRows.filter((row) => statusFilter === "ALL" || (statusFilter === "OPEN" ? row.dueTotal > 0 || row.hasMissingTariff : statusFilter === "UNPAID" ? row.journeys.some((journey) => journey.due === journey.tariff && (journey.due ?? 0) > 0) : statusFilter === "PARTIAL" ? row.journeys.some((journey) => journey.paid > 0 && (journey.due ?? 0) > 0) : row.journeys.length > 0 && row.journeys.every((journey) => journey.due === 0)));
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const visibleRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalOutstanding = rows.reduce((sum, row) => sum + row.dueTotal, 0);
@@ -47,7 +74,7 @@ export default async function PembayaranPage({ searchParams }: { searchParams: P
   const query = (nextPage: number) => `?q=${encodeURIComponent(search)}&status=${encodeURIComponent(statusFilter)}&page=${nextPage}`;
 
   return <main className="mx-auto w-full min-w-0 max-w-6xl space-y-7 p-4 sm:p-6 lg:p-8">
-    <header className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Pembayaran</h1><p className="mt-1 text-sm text-muted-foreground">Kelola tagihan per peserta. Rincian Pulang dan Kembali dibuka dari baris peserta.</p></div><div className="flex flex-wrap gap-2"><Link href="/laporan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Laporan</Link>{scope.role === "admin" && <Link href="/keuangan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Keuangan pusat</Link>}<Link href="/koreksi-keuangan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Koreksi transaksi</Link><Link href="/refund" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Kelola refund →</Link></div></header>
+    <header className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Pembayaran</h1><p className="mt-1 text-sm text-muted-foreground">Kelola tagihan per peserta. Rincian Pulang dan Kembali dibuka dari baris peserta.</p></div><div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap"><PaymentPdfExportButton rows={allRows} eventName={eventContext.selectedEvent?.name ?? "Event"} search={search}/><Link href="/laporan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Laporan</Link>{scope.role === "admin" && <Link href="/keuangan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Keuangan pusat</Link>}<Link href="/koreksi-keuangan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Koreksi transaksi</Link><Link href="/refund" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Kelola refund →</Link></div></header>
     <FinanceContextNote mode="event" eventName={eventContext.selectedEvent?.name} />
     <section className="grid gap-3 sm:grid-cols-3"><article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Peserta sesuai filter</p><strong className="mt-1 block text-2xl">{rows.length}</strong></article><article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Sisa tagihan</p><strong className="mt-1 block text-2xl">{money(totalOutstanding)}</strong><p className="mt-1 text-xs text-muted-foreground">Belum dibayar dari peserta yang tampil.</p></article><article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kelebihan pembayaran</p><strong className="mt-1 block text-2xl">{money([...netBalances.values()].reduce((a, b) => a + b, 0))}</strong><p className="mt-1 text-xs text-muted-foreground">Masih ditahan di pusat untuk Korda tujuan.</p></article></section>
     <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div><h2 className="text-lg font-semibold">Tagihan peserta</h2><p className="text-sm text-muted-foreground">Pilih peserta untuk mencatat pembayaran. Beberapa peserta dapat digabung dalam satu transfer keluarga.</p></div>

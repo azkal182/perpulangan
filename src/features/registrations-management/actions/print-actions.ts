@@ -40,7 +40,6 @@ export async function getPrintDataAction(
         status: "REGISTERED",
         registration: {
           eventId: params.eventId,
-          status: { not: "CANCELLED" },
         },
         busAssignment: {
           is: {

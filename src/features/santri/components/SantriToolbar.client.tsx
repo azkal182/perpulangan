@@ -18,10 +18,11 @@ import { getKorda } from "@/features/master/actions/korda.action";
 import type { Korwil, Korda } from "@/features/master/types";
 import { logger, logError } from "@/lib/logger-client";
 
-import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Download, Filter, Info, Search, UserPlus, XIcon, FileDown, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { getStudentsForPDFExport } from "../actions/export-pdf.action";
+import { getStudentsForPDFExport, type StudentPdfExportFilter } from "../actions/export-pdf.action";
 import { generateStudentsPDF } from "../utils/pdf-generator";
 import { AddManualStudentDialog } from "./AddManualStudentDialog";
 import { ImportSingleStudentDialog } from "./ImportSingleStudentDialog";
@@ -56,7 +57,7 @@ export function SantriToolbarClient({
   initialMissingCity?: boolean;
   initialUnlinkedKorda?: boolean;
 }) {
-  const [exportingPDF, setExportingPDF] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState<StudentPdfExportFilter | null>(null);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
   const [importSingleOpen, setImportSingleOpen] = useState(false);
 
@@ -286,13 +287,18 @@ export function SantriToolbarClient({
         ? "Ada error"
         : null;
 
-  const handleExportPDF = async () => {
-    setExportingPDF(true);
+  const handleExportPDF = async (filter: StudentPdfExportFilter) => {
+    setExportingPDF(filter);
     try {
-      const result = await getStudentsForPDFExport();
+      const result = await getStudentsForPDFExport(filter);
       if (result.success && result.data) {
         logger.info({ count: result.data.length }, "santri.export.pdf success");
-        generateStudentsPDF(result.data);
+        const labels: Record<StudentPdfExportFilter, string> = {
+          ALL: "Semua santri",
+          REGISTERED: "Santri sudah registrasi",
+          UNREGISTERED: "Santri belum registrasi",
+        };
+        generateStudentsPDF(result.data, result.eventName ?? "Event", labels[filter], filter.toLowerCase());
       } else {
         logger.warn({ error: result.error }, "santri.export.pdf failed");
         alert(result.error || "Gagal mengambil data siswa");
@@ -301,7 +307,7 @@ export function SantriToolbarClient({
       logError(error, { component: "SantriToolbar", action: "exportPDF" });
       alert("Terjadi kesalahan saat membuat PDF");
     } finally {
-      setExportingPDF(false);
+      setExportingPDF(null);
     }
   };
 
@@ -469,15 +475,30 @@ export function SantriToolbarClient({
 
           {/* RIGHT: Action Buttons */}
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:flex-nowrap">
-            <Button
-              onClick={handleExportPDF}
-              variant="outline"
-              className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
-              disabled={exportingPDF}
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              {exportingPDF ? "Membuat PDF..." : "Export PDF"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full sm:flex-1 lg:w-auto lg:flex-initial"
+                  disabled={exportingPDF !== null}
+                >
+                  <FileDown className="mr-2 h-4 w-4" />
+                  {exportingPDF ? "Membuat PDF..." : "Export PDF"}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={exportingPDF !== null} onSelect={() => void handleExportPDF("ALL")}>
+                  Export semua santri
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={exportingPDF !== null} onSelect={() => void handleExportPDF("REGISTERED")}>
+                  Santri sudah registrasi
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={exportingPDF !== null} onSelect={() => void handleExportPDF("UNREGISTERED")}>
+                  Santri belum registrasi
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <Button
               variant="outline"
