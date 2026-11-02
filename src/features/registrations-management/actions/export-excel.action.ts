@@ -145,7 +145,16 @@ export async function getRegistrationsForExcelExportAction(
         if (!grouped.has(korwilName)) grouped.set(korwilName, new Map<string, RegistrationExportRow[]>());
         const kordaMap = grouped.get(korwilName)!;
         if (!kordaMap.has(kordaName)) kordaMap.set(kordaName, []);
-        kordaMap.get(kordaName)!.push({ studentName: participantName, gender: mapGenderToShortLabel(participantGender), direction: journey.direction === "OUTBOUND" ? "Pulang" : "Kembali", journeyStatus: journey.status === "REGISTERED" ? "Terdaftar" : "Dibatalkan", destinationKorda: kordaName, travelPoint: journey.locationNameSnapshot, bus: journey.busAssignment?.bus?.label ?? "" });
+        kordaMap.get(kordaName)!.push({
+          studentName: participantName,
+          gender: mapGenderToShortLabel(participantGender),
+          paymentStatus: calculatedPaymentStatus === "PAID" ? "PAID" : "UNPAID",
+          direction: journey.direction === "OUTBOUND" ? "Pulang" : "Kembali",
+          journeyStatus: journey.status === "REGISTERED" ? "Terdaftar" : "Dibatalkan",
+          destinationKorda: kordaName,
+          travelPoint: journey.locationNameSnapshot,
+          bus: journey.busAssignment?.bus?.label ?? "",
+        });
       }
     });
 

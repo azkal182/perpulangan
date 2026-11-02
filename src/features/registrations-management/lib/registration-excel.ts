@@ -3,6 +3,7 @@ import { createExcelWorkbookBlob, downloadExcelBlob, type ExcelCell, type ExcelW
 export interface RegistrationExportRow {
   studentName: string;
   gender: "L" | "P" | "-";
+  paymentStatus: "PAID" | "UNPAID";
   direction: string;
   journeyStatus: string;
   destinationKorda: string;
@@ -24,6 +25,8 @@ interface GenderTotals {
   total: number;
   putra: number;
   putri: number;
+  paid: number;
+  unpaid: number;
 }
 
 function getRowsTotals(rows: RegistrationExportRow[]): GenderTotals {
@@ -31,6 +34,8 @@ function getRowsTotals(rows: RegistrationExportRow[]): GenderTotals {
     total: rows.length,
     putra: rows.filter((row) => row.gender === "L").length,
     putri: rows.filter((row) => row.gender === "P").length,
+    paid: rows.filter((row) => row.paymentStatus === "PAID").length,
+    unpaid: rows.filter((row) => row.paymentStatus === "UNPAID").length,
   };
 }
 
@@ -40,8 +45,10 @@ function getKorwilTotals(sheet: RegistrationExportKorwilSheet): GenderTotals {
     total.total += kordaTotals.total;
     total.putra += kordaTotals.putra;
     total.putri += kordaTotals.putri;
+    total.paid += kordaTotals.paid;
+    total.unpaid += kordaTotals.unpaid;
     return total;
-  }, { total: 0, putra: 0, putri: 0 });
+  }, { total: 0, putra: 0, putri: 0, paid: 0, unpaid: 0 });
 }
 
 function text(value: string, style: ExcelCell["style"] = "default"): ExcelCell {
@@ -66,38 +73,40 @@ function buildSummaryWorksheet(
     total.total += korwilTotals.total;
     total.putra += korwilTotals.putra;
     total.putri += korwilTotals.putri;
+    total.paid += korwilTotals.paid;
+    total.unpaid += korwilTotals.unpaid;
     return total;
-  }, { total: 0, putra: 0, putri: 0 });
+  }, { total: 0, putra: 0, putri: 0, paid: 0, unpaid: 0 });
   const rows: ExcelCell[][] = [
-    [merged(`RINGKASAN EXPORT PESERTA - ${directionLabel.toLocaleUpperCase("id-ID")}`, 5, "title")],
-    [merged(`Dibuat: ${new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}`, 5, "muted")],
+    [merged(`RINGKASAN EXPORT PESERTA - ${directionLabel.toLocaleUpperCase("id-ID")}`, 7, "title")],
+    [merged(`Dibuat: ${new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}`, 7, "muted")],
     [],
-    [text("Jumlah peserta pada arah terpilih", "header"), number(grandTotals.total), text("Jumlah Putra", "header"), number(grandTotals.putra), text("Jumlah Putri", "header"), number(grandTotals.putri)],
-    [text("Jumlah Korwil", "header"), number(sheets.length), text("Jumlah Korda", "header"), number(totalKorda), text(""), text("")],
+    [text("Jumlah peserta pada arah terpilih", "header"), number(grandTotals.total), text("Lunas", "header"), number(grandTotals.paid), text("Belum lunas", "header"), number(grandTotals.unpaid), text("Jumlah Putra", "header"), number(grandTotals.putra)],
+    [text("Jumlah Putri", "header"), number(grandTotals.putri), text("Jumlah Korwil", "header"), number(sheets.length), text("Jumlah Korda", "header"), number(totalKorda), text(""), text("")],
     [],
-    [merged("RINGKASAN PER KORWIL", 5)],
-    [text("No", "headerCenter"), text("Korwil", "header"), text("Jumlah Korda", "headerCenter"), text("Peserta pada arah terpilih", "headerCenter"), text("Putra", "headerCenter"), text("Putri", "headerCenter")],
+    [merged("RINGKASAN PER KORWIL", 7)],
+    [text("No", "headerCenter"), text("Korwil", "header"), text("Jumlah Korda", "headerCenter"), text("Peserta", "headerCenter"), text("Lunas", "headerCenter"), text("Belum lunas", "headerCenter"), text("Putra", "headerCenter"), text("Putri", "headerCenter")],
   ];
 
-  if (!sheets.length) rows.push([merged("Tidak ada data perjalanan untuk diringkas", 5, "muted")]);
+  if (!sheets.length) rows.push([merged("Tidak ada data perjalanan untuk diringkas", 7, "muted")]);
   else sheets.forEach((sheet, index) => {
     const totals = getKorwilTotals(sheet);
-    rows.push([number(index + 1), text(sheet.korwilName), number(sheet.kordas.length), number(totals.total), number(totals.putra), number(totals.putri)]);
+    rows.push([number(index + 1), text(sheet.korwilName), number(sheet.kordas.length), number(totals.total), number(totals.paid), number(totals.unpaid), number(totals.putra), number(totals.putri)]);
   });
 
-  rows.push([], [merged("RINGKASAN PER KORWIL - KORDA", 5)], [text("No", "headerCenter"), text("Korwil", "header"), text("Korda", "header"), text("Peserta pada arah terpilih", "headerCenter"), text("Putra", "headerCenter"), text("Putri", "headerCenter")]);
-  if (!sheets.length) rows.push([merged("Tidak ada data perjalanan untuk diringkas", 5, "muted")]);
+  rows.push([], [merged("RINGKASAN PER KORWIL - KORDA", 7)], [text("No", "headerCenter"), text("Korwil", "header"), text("Korda", "header"), text("Peserta", "headerCenter"), text("Lunas", "headerCenter"), text("Belum lunas", "headerCenter"), text("Putra", "headerCenter"), text("Putri", "headerCenter")]);
+  if (!sheets.length) rows.push([merged("Tidak ada data perjalanan untuk diringkas", 7, "muted")]);
   else {
     let rowNumber = 1;
     for (const sheet of sheets) {
       for (const korda of sheet.kordas) {
         const totals = getRowsTotals(korda.rows);
-        rows.push([number(rowNumber++), text(sheet.korwilName), text(korda.kordaName), number(totals.total), number(totals.putra), number(totals.putri)]);
+        rows.push([number(rowNumber++), text(sheet.korwilName), text(korda.kordaName), number(totals.total), number(totals.paid), number(totals.unpaid), number(totals.putra), number(totals.putri)]);
       }
     }
   }
 
-  return { name: "Ringkasan", columns: [45, 220, 180, 110, 90, 90], rows };
+  return { name: "Ringkasan", columns: [45, 220, 180, 110, 90, 110, 90, 90], rows };
 }
 
 function sanitizeSheetName(rawName: string, fallbackIndex: number): string {
