@@ -38,7 +38,12 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
   const billableJourneyScope: Prisma.JourneyWhereInput = { ...journeyScope, status: "REGISTERED" };
   const activityDate = from || to ? { gte: from, lte: to } : undefined;
   const balanceScope: Prisma.KordaBalanceEntryWhereInput = { AND: [eventBalanceEntryWhere(selectedEventId), { ownerKorda: { is: regionalKorda }, ...(selectedKordaId ? { ownerKordaId: selectedKordaId } : {}), ...(activityDate ? { createdAt: activityDate } : {}) }] };
-  const [journeys, allocations, refunds, corrections, balances, balanceTotals, balanceCount] = await Promise.all([
+  const disbursementScope: Prisma.TreasuryDisbursementWhereInput = {
+    korda: { is: regionalKorda },
+    ...(selectedKordaId ? { kordaId: selectedKordaId } : {}),
+    ...(activityDate ? { disbursedAt: activityDate } : {}),
+  };
+  const [journeys, allocations, refunds, corrections, balances, balanceTotals, balanceCount, disbursements, allDisbursedTotal] = await Promise.all([
     prisma.journey.findMany({ where: billableJourneyScope, select: { id: true, direction: true, tariffSnapshot: true, destinationKordaId: true, destinationKordaNameSnapshot: true, registration: { select: { event: { select: { name: true } } } }, paymentAllocations: { where: { type: "JOURNEY" }, select: { amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } } }),
     prisma.paymentAllocation.findMany({ where: { type: "JOURNEY", journey: journeyScope, ...(activityDate ? { payment: { paidAt: activityDate } } : {}) }, select: { amount: true, journey: { select: { direction: true, destinationKordaNameSnapshot: true } }, payment: { select: { paidAt: true } } } }),
     prisma.refund.findMany({ where: { paymentAllocation: { type: "JOURNEY", journey: journeyScope }, ...(activityDate ? { refundedAt: activityDate } : {}) }, select: { amount: true, refundedAt: true, paymentAllocation: { select: { journey: { select: { direction: true, destinationKordaNameSnapshot: true } } } } } }),
@@ -46,6 +51,19 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
     prisma.kordaBalanceEntry.findMany({ where: balanceScope, select: { id: true, entryType: true, amount: true, originKordaNameSnapshot: true, destinationKordaNameSnapshot: true, participantNameSnapshot: true, createdAt: true, ownerKorda: { select: { name: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (balancePage - 1) * BALANCE_PAGE_SIZE, take: BALANCE_PAGE_SIZE }),
     prisma.kordaBalanceEntry.groupBy({ by: ["entryType"], where: balanceScope, _sum: { amount: true } }),
     prisma.kordaBalanceEntry.count({ where: balanceScope }),
+    prisma.treasuryDisbursement.findMany({
+      where: disbursementScope,
+      select: { id: true, amount: true, disbursedAt: true, note: true, korda: { select: { name: true } } },
+      orderBy: { disbursedAt: "desc" },
+      take: 50,
+    }),
+    prisma.treasuryDisbursement.aggregate({
+      where: {
+        korda: { is: regionalKorda },
+        ...(selectedKordaId ? { kordaId: selectedKordaId } : {}),
+      },
+      _sum: { amount: true },
+    }),
   ]);
 
   const groups = new Map<string, { korda: string; direction: string; billed: number; fee: number; received: number; refunded: number; corrected: number; outstanding: number }>();
@@ -71,6 +89,10 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
   const balancePageCount = Math.max(1, Math.ceil(balanceCount / BALANCE_PAGE_SIZE));
   const balancePageHref = (page: number) => `/laporan?korda=${encodeURIComponent(selectedKordaId)}&arah=${encodeURIComponent(direction)}&dari=${encodeURIComponent(fromValue)}&sampai=${encodeURIComponent(toValue)}&saldoPage=${page}`;
 
+  const disbursedTotal = allDisbursedTotal._sum.amount ?? 0;
+  const totalKordaMoney = total.billed + Math.max(0, balanceCredits);
+  const remainingKordaSaldo = Math.max(0, totalNetEntitlement + balanceCredits - disbursedTotal);
+
   return <main className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-3 sm:p-6 lg:p-8">
     <header className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Laporan keuangan</h1><p className="mt-1 text-sm text-muted-foreground">Ringkasan baca-saja tagihan, penerimaan, refund, koreksi, dan Saldo Lain sesuai cakupan akses Anda.</p></div><div className="flex flex-wrap gap-2"><Link href="/pembayaran" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Pembayaran</Link><Link href="/refund" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Refund</Link>{scope.role === "admin" && <Link href="/keuangan" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Keuangan pusat</Link>}</div></header>
     <FinanceContextNote mode="event" eventName={eventContext.selectedEvent?.name} />
@@ -84,7 +106,82 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
     </form>
     {activityDate && <p className="text-sm text-muted-foreground">Rentang tanggal hanya berlaku untuk penerimaan, refund, koreksi, dan kelebihan pembayaran. Tagihan, fee, dan hak bersih tetap menunjukkan posisi seluruh waktu pada event, Korda, dan arah yang dipilih.</p>}
     <FinanceHowToRead />
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Tagihan bruto terdaftar", total.billed], ["Fee pusat", total.fee], ["Hak Korda setelah fee", totalNetEntitlement], ["Penerimaan tercatat", total.received], ["Refund aktual", total.refunded], ["Koreksi alokasi", total.corrected], ["Sisa tagihan", total.outstanding]].map(([label, amount]) => <article key={label} className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><strong className="mt-1 block text-xl">{money(Number(amount))}</strong><p className="mt-1 text-xs text-muted-foreground">{label === "Tagihan bruto terdaftar" ? "Tarif terdaftar, bukan kas masuk." : label === "Hak Korda setelah fee" ? "Hak pembukuan, belum tentu sudah dapat dicairkan." : label === "Penerimaan tercatat" ? "Pembayaran yang tercatat masuk." : label === "Sisa tagihan" ? "Tagihan yang belum tertutup pembayaran." : "Mengikuti filter event dan cakupan di atas."}</p></article>)}</section>
+
+    {/* Posisi Dana Korda & Pencairan (Total Uang, Fee, Hak, Pencairan, Sisa Saldo) */}
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Posisi hak &amp; pencairan Korda</h2>
+          <p className="text-sm text-muted-foreground">Ringkasan hak bersih pendaftaran, fee pondok, pencairan yang sudah diterima, dan sisa saldo hak Korda.</p>
+        </div>
+        {selectedKordaId && (
+          <Link
+            href={`/keuangan/${selectedKordaId}?perjalanan=${direction === "OUTBOUND" ? "outbound" : direction === "RETURN" ? "return" : "both"}`}
+            className="rounded-md border px-3 py-1.5 text-xs font-medium text-primary hover:bg-muted"
+          >
+            Lihat detail per anak &amp; bukti →
+          </Link>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <article className="rounded-xl border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Total uang korda</p>
+          <strong className="mt-1 block text-xl">{money(totalKordaMoney)}</strong>
+          <p className="mt-1 text-xs text-muted-foreground">Tagihan bruto + Saldo Lain.</p>
+        </article>
+        <article className="rounded-xl border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Fee dibayarkan korda</p>
+          <strong className="mt-1 block text-xl">{money(total.fee)}</strong>
+          <p className="mt-1 text-xs text-muted-foreground">Rp10.000 × perjalanan terdaftar.</p>
+        </article>
+        <article className="rounded-xl border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Uang hak korda</p>
+          <strong className="mt-1 block text-xl">{money(totalNetEntitlement)}</strong>
+          <p className="mt-1 text-xs text-muted-foreground">Hak bersih setelah dipotong fee.</p>
+        </article>
+        <article className="rounded-xl border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Sudah dicairkan</p>
+          <strong className="mt-1 block text-xl text-emerald-600 dark:text-emerald-400">{money(disbursedTotal)}</strong>
+          <p className="mt-1 text-xs text-muted-foreground">Dana pusat yang sudah diserahkan.</p>
+        </article>
+        <article className="rounded-xl border bg-card p-4 ring-1 ring-primary/20 bg-primary/[0.03]">
+          <p className="text-sm text-muted-foreground">Sisa saldo hak korda</p>
+          <strong className="mt-1 block text-xl text-primary font-bold">{money(remainingKordaSaldo)}</strong>
+          <p className="mt-1 text-xs text-muted-foreground">Hak + saldo lain dikurangi pencairan.</p>
+        </article>
+      </div>
+    </section>
+
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">Statistik aktivitas transaksi</h2>
+        <p className="text-sm text-muted-foreground">Pergerakan arus kas pembayaran, refund, koreksi, dan sisa tagihan pada filter aktif.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Tagihan bruto terdaftar", total.billed],
+          ["Fee pusat", total.fee],
+          ["Penerimaan tercatat", total.received],
+          ["Refund aktual", total.refunded],
+          ["Koreksi alokasi", total.corrected],
+          ["Sisa tagihan", total.outstanding],
+        ].map(([label, amount]) => (
+          <article key={label} className="rounded-xl border bg-card p-4">
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <strong className="mt-1 block text-xl">{money(Number(amount))}</strong>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {label === "Tagihan bruto terdaftar"
+                ? "Tarif terdaftar, bukan kas masuk."
+                : label === "Penerimaan tercatat"
+                ? "Pembayaran yang tercatat masuk."
+                : label === "Sisa tagihan"
+                ? "Tagihan yang belum tertutup pembayaran."
+                : "Mengikuti filter event dan cakupan di atas."}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
     <section className="space-y-3"><div><h2 className="text-lg font-semibold">Rincian per Korda tujuan dan perjalanan</h2><p className="text-sm text-muted-foreground">Penerimaan, refund, dan koreksi ditampilkan terpisah agar perubahan alokasi tidak disamakan dengan uang yang benar-benar masuk atau keluar.</p></div>
       {reportRows.length ? <>
         <div className="grid gap-3 lg:hidden">{reportRows.map((row) => <article key={`${row.korda}:${row.direction}`} className="min-w-0 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words font-semibold">{row.korda}</h3><p className="text-sm text-muted-foreground">{row.direction === "OUTBOUND" ? "Pulang" : "Kembali"}</p></div><span className="rounded-full bg-muted px-2.5 py-1 text-xs">Rincian</span></div><dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 text-sm"><div><dt className="text-muted-foreground">Tagihan</dt><dd className="break-words font-medium">{money(row.billed)}</dd></div><div><dt className="text-muted-foreground">Penerimaan</dt><dd className="break-words font-medium">{money(row.received)}</dd></div><div><dt className="text-muted-foreground">Refund</dt><dd className="break-words">{money(row.refunded)}</dd></div><div><dt className="text-muted-foreground">Koreksi</dt><dd className="break-words">{money(row.corrected)}</dd></div><div><dt className="text-muted-foreground">Penerimaan bersih</dt><dd className="break-words font-semibold">{money(row.received - row.refunded - row.corrected)}</dd></div><div><dt className="text-muted-foreground">Sisa tagihan</dt><dd className="break-words font-medium">{money(row.outstanding)}</dd></div></dl></article>)}</div>
@@ -95,6 +192,60 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
       <div className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Perubahan bersih Saldo Lain pada cakupan Korda dan tanggal</p><strong className="text-xl">{money(balanceCredits)}</strong></div>
       {balances.length ? <><div className="grid gap-3 md:hidden">{balances.map((row) => <article key={row.id} className="min-w-0 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words font-semibold">{row.participantNameSnapshot}</h3><p className="text-sm text-muted-foreground">{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(row.createdAt)}</p></div><span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs">{row.entryType === "CREDIT" ? "Kredit" : row.entryType === "REFUND" ? "Refund" : "Koreksi"}</span></div><dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 text-sm"><div><dt className="text-muted-foreground">Korda asal</dt><dd className="break-words">{row.originKordaNameSnapshot ?? "—"}</dd></div><div><dt className="text-muted-foreground">Korda tujuan/pemilik</dt><dd className="break-words">{row.destinationKordaNameSnapshot || row.ownerKorda.name}</dd></div><div className="col-span-2 border-t pt-3"><dt className="text-muted-foreground">Nominal</dt><dd className="font-semibold">{row.entryType === "CREDIT" ? "+" : "−"}{money(Math.abs(row.amount))}</dd></div></dl></article>)}</div><div className="hidden overflow-x-auto rounded-xl border md:block"><table className="w-full min-w-[720px] text-sm"><thead className="bg-muted/50 text-left"><tr>{["Tanggal", "Peserta", "Korda asal", "Korda tujuan/pemilik", "Jenis", "Nominal"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead><tbody>{balances.map((row) => <tr key={row.id} className="border-t"><td className="p-3">{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(row.createdAt)}</td><td className="p-3">{row.participantNameSnapshot}</td><td className="p-3">{row.originKordaNameSnapshot ?? "—"}</td><td className="p-3">{row.destinationKordaNameSnapshot || row.ownerKorda.name}</td><td className="p-3">{row.entryType === "CREDIT" ? "Kredit" : row.entryType === "REFUND" ? "Refund" : "Koreksi"}</td><td className="p-3 font-semibold">{row.entryType === "CREDIT" ? "+" : "−"}{money(Math.abs(row.amount))}</td></tr>)}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-muted-foreground">Menampilkan {Math.min((balancePage - 1) * BALANCE_PAGE_SIZE + 1, balanceCount)}–{Math.min(balancePage * BALANCE_PAGE_SIZE, balanceCount)} dari {balanceCount} entri</span><div className="flex gap-2">{balancePage > 1 ? <Link className="rounded border px-3 py-2 hover:bg-muted" href={balancePageHref(balancePage - 1)}>Sebelumnya</Link> : <span aria-disabled="true" className="cursor-not-allowed rounded border px-3 py-2 opacity-40">Sebelumnya</span>}{balancePage < balancePageCount ? <Link className="rounded border px-3 py-2 hover:bg-muted" href={balancePageHref(balancePage + 1)}>Berikutnya</Link> : <span aria-disabled="true" className="cursor-not-allowed rounded border px-3 py-2 opacity-40">Berikutnya</span>}</div></div></> : <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">Belum ada perubahan Saldo Lain pada filter ini.</p>}
     </section>
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">Riwayat pencairan dana</h2>
+        <p className="text-sm text-muted-foreground">Catatan dana dari kas pusat yang sudah diserahkan / ditransfer kepada Korda dalam cakupan ini.</p>
+      </div>
+      {disbursements.length ? (
+        <>
+          <div className="grid gap-3 md:hidden">
+            {disbursements.map((row) => (
+              <article key={row.id} className="min-w-0 rounded-xl border bg-card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="break-words font-semibold">{row.korda.name}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(row.disbursedAt)}
+                    </p>
+                  </div>
+                  <strong className="text-emerald-600 dark:text-emerald-400">{money(row.amount)}</strong>
+                </div>
+                <div className="mt-3 border-t pt-2 text-sm text-muted-foreground">
+                  <p>Catatan: {row.note ?? "—"}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-xl border md:block">
+            <table className="w-full min-w-[620px] text-sm">
+              <thead className="bg-muted/50 text-left">
+                <tr>
+                  {["Tanggal", "Korda penerima", "Nominal pencairan", "Catatan"].map((label) => (
+                    <th key={label} className="p-3">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {disbursements.map((row) => (
+                  <tr key={row.id} className="border-t">
+                    <td className="p-3">
+                      {new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(row.disbursedAt)}
+                    </td>
+                    <td className="p-3 font-medium">{row.korda.name}</td>
+                    <td className="p-3 font-semibold text-emerald-600 dark:text-emerald-400">{money(row.amount)}</td>
+                    <td className="p-3 text-muted-foreground">{row.note ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">Belum ada riwayat pencairan pada filter ini.</p>
+      )}
+    </section>
+
     <p className="text-xs text-muted-foreground">{scope.role === "admin" ? <>Laporan ini bukan catatan kas rekening pusat. Untuk saldo pusat dan pencairan aktual ke Korda, buka Keuangan pusat.</> : "Laporan ini bersifat baca-saja dan menampilkan data sesuai cakupan akses Anda."}</p>
   </main>;
 }

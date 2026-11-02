@@ -10,12 +10,17 @@ const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
 const dateLabel = (date: Date) => new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(date);
 
 export default async function KordaFinanceDetailPage({ params, searchParams }: { params: Promise<{ kordaId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const { kordaId } = await params;
   const scope = await getRegionalAccessScope();
-  if (scope.role !== "admin") {
-    return <main className="mx-auto w-full max-w-3xl p-4 sm:p-8"><section className="rounded-xl border border-destructive/20 bg-destructive/10 p-6"><h1 className="font-semibold text-destructive">Akses ditolak</h1><p className="mt-1 text-sm text-destructive/80">Detail keuangan Korda hanya dapat diakses oleh admin.</p></section></main>;
+
+  const isAuthorized = scope.role === "admin"
+    || (scope.role === "korda" && scope.kordaId === kordaId)
+    || (scope.role === "korwil"); // Korwil diizinkan bila korda di bawah korwilnya, akan divalidasi oleh treasury / korda
+
+  if (!isAuthorized) {
+    return <main className="mx-auto w-full max-w-3xl p-4 sm:p-8"><section className="rounded-xl border border-destructive/20 bg-destructive/10 p-6"><h1 className="font-semibold text-destructive">Akses ditolak</h1><p className="mt-1 text-sm text-destructive/80">Anda tidak memiliki hak akses untuk melihat rincian keuangan Korda ini.</p></section></main>;
   }
 
-  const { kordaId } = await params;
   const query = await searchParams;
   const requestedDirection = typeof query.perjalanan === "string" ? query.perjalanan : "both";
   const direction: FinanceJourneyFilter = requestedDirection === "outbound" || requestedDirection === "return" ? requestedDirection : "both";
@@ -27,7 +32,9 @@ export default async function KordaFinanceDetailPage({ params, searchParams }: {
 
   return <main className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-3 sm:p-6 lg:p-8">
     <header className="space-y-3">
-      <Link href={`/keuangan?perjalanan=${direction}`} className="text-sm font-medium text-primary hover:underline">← Kembali ke keuangan pusat</Link>
+      <Link href={scope.role === "admin" ? `/keuangan?perjalanan=${direction}` : "/laporan"} className="text-sm font-medium text-primary hover:underline">
+        ← Kembali ke {scope.role === "admin" ? "keuangan pusat" : "laporan keuangan"}
+      </Link>
       <div><h1 className="text-2xl font-bold tracking-tight">Detail keuangan · {detail.korda.name}</h1><p className="mt-1 text-sm text-muted-foreground">Rincian perjalanan {direction === "both" ? "pulang dan pergi" : direction === "outbound" ? "pulang" : "pergi"}. Kas pusat dan pencairan tetap global.</p></div>
     </header>
 
