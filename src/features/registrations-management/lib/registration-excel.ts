@@ -109,6 +109,63 @@ function buildSummaryWorksheet(
   return { name: "Ringkasan", columns: [45, 220, 180, 110, 90, 110, 90, 90], rows };
 }
 
+function buildDropPointSummaryWorksheet(
+  sheets: RegistrationExportKorwilSheet[],
+  directionLabel: string,
+): ExcelWorksheet {
+  const rows: ExcelCell[][] = [
+    [merged(`RINGKASAN TITIK TURUN - ${directionLabel.toLocaleUpperCase("id-ID")}`, 2, "title")],
+    [merged(`Dibuat: ${new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}`, 2, "muted")],
+    [],
+  ];
+
+  if (!sheets.length) {
+    rows.push([merged("Tidak ada data perjalanan untuk diringkas", 2, "muted")]);
+    return { name: "Ringkasan Titik Turun", columns: [45, 280, 130], rows };
+  }
+
+  for (const sheet of sheets) {
+    rows.push([merged(`KORWIL: ${sheet.korwilName}`, 2, "section")]);
+
+    for (const korda of sheet.kordas) {
+      const pointCounts = new Map<string, number>();
+
+      for (const row of korda.rows) {
+        const pointName = row.travelPoint.trim() || "Titik turun belum tersedia";
+        pointCounts.set(pointName, (pointCounts.get(pointName) ?? 0) + 1);
+      }
+
+      rows.push([merged(`KORDA: ${korda.kordaName}`, 2)]);
+      rows.push([
+        text("No", "headerCenter"),
+        text("Titik turun", "header"),
+        text("Jumlah peserta", "headerCenter"),
+      ]);
+
+      const sortedPoints = [...pointCounts.entries()].sort(([first], [second]) =>
+        first.localeCompare(second, "id", { sensitivity: "base" }),
+      );
+
+      if (!sortedPoints.length) {
+        rows.push([merged("Tidak ada titik turun", 2, "muted")]);
+      } else {
+        sortedPoints.forEach(([pointName, participantCount], index) => {
+          rows.push([number(index + 1), text(pointName), number(participantCount)]);
+        });
+        rows.push([
+          text("Total Korda", "header"),
+          text(""),
+          number(korda.rows.length, "textCenter"),
+        ]);
+      }
+
+      rows.push([]);
+    }
+  }
+
+  return { name: "Ringkasan Titik Turun", columns: [45, 280, 130], rows };
+}
+
 function sanitizeSheetName(rawName: string, fallbackIndex: number): string {
   const cleaned = rawName.replace(/[:\\/?*\[\]]/g, " ").replace(/[\u0000-\u001F]/g, " ").replace(/\s+/g, " ").trim().replace(/^'+|'+$/g, "");
   return (cleaned || `Korwil ${fallbackIndex + 1}`).slice(0, 31);
@@ -131,8 +188,12 @@ export function buildRegistrationsExcelBlob(
   directionLabel: string,
 ): Blob {
   const usedNames = new Set<string>();
-  const worksheets: ExcelWorksheet[] = [buildSummaryWorksheet(sheets, directionLabel)];
+  const worksheets: ExcelWorksheet[] = [
+    buildSummaryWorksheet(sheets, directionLabel),
+    buildDropPointSummaryWorksheet(sheets, directionLabel),
+  ];
   usedNames.add("ringkasan");
+  usedNames.add("ringkasan titik turun");
 
   sheets.forEach((sheet, sheetIndex) => {
     const rows: ExcelCell[][] = [[merged(`KORWIL: ${sheet.korwilName}`, 7, "title")], []];
