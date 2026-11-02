@@ -27,6 +27,7 @@ export default async function KeuanganPage({ searchParams }: { searchParams: Pro
   const toValue = typeof params.sampai === "string" ? params.sampai : "";
   const requestedDirection = typeof params.perjalanan === "string" ? params.perjalanan : "both";
   const direction: FinanceJourneyFilter = requestedDirection === "outbound" || requestedDirection === "return" ? requestedDirection : "both";
+  const directionLabel = direction === "outbound" ? "Pulang saja" : direction === "return" ? "Pergi saja" : "Pulang & Pergi";
   const from = asDate(fromValue);
   const to = asDate(toValue, true);
   const position = await getTreasuryPosition(scope, direction);
@@ -75,25 +76,47 @@ export default async function KeuanganPage({ searchParams }: { searchParams: Pro
       {direction !== "both" && <p className="mt-3 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">Kas pusat, pencairan, dan Saldo Lain tetap bersifat global karena belum memiliki atribusi arah perjalanan pada data sumber.</p>}
     </section>
 
-    {scope.role === "admin" && <section className="space-y-3">
-      <div><h2 className="text-lg font-semibold">Ringkasan keuangan · semua event</h2><p className="mt-1 text-sm text-muted-foreground">Ringkasan ini tetap global saat filter perjalanan diubah. Fee masuk dihitung dari penerimaan bersih yang dialokasikan ke tagihan perjalanan.</p></div>
-      <div className="grid gap-4 xl:grid-cols-[0.8fr_1.6fr_0.8fr]">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Tagihan global</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalGrossBilled)}</strong><p className="mt-1 text-xs text-muted-foreground">Tarif perjalanan berstatus REGISTERED.</p></article>
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Fee tagihan global</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalFee)}</strong><p className="mt-1 text-xs text-muted-foreground">Rp10.000 per perjalanan REGISTERED.</p></article>
+    {scope.role === "admin" && <>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold">Tagihan & hak pendaftaran</h2>
+          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">{directionLabel}</span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2 xl:border-x xl:px-4">
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Uang masuk global (sesuai rek)</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalPaymentReceipts ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Total pembayaran tercatat, sebelum refund dan pencairan.</p></article>
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Fee masuk</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalFeeReceived)}</strong><p className="mt-1 text-xs text-muted-foreground">Bagian fee proporsional dari penerimaan bersih tagihan; tidak termasuk Saldo Lain.</p></article>
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Hak setelah fee</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalRegistrationEntitlement)}</strong><p className="mt-1 text-xs text-muted-foreground">Tagihan global dikurangi fee tagihan; hak pembukuan, bukan kas diterima.</p></article>
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kelebihan pembayaran</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalBalanceCash)}</strong><p className="mt-1 text-xs text-muted-foreground">Saldo Lain bersih yang masih dimiliki Korda tujuan.</p></article>
+        <p className="text-sm text-muted-foreground">Mengikuti filter perjalanan di atas. Menampilkan posisi estimasi tagihan pendaftaran serta realisasi uang masuk yang sudah teralokasi.</p>
+
+        {/* Baris 1: Sisi Tagihan (Pendaftar) */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <article className="rounded-xl border bg-card p-4 ring-1 ring-primary/20"><p className="text-sm text-muted-foreground">Tagihan bruto</p><strong className="mt-1 block text-2xl">{money(position.totalGrossBilled)}</strong><p className="mt-1 text-xs text-muted-foreground">Tarif perjalanan REGISTERED sesuai filter.</p></article>
+          <article className="rounded-xl border bg-card p-4 ring-1 ring-primary/20"><p className="text-sm text-muted-foreground">Fee tagihan</p><strong className="mt-1 block text-2xl">{money(position.totalFee)}</strong><p className="mt-1 text-xs text-muted-foreground">Rp10.000 × seluruh perjalanan REGISTERED.</p></article>
+          <article className="rounded-xl border bg-card p-4 ring-1 ring-primary/20"><p className="text-sm text-muted-foreground">Hak setelah fee</p><strong className="mt-1 block text-2xl">{money(position.totalRegistrationEntitlement)}</strong><p className="mt-1 text-xs text-muted-foreground">Tagihan dikurangi fee; potensi hak jika lunas.</p></article>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kas</p><strong className="mt-1 block text-2xl">{money(globalPosition.centralBalance ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Uang masuk dikurangi total pengeluaran.</p></article>
-          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Total pengeluaran</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalExpenses)}</strong><p className="mt-1 text-xs text-muted-foreground">Refund aktual ditambah pencairan ke Korda.</p></article>
+
+        {/* Baris 2: Sisi Realisasi (Uang Masuk & Lunas) */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <article className="rounded-xl border bg-card p-4 ring-1 ring-emerald-500/30 bg-emerald-500/[0.02]"><p className="text-sm text-muted-foreground">Uang masuk teralokasi</p><strong className="mt-1 block text-2xl text-emerald-600 dark:text-emerald-400">{money(position.totalRegistrationReceived)}</strong><p className="mt-1 text-xs text-muted-foreground">Pembayaran yang masuk untuk tiket perjalanan sesuai filter.</p></article>
+          <article className="rounded-xl border bg-card p-4 ring-1 ring-emerald-500/30 bg-emerald-500/[0.02]"><p className="text-sm text-muted-foreground">Fee (tiket lunas)</p><strong className="mt-1 block text-2xl">{money(position.totalFeePaid)}</strong><p className="mt-1 text-xs text-muted-foreground">Rp10.000 × {position.totalPaidJourneyCount} tiket yang sudah lunas.</p></article>
+          <article className="rounded-xl border bg-card p-4 ring-1 ring-emerald-500/30 bg-emerald-500/[0.02]"><p className="text-sm text-muted-foreground">Hak dari uang masuk</p><strong className="mt-1 block text-2xl font-bold">{money(Math.max(0, position.totalRegistrationReceived - position.totalFeePaid))}</strong><p className="mt-1 text-xs text-muted-foreground">Uang masuk teralokasi dikurangi fee tiket lunas.</p></article>
         </div>
+      </section>
+      <div className="flex items-center gap-3 py-1">
+        <div className="h-px flex-1 bg-border" />
+        <p className="shrink-0 text-xs text-muted-foreground">Data di bawah selalu global — tidak berubah saat filter perjalanan diubah</p>
+        <div className="h-px flex-1 bg-border" />
       </div>
-    </section>}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold">Kas rekening & pengeluaran</h2>
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Semua event · Semua arah</span>
+        </div>
+        <p className="text-sm text-muted-foreground">Satu pembayaran atau refund dapat mencakup Pulang dan Pergi sekaligus, sehingga tidak dapat difilter per arah perjalanan.</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Uang masuk (sesuai rek)</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalPaymentReceipts ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Total pembayaran tercatat, sebelum refund dan pencairan.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kelebihan pembayaran</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalBalanceCash)}</strong><p className="mt-1 text-xs text-muted-foreground">Saldo Lain bersih semua Korda tujuan.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Total pengeluaran</p><strong className="mt-1 block text-2xl">{money(globalPosition.totalExpenses)}</strong><p className="mt-1 text-xs text-muted-foreground">Refund aktual ditambah pencairan ke Korda.</p></article>
+          <article className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Kas</p><strong className="mt-1 block text-2xl">{money(globalPosition.centralBalance ?? 0)}</strong><p className="mt-1 text-xs text-muted-foreground">Uang masuk dikurangi total pengeluaran.</p></article>
+        </div>
+      </section>
+    </>}
 
     <FinanceHowToRead />
 

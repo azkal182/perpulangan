@@ -56,11 +56,13 @@ export async function getTreasuryPosition(
     name: korda.name,
     grossBilled: 0,
     billedJourneyCount: 0,
+    paidJourneyCount: 0,
     cancelledJourneyCount: 0,
     fee: 0,
     registrationEntitlement: 0,
     registrationReceived: 0,
     feeReceived: 0,
+    feePaid: 0,
     balanceCash: 0,
     assigned: 0,
     disbursed: 0,
@@ -87,6 +89,10 @@ export async function getTreasuryPosition(
       CENTRAL_FEE_PER_JOURNEY,
       Math.floor((eligibleReceipt * CENTRAL_FEE_PER_JOURNEY) / journey.tariffSnapshot),
     );
+    if (received >= journey.tariffSnapshot) {
+      position.paidJourneyCount += 1;
+      position.feePaid += CENTRAL_FEE_PER_JOURNEY;
+    }
   }
 
   for (const position of positions.values()) {
@@ -119,6 +125,9 @@ export async function getTreasuryPosition(
   const totalHeldAtCenter = [...positions.values()].reduce((sum, row) => sum + row.heldAtCenter, 0);
   const totalFee = [...positions.values()].reduce((sum, row) => sum + row.fee, 0);
   const totalFeeReceived = [...positions.values()].reduce((sum, row) => sum + row.feeReceived, 0);
+  const totalFeePaid = [...positions.values()].reduce((sum, row) => sum + row.feePaid, 0);
+  const totalPaidJourneyCount = [...positions.values()].reduce((sum, row) => sum + row.paidJourneyCount, 0);
+  const totalRegistrationReceived = [...positions.values()].reduce((sum, row) => sum + row.registrationReceived, 0);
   const totalBalanceCash = [...positions.values()].reduce((sum, row) => sum + row.balanceCash, 0);
   const totalRefunds = refunds?._sum.amount ?? 0;
   const totalExpenses = totalRefunds + (allDisbursements?._sum.amount ?? 0);
@@ -139,6 +148,9 @@ export async function getTreasuryPosition(
     totalHeldAtCenter,
     totalFee,
     totalFeeReceived,
+    totalFeePaid,
+    totalPaidJourneyCount,
+    totalRegistrationReceived,
     totalBalanceCash,
     totalRefunds,
     totalExpenses,
