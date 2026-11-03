@@ -8,6 +8,41 @@ export const PAPER_SIZES = {
 
 export type PaperSize = keyof typeof PAPER_SIZES;
 export type PrintType = "luggage_card" | "ticket" | "bracelet";
+export type LuggageCardSize = "standard" | "large_portrait" | "large_landscape";
+
+export const LUGGAGE_CARD_SIZES: Record<
+  LuggageCardSize,
+  {
+    width: number;
+    height: number;
+    name: string;
+    label: string;
+    orientation: "portrait" | "landscape";
+  }
+> = {
+  standard: {
+    width: 95,
+    height: 53,
+    name: "Standar",
+    label: "9.5 × 5.3 cm (Landscape)",
+    orientation: "portrait",
+  },
+  large_portrait: {
+    width: 77,
+    height: 127,
+    name: "Besar Tegak",
+    label: "7.7 × 12.7 cm (Portrait)",
+    orientation: "portrait",
+  },
+  large_landscape: {
+    width: 127,
+    height: 77,
+    name: "Besar Mendatar",
+    label: "12.7 × 7.7 cm (Landscape)",
+    orientation: "landscape",
+  },
+};
+
 export const BRACELET_SIZE_MM = { width: 220, height: 20 } as const;
 
 // Color palette for Korda hashing (using Tailwind classes)
@@ -264,6 +299,7 @@ export interface LayoutConfig {
 export function calculateLayout(
   paperSize: PaperSize,
   printType: PrintType,
+  luggageCardSize: LuggageCardSize = "standard",
 ): LayoutConfig {
   if (printType === "bracelet") {
     const sheetWidth = PAPER_SIZES[paperSize].height;
@@ -290,7 +326,110 @@ export function calculateLayout(
   void PAPER_SIZES[paperSize]; // retained for potential future use
 
   if (printType === "luggage_card") {
-    // Landscape card: sedikit dipersempit agar area aman kiri/kanan lebih longgar saat print
+    if (luggageCardSize === "large_portrait") {
+      const cardWidth = 77;
+      const cardHeight = 127;
+
+      switch (paperSize) {
+        case "A4":
+          return {
+            columns: 2,
+            rows: 2,
+            cardWidth,
+            cardHeight,
+            marginX: 28, // (210 - (77*2)) / 2 = 28
+            marginY: 21.5, // (297 - (127*2)) / 2 = 21.5
+            gapX: 0,
+            gapY: 0,
+          };
+        case "F4":
+          return {
+            columns: 2,
+            rows: 2,
+            cardWidth,
+            cardHeight,
+            marginX: 30.5, // (215 - (77*2)) / 2 = 30.5
+            marginY: 38, // (330 - (127*2)) / 2 = 38
+            gapX: 0,
+            gapY: 0,
+          };
+        case "A3":
+          return {
+            columns: 3,
+            rows: 3,
+            cardWidth,
+            cardHeight,
+            marginX: 33, // (297 - (77*3)) / 2 = 33
+            marginY: 19.5, // (420 - (127*3)) / 2 = 19.5
+            gapX: 0,
+            gapY: 0,
+          };
+        case "A3+":
+          return {
+            columns: 4,
+            rows: 3,
+            cardWidth,
+            cardHeight,
+            marginX: 10.5, // (329 - (77*4)) / 2 = 10.5
+            marginY: 51, // (483 - (127*3)) / 2 = 51
+            gapX: 0,
+            gapY: 0,
+          };
+      }
+    } else if (luggageCardSize === "large_landscape") {
+      // Landscape paper orientation: paper width is swapped with height
+      const cardWidth = 127;
+      const cardHeight = 77;
+
+      switch (paperSize) {
+        case "A4":
+          return {
+            columns: 2,
+            rows: 2,
+            cardWidth,
+            cardHeight,
+            marginX: 21.5, // (297 - (127*2)) / 2 = 21.5
+            marginY: 28, // (210 - (77*2)) / 2 = 28
+            gapX: 0,
+            gapY: 0,
+          };
+        case "F4":
+          return {
+            columns: 2,
+            rows: 2,
+            cardWidth,
+            cardHeight,
+            marginX: 38, // (330 - (127*2)) / 2 = 38
+            marginY: 30.5, // (215 - (77*2)) / 2 = 30.5
+            gapX: 0,
+            gapY: 0,
+          };
+        case "A3":
+          return {
+            columns: 3,
+            rows: 3,
+            cardWidth,
+            cardHeight,
+            marginX: 19.5, // (420 - (127*3)) / 2 = 19.5
+            marginY: 33, // (297 - (77*3)) / 2 = 33
+            gapX: 0,
+            gapY: 0,
+          };
+        case "A3+":
+          return {
+            columns: 3,
+            rows: 4,
+            cardWidth,
+            cardHeight,
+            marginX: 51, // (483 - (127*3)) / 2 = 51
+            marginY: 10.5, // (329 - (77*4)) / 2 = 10.5
+            gapX: 0,
+            gapY: 0,
+          };
+      }
+    }
+
+    // Default: Standard landscape card (95 x 53 mm)
     const cardWidth = 95;
     const cardHeight = 53;
 

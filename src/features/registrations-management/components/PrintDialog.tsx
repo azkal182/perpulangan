@@ -39,8 +39,13 @@ import type {
   PaperSize,
   PrintType,
   PrintDataItem,
+  LuggageCardSize,
 } from "../lib/print-utils";
-import { calculateLayout, PAPER_SIZES, getKordaColor } from "../lib/print-utils";
+import {
+  calculateLayout,
+  PAPER_SIZES,
+  getKordaColor,
+} from "../lib/print-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -105,6 +110,7 @@ export function PrintWorkspace({
 }: PrintWorkspaceProps) {
   const [journeyFilter, setJourneyFilter] = useState<"" | "outbound" | "return">("");
   const [printType, setPrintType] = useState<PrintType>("luggage_card");
+  const [luggageCardSize, setLuggageCardSize] = useState<LuggageCardSize>("standard");
   const [paperSize, setPaperSize] = useState<PaperSize>("A4");
   const [genderFilter, setGenderFilter] = useState<
     "all" | "Laki-laki" | "Perempuan"
@@ -217,14 +223,18 @@ export function PrintWorkspace({
         window.requestAnimationFrame(() => resolve());
       });
 
-      const layout = calculateLayout(paperSize, printType);
-      const paper = printType === "bracelet"
+      const isPaperLandscape =
+        printType === "bracelet" ||
+        (printType === "luggage_card" && luggageCardSize === "large_landscape");
+
+      const layout = calculateLayout(paperSize, printType, luggageCardSize);
+      const paper = isPaperLandscape
         ? { width: PAPER_SIZES[paperSize].height, height: PAPER_SIZES[paperSize].width }
         : PAPER_SIZES[paperSize];
 
       // Create PDF
       const pdf = new jsPDF({
-        orientation: printType === "bracelet" ? "landscape" : "portrait",
+        orientation: isPaperLandscape ? "landscape" : "portrait",
         unit: "mm",
         format: [paper.width, paper.height],
       });
@@ -246,7 +256,15 @@ export function PrintWorkspace({
           const y = layout.marginY + row * (layout.cardHeight + layout.gapY);
 
           if (printType === "luggage_card") {
-            drawLuggageCardToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
+            drawLuggageCardToPdf(
+              pdf,
+              item,
+              x,
+              y,
+              layout.cardWidth,
+              layout.cardHeight,
+              luggageCardSize,
+            );
             return;
           }
           if (printType === "ticket") {
@@ -259,7 +277,7 @@ export function PrintWorkspace({
       }
 
       // Download PDF
-      const filename = `${printType === "luggage_card" ? "kartu_barang" : printType === "ticket" ? "tiket" : "gelang_22x2cm"}_${printType === "bracelet" ? "custom" : paperSize}_${new Date().getTime()}.pdf`;
+      const filename = `${printType === "luggage_card" ? `kartu_barang_${luggageCardSize}` : printType === "ticket" ? "tiket" : "gelang_22x2cm"}_${paperSize}_${new Date().getTime()}.pdf`;
       pdf.save(filename);
 
       toast.dismiss();
@@ -274,8 +292,11 @@ export function PrintWorkspace({
     }
   };
 
-  const layout = calculateLayout(paperSize, printType);
-  const paper = printType === "bracelet"
+  const isPaperLandscape =
+    printType === "bracelet" ||
+    (printType === "luggage_card" && luggageCardSize === "large_landscape");
+  const layout = calculateLayout(paperSize, printType, luggageCardSize);
+  const paper = isPaperLandscape
     ? { width: PAPER_SIZES[paperSize].height, height: PAPER_SIZES[paperSize].width }
     : PAPER_SIZES[paperSize];
   const cardsPerPage = layout.columns * layout.rows;
@@ -475,21 +496,71 @@ export function PrintWorkspace({
         </div>
       </div>
 
-      {/* Paper Size */}
-      <div className="space-y-2">
-        <Label>Ukuran Kertas</Label>
-        <Select value={paperSize} onValueChange={(v: PaperSize) => { setPaperSize(v); resetPreview(); }}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="A4">A4 (210 x 297 mm)</SelectItem>
-            <SelectItem value="F4">F4 (215 x 330 mm)</SelectItem>
-            <SelectItem value="A3">A3 (297 x 420 mm)</SelectItem>
-            <SelectItem value="A3+">A3+ (329 x 483 mm)</SelectItem>
-          </SelectContent>
-        </Select>
-        {printType === "bracelet" && <p className="text-xs text-muted-foreground">Setiap gelang berukuran 22 × 2 cm dan disusun pada lembar kertas terpilih (landscape).</p>}
+      {/* Paper Size & Card Size */}
+      <div
+        className={`grid grid-cols-1 gap-4 ${printType === "luggage_card" ? "md:grid-cols-2" : ""}`}
+      >
+        <div className="space-y-2">
+          <Label>Ukuran Kertas</Label>
+          <Select
+            value={paperSize}
+            onValueChange={(v: PaperSize) => {
+              setPaperSize(v);
+              resetPreview();
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="A4">A4 (210 x 297 mm)</SelectItem>
+              <SelectItem value="F4">F4 (215 x 330 mm)</SelectItem>
+              <SelectItem value="A3">A3 (297 x 420 mm)</SelectItem>
+              <SelectItem value="A3+">A3+ (329 x 483 mm)</SelectItem>
+            </SelectContent>
+          </Select>
+          {printType === "bracelet" && (
+            <p className="text-xs text-muted-foreground">
+              Setiap gelang berukuran 22 × 2 cm dan disusun pada lembar kertas terpilih (landscape).
+            </p>
+          )}
+        </div>
+
+        {printType === "luggage_card" && (
+          <div className="space-y-2">
+            <Label>Ukuran Kartu Barang</Label>
+            <Select
+              value={luggageCardSize}
+              onValueChange={(v: LuggageCardSize) => {
+                setLuggageCardSize(v);
+                resetPreview();
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">
+                  Standar (9.5 × 5.3 cm - Landscape)
+                </SelectItem>
+                <SelectItem value="large_portrait">
+                  Besar Tegak (7.7 × 12.7 cm - Portrait)
+                </SelectItem>
+                <SelectItem value="large_landscape">
+                  Besar Mendatar (12.7 × 7.7 cm - Landscape)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {luggageCardSize === "standard" &&
+                "Ukuran kartu standar 9.5 × 5.3 cm (landscape)."}
+              {luggageCardSize === "large_portrait" &&
+                "Ukuran 7.7 × 12.7 cm tegak (portrait) untuk plastik mika / pouch gantungan koper."}
+              {luggageCardSize === "large_landscape" &&
+                "Ukuran 12.7 × 7.7 cm mendatar (landscape) format besar."}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Preview */}
@@ -563,7 +634,7 @@ export function PrintWorkspace({
                   >
                     {printType === "bracelet" && <PreviewBraceletCropMarks unitPx={mmToPx(1) * previewScale} />}
                     {printType === "luggage_card" ? (
-                      <PreviewLuggageCard item={item} />
+                      <PreviewLuggageCard item={item} cardSize={luggageCardSize} />
                     ) : printType === "ticket" ? (
                       <PreviewTicketCard item={item} />
                     ) : (
@@ -805,212 +876,452 @@ function wrapPreviewLines(value: string, maxChars: number, maxLines: number): st
   return lines.length ? lines : ["-"];
 }
 
-function PreviewLuggageCard({ item }: { item: PrintDataItem }) {
+function PreviewLuggageCard({
+  item,
+  cardSize = "standard",
+}: {
+  item: PrintDataItem;
+  cardSize?: LuggageCardSize;
+}) {
   const palette = getHexPalette(item.kordaName);
   const isPutri = isPutriGender(item.studentGender);
   const genderLabel = isPutri ? "PUTRI" : "PUTRA";
-  const floralScaleX = 980 / 800;
-  const floralScaleY = 530 / 600;
-  const kordaText = truncatePreviewText(item.kordaName, 16).toUpperCase();
-  const studentName = truncatePreviewText(item.studentName, 30).toUpperCase();
-  const studentNis = item.studentNis ? truncatePreviewText(item.studentNis, 20) : "";
   const rosterNumber = String(item.rosterNumber).padStart(3, "0");
-  const parentPhone = truncatePreviewText(item.parrentPhone, 24);
-  const dropPoint = truncatePreviewText(item.dropPointName, 20);
-  const busLabel = truncatePreviewText(item.busLabel, 20);
-  const busBadgeWidth = Math.max(
-    48,
-    Math.min(420, busLabel.length * 15 + 24),
-  );
+  const parentPhone = item.parrentPhone ? truncatePreviewText(item.parrentPhone, 22) : "-";
+
+  if (cardSize === "large_portrait") {
+    const kordaText = truncatePreviewText(item.kordaName, 22).toUpperCase();
+    const studentName = truncatePreviewText(item.studentName, 26).toUpperCase();
+    const studentNis = item.studentNis ? truncatePreviewText(item.studentNis, 16) : "";
+    const dropPointLines = wrapPreviewLines(item.dropPointName, 22, 2);
+    const busLabel = truncatePreviewText(item.busLabel || "-", 14).toUpperCase();
+    const nisBadgeWidth = Math.max(90, Math.min(260, studentNis.length * 11 + 65));
+
+    return (
+      <svg
+        viewBox="0 0 770 1270"
+        className="h-full w-full"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={`Preview kartu barang tegak ${studentName}`}
+      >
+        {/* Outer Cutting Border (Subtle Gray) */}
+        <rect x="0.5" y="0.5" width="769" height="1269" fill="#ffffff" stroke="#d1d5db" strokeWidth="1" />
+
+        {/* Inner Card Artwork Container (Plain White Frame Gap: 25 SVG units = 2.5mm) */}
+        <rect x="25" y="25" width="720" height="1220" rx="14" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
+
+        {isPutri ? (
+          <g opacity="0.07" transform="translate(470, 930)">
+            <circle cx="120" cy="120" r="100" fill="none" stroke={palette.header} strokeWidth="12" />
+            <path d="M 120 20 C 170 70 170 170 120 220 C 70 170 70 70 120 20 Z" fill={palette.header} />
+          </g>
+        ) : (
+          <g opacity="0.04">
+            <pattern id={`grid-pattern-p-${item.id}`} width="24" height="24" patternUnits="userSpaceOnUse">
+              <circle cx="12" cy="12" r="1.8" fill={palette.header} />
+            </pattern>
+            <rect x="26" y="225" width="718" height="1010" fill={`url(#grid-pattern-p-${item.id})`} />
+          </g>
+        )}
+
+        {/* Top Header Banner */}
+        <path d="M 25 39 C 25 31 31 25 39 25 L 731 25 C 739 25 745 31 745 39 L 745 220 L 25 220 Z" fill={palette.header} />
+
+        {/* Center Punch Hole Guide */}
+        <circle cx="385" cy="62" r="18" fill="none" stroke="#ffffff" strokeWidth="2" strokeDasharray="5 3" opacity="0.75" />
+        <circle cx="385" cy="62" r="3.5" fill="#ffffff" opacity="0.75" />
+
+        <text x="385" y="120" fill="#ffffff" opacity="0.85" textAnchor="middle" fontSize="20" fontWeight="700" letterSpacing="3">
+          LABEL BAGASI SANTRI
+        </text>
+        <text x="385" y="178" fill="#ffffff" textAnchor="middle" fontSize="42" fontWeight="900" letterSpacing="1">
+          {kordaText}
+        </text>
+
+        {/* Accent Strip below Header */}
+        <rect x="25" y="220" width="720" height="6" fill={palette.border} />
+
+        {/* Sub Header: Gender Pill & Roster Number Badges */}
+        <rect x="25" y="226" width="720" height="110" fill="#f8fafc" />
+        <rect x="55" y="248" width="220" height="66" rx="33" fill={palette.header} />
+        <text x="165" y="290" fill="#ffffff" textAnchor="middle" fontSize="24" fontWeight="900" letterSpacing="1.5">
+          {genderLabel}
+        </text>
+
+        <rect x="470" y="240" width="220" height="82" rx="12" fill="#ffffff" stroke={palette.border} strokeWidth="1.5" />
+        <text x="580" y="268" fill="#6b7280" textAnchor="middle" fontSize="16" fontWeight="800" letterSpacing="1.5">
+          NO. URUT
+        </text>
+        <text x="580" y="308" fill="#111827" textAnchor="middle" fontSize="38" fontWeight="900">
+          {rosterNumber}
+        </text>
+        <line x1="25" y1="336" x2="745" y2="336" stroke="#e2e8f0" strokeWidth="1.5" />
+
+        {/* Passenger Hero Name */}
+        <text x="55" y="380" fill="#9ca3af" fontSize="19" fontWeight="800" letterSpacing="2">
+          NAMA PENUMPANG / SANTRI
+        </text>
+        <text x="55" y="435" fill="#111827" fontSize="44" fontWeight="900">
+          {studentName}
+        </text>
+
+        {studentNis ? (
+          <g transform="translate(55, 458)">
+            <rect width={nisBadgeWidth} height="38" rx="8" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+            <text x="14" y="26" fill="#4b5563" fontSize="22" fontWeight="800">
+              NIS: {studentNis}
+            </text>
+          </g>
+        ) : (
+          <g transform="translate(55, 458)">
+            <rect width="210" height="38" rx="8" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+            <text x="14" y="26" fill="#6b7280" fontSize="20" fontWeight="800">
+              PESERTA UMUM
+            </text>
+          </g>
+        )}
+
+        <line x1="50" y1="520" x2="720" y2="520" stroke="#e5e7eb" strokeWidth="1.5" strokeDasharray="6 4" />
+
+        {/* Drop Point Container Card */}
+        <g transform="translate(55, 545)">
+          <rect width="660" height="160" rx="14" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.5" />
+          <text x="24" y="38" fill="#6b7280" fontSize="19" fontWeight="800" letterSpacing="2">
+            TITIK TURUN (DROP POINT)
+          </text>
+          <text x="24" y="88" fill="#111827" fontSize="36" fontWeight="800">
+            {dropPointLines[0]}
+          </text>
+          {dropPointLines[1] && (
+            <text x="24" y="132" fill="#111827" fontSize="32" fontWeight="800">
+              {dropPointLines[1]}
+            </text>
+          )}
+        </g>
+
+        {/* Emergency Contact Container Card */}
+        <g transform="translate(55, 725)">
+          <rect width="660" height="140" rx="14" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.5" />
+          <text x="24" y="38" fill="#6b7280" fontSize="19" fontWeight="800" letterSpacing="2">
+            KONTAK DARURAT / ORTU
+          </text>
+          <text x="24" y="92" fill="#1f2937" fontSize="36" fontWeight="800">
+            {parentPhone}
+          </text>
+        </g>
+
+        {/* Armada Bus Focal Point (Moved to Bottom Section) */}
+        <text x="55" y="895" fill="#6b7280" fontSize="20" fontWeight="800" letterSpacing="2">
+          ARMADA BUS
+        </text>
+        <g transform="translate(55, 915)">
+          <rect width="660" height="235" rx="16" fill={palette.header} stroke={palette.border} strokeWidth="2.5" />
+          <path d="M 0 16 C 0 7.2 7.2 0 16 0 L 644 0 C 652.8 0 660 7.2 660 16 L 660 46 L 0 46 Z" fill="rgba(0, 0, 0, 0.14)" />
+          <text x="330" y="32" fill="#ffffff" opacity="0.95" textAnchor="middle" fontSize="20" fontWeight="800" letterSpacing="2.5">
+            BUS PENUMPANG
+          </text>
+          <text x="330" y="160" fill="#ffffff" textAnchor="middle" fontSize="66" fontWeight="900" letterSpacing="2">
+            {busLabel}
+          </text>
+        </g>
+      </svg>
+    );
+  }
+
+  if (cardSize === "large_landscape") {
+    const kordaText = truncatePreviewText(item.kordaName, 24).toUpperCase();
+    const studentName = truncatePreviewText(item.studentName, 34).toUpperCase();
+    const studentNis = item.studentNis ? truncatePreviewText(item.studentNis, 18) : "";
+    const dropPointLines = wrapPreviewLines(item.dropPointName, 22, 2);
+    const busLabel = truncatePreviewText(item.busLabel || "-", 14).toUpperCase();
+    const nisBadgeWidth = Math.max(110, Math.min(320, studentNis.length * 13 + 80));
+
+    return (
+      <svg
+        viewBox="0 0 1270 770"
+        className="h-full w-full"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={`Preview kartu barang besar mendatar ${studentName}`}
+      >
+        {/* Outer Cutting Border (Subtle Gray) */}
+        <rect x="0.5" y="0.5" width="1269" height="769" fill="#ffffff" stroke="#d1d5db" strokeWidth="1" />
+
+        {/* Inner Card Artwork Container (Plain White Frame Gap: 25 SVG units = 2.5mm) */}
+        <rect x="25" y="25" width="1220" height="720" rx="12" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
+
+        {isPutri ? (
+          <g opacity="0.07" transform="translate(880, 360)">
+            <circle cx="160" cy="160" r="140" fill="none" stroke={palette.header} strokeWidth="16" />
+            <path d="M 160 30 C 220 90 220 230 160 290 C 100 230 100 90 160 30 Z" fill={palette.header} />
+          </g>
+        ) : (
+          <g opacity="0.04">
+            <pattern id={`grid-pattern-ll-${item.id}`} width="28" height="28" patternUnits="userSpaceOnUse">
+              <circle cx="14" cy="14" r="2.2" fill={palette.header} />
+            </pattern>
+            <rect x="26" y="180" width="1218" height="540" fill={`url(#grid-pattern-ll-${item.id})`} />
+          </g>
+        )}
+
+        {/* Top Header Banner */}
+        <path d="M 25 37 C 25 30.5 30.5 25 37 25 L 1233 25 C 1239.5 25 1245 30.5 1245 37 L 1245 175 L 25 175 Z" fill={palette.header} />
+
+        {/* Punch Hole */}
+        <circle cx="80" cy="95" r="22" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="5 3" opacity="0.75" />
+        <circle cx="80" cy="95" r="4.5" fill="#ffffff" opacity="0.75" />
+
+        <text x="125" y="75" fill="#ffffff" opacity="0.85" fontSize="21" fontWeight="700" letterSpacing="3">
+          LABEL BAGASI SANTRI
+        </text>
+        <text x="125" y="145" fill="#ffffff" fontSize="50" fontWeight="900" letterSpacing="1">
+          {kordaText}
+        </text>
+
+        {/* Right Badges */}
+        <rect x="860" y="52" width="150" height="85" rx="42" fill="rgba(255, 255, 255, 0.22)" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="2" />
+        <text x="935" y="106" fill="#ffffff" textAnchor="middle" fontSize="30" fontWeight="800" letterSpacing="1.5">
+          {genderLabel}
+        </text>
+
+        <rect x="1030" y="42" width="195" height="105" rx="16" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
+        <text x="1127" y="76" fill="#6b7280" textAnchor="middle" fontSize="21" fontWeight="800" letterSpacing="2">
+          NO. URUT
+        </text>
+        <text x="1127" y="127" fill="#111827" textAnchor="middle" fontSize="48" fontWeight="900">
+          {rosterNumber}
+        </text>
+
+        <rect x="25" y="175" width="1220" height="7" fill={palette.border} />
+
+        {/* Hero Name Area */}
+        <text x="75" y="225" fill="#9ca3af" fontSize="21" fontWeight="800" letterSpacing="2">
+          NAMA PENUMPANG / SANTRI
+        </text>
+        <text x="75" y="282" fill="#111827" fontSize="52" fontWeight="900">
+          {studentName}
+        </text>
+
+        {studentNis ? (
+          <g transform="translate(75, 305)">
+            <rect width={nisBadgeWidth} height="42" rx="8" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+            <text x="16" y="29" fill="#4b5563" fontSize="24" fontWeight="800">
+              NIS: {studentNis}
+            </text>
+          </g>
+        ) : (
+          <g transform="translate(75, 305)">
+            <rect width="230" height="42" rx="8" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+            <text x="16" y="29" fill="#6b7280" fontSize="22" fontWeight="800">
+              PESERTA UMUM
+            </text>
+          </g>
+        )}
+
+        <line x1="65" y1="365" x2="1205" y2="365" stroke="#e5e7eb" strokeWidth="2" strokeDasharray="8 5" />
+
+        {/* Left Column: Drop Point & Phone */}
+        <text x="75" y="410" fill="#6b7280" fontSize="23" fontWeight="800" letterSpacing="2">
+          TITIK TURUN (DROP POINT)
+        </text>
+        <text x="75" y="458" fill="#111827" fontSize="38" fontWeight="800">
+          {dropPointLines[0]}
+        </text>
+        {dropPointLines[1] && (
+          <text x="75" y="505" fill="#111827" fontSize="34" fontWeight="800">
+            {dropPointLines[1]}
+          </text>
+        )}
+
+        <text x="75" y="580" fill="#6b7280" fontSize="22" fontWeight="800" letterSpacing="2">
+          KONTAK DARURAT / ORTU
+        </text>
+        <text x="75" y="628" fill="#1f2937" fontSize="36" fontWeight="800">
+          {parentPhone}
+        </text>
+
+        <line x1="660" y1="385" x2="660" y2="715" stroke="#e5e7eb" strokeWidth="2" />
+
+        {/* Right Column: Armada Bus */}
+        <text x="695" y="410" fill="#6b7280" fontSize="23" fontWeight="800" letterSpacing="2">
+          ARMADA BUS
+        </text>
+        <g transform="translate(695, 430)">
+          <rect width="515" height="215" rx="18" fill={palette.header} stroke={palette.border} strokeWidth="2.5" />
+          <path d="M 0 18 C 0 8 8 0 18 0 L 497 0 C 507 0 515 8 515 18 L 515 50 L 0 50 Z" fill="rgba(0, 0, 0, 0.12)" />
+          <text x="257" y="36" fill="#ffffff" opacity="0.95" textAnchor="middle" fontSize="23" fontWeight="800" letterSpacing="2.5">
+            BUS PENUMPANG
+          </text>
+          <text x="257" y="152" fill="#ffffff" textAnchor="middle" fontSize="66" fontWeight="900" letterSpacing="2">
+            {busLabel}
+          </text>
+        </g>
+      </svg>
+    );
+  }
+
+  // Standard (950 x 530)
+  const kordaText = truncatePreviewText(item.kordaName, 22).toUpperCase();
+  const studentName = truncatePreviewText(item.studentName, 32).toUpperCase();
+  const studentNis = item.studentNis ? truncatePreviewText(item.studentNis, 18) : "";
+  const dropPointLines = wrapPreviewLines(item.dropPointName, 18, 2);
+  const busLabel = truncatePreviewText(item.busLabel || "-", 14).toUpperCase();
+  const nisBadgeWidth = Math.max(90, Math.min(260, studentNis.length * 11 + 65));
 
   return (
     <svg
-      viewBox="0 0 980 530"
+      viewBox="0 0 950 530"
       className="h-full w-full"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`Preview kartu barang ${studentName}`}
     >
-      <rect x="1" y="1" width="978" height="528" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
-      <rect x="1" y="1" width="978" height="118" fill={palette.header} />
-      <rect x="1" y="119" width="978" height="7" fill={palette.border} />
-      <rect x="1" y="126" width="978" height="93" fill={palette.bg} />
-      {isPutri && (
-        <g opacity="0.2">
-          <defs>
-            <g id="wm-flower">
-              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} />
-              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(60)" />
-              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(120)" />
-              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(180)" />
-              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(240)" />
-              <ellipse cx="0" cy="-22" rx="9" ry="18" fill={palette.header} transform="rotate(300)" />
-              <circle cx="0" cy="0" r="8" fill={palette.border} />
-              <circle cx="0" cy="0" r="4" fill={palette.text} />
-            </g>
-            <g id="wm-flower-lg">
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(45)" />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(90)" />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(135)" />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(180)" />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(225)" />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(270)" />
-              <ellipse cx="0" cy="-30" rx="12" ry="26" fill={palette.header} transform="rotate(315)" />
-              <circle cx="0" cy="0" r="12" fill={palette.border} />
-              <circle cx="0" cy="0" r="6" fill={palette.text} />
-            </g>
-            <g id="wm-leaf">
-              <ellipse cx="0" cy="-12" rx="5" ry="12" fill={palette.header} />
-            </g>
-            <g id="wm-bud">
-              <ellipse cx="0" cy="-10" rx="6" ry="12" fill={palette.header} />
-              <line x1="0" y1="2" x2="0" y2="18" stroke={palette.text} strokeWidth="2" />
-              <ellipse
-                cx="-5"
-                cy="10"
-                rx="4"
-                ry="8"
-                fill={palette.header}
-                transform="rotate(-30 -5 10)"
-              />
-              <ellipse
-                cx="5"
-                cy="10"
-                rx="4"
-                ry="8"
-                fill={palette.header}
-                transform="rotate(30 5 10)"
-              />
-            </g>
-          </defs>
+      {/* Outer Cutting Border (Subtle Gray) */}
+      <rect x="0.5" y="0.5" width="949" height="529" fill="#ffffff" stroke="#d1d5db" strokeWidth="1" />
 
-          <g transform={`scale(${floralScaleX} ${floralScaleY})`}>
-            <g opacity="0.26">
-              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
-              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
-              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
-              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
-              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
-              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
-              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
-              <use href="#wm-flower-lg" transform="translate(90,50)" />
-              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
-              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
-              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
-              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
-            </g>
+      {/* Inner Card Artwork Container (Plain White Frame Gap: 20 SVG units = 2.0mm) */}
+      <rect x="20" y="20" width="910" height="490" rx="10" fill="#ffffff" stroke={palette.border} strokeWidth="2" />
 
-            <g transform="translate(800,0) scale(-1,1)" opacity="0.26">
-              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
-              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
-              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
-              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
-              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
-              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
-              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
-              <use href="#wm-flower-lg" transform="translate(90,50)" />
-              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
-              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
-              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
-              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
-            </g>
-
-            <g transform="translate(0,600) scale(1,-1)" opacity="0.26">
-              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
-              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
-              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
-              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
-              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
-              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
-              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
-              <use href="#wm-flower-lg" transform="translate(90,50)" />
-              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
-              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
-              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
-              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
-            </g>
-
-            <g transform="translate(800,600) scale(-1,-1)" opacity="0.26">
-              <path d="M 20 180 Q 60 120 90 50" stroke={palette.text} strokeWidth="3" fill="none" />
-              <path d="M 20 180 Q 0 120 30 60" stroke={palette.text} strokeWidth="2.5" fill="none" />
-              <path d="M 40 160 Q 80 140 120 100" stroke={palette.text} strokeWidth="2" fill="none" />
-              <use href="#wm-leaf" transform="translate(55,115) rotate(-40)" />
-              <use href="#wm-leaf" transform="translate(72,88) rotate(-20)" />
-              <use href="#wm-leaf" transform="translate(28,130) rotate(30)" />
-              <use href="#wm-leaf" transform="translate(85,130) rotate(-60)" />
-              <use href="#wm-flower-lg" transform="translate(90,50)" />
-              <use href="#wm-flower" transform="translate(30,62) scale(0.8)" />
-              <use href="#wm-flower" transform="translate(118,100) scale(0.7)" />
-              <use href="#wm-bud" transform="translate(65,72) scale(0.75)" />
-              <use href="#wm-bud" transform="translate(48,92) scale(0.6)" />
-            </g>
-
-            <g transform="translate(400, 300)" opacity="0.11">
-              <use href="#wm-flower-lg" transform="scale(2.25)" />
-              <use href="#wm-flower" transform="translate(90,0) scale(1.2)" />
-              <use href="#wm-flower" transform="translate(-90,0) scale(1.2)" />
-              <use href="#wm-flower" transform="translate(0,90) scale(1.2)" />
-              <use href="#wm-flower" transform="translate(0,-90) scale(1.2)" />
-              <use href="#wm-flower" transform="translate(65,65) scale(0.95)" />
-              <use href="#wm-flower" transform="translate(-65,65) scale(0.95)" />
-              <use href="#wm-flower" transform="translate(65,-65) scale(0.95)" />
-              <use href="#wm-flower" transform="translate(-65,-65) scale(0.95)" />
-            </g>
-
-            <path
-              d="M 140 35 Q 280 18 400 28 Q 520 18 660 35"
-              stroke={palette.text}
-              strokeWidth="2"
-              fill="none"
-              opacity="0.18"
-            />
-            <path
-              d="M 140 565 Q 280 582 400 572 Q 520 582 660 565"
-              stroke={palette.text}
-              strokeWidth="2"
-              fill="none"
-              opacity="0.18"
-            />
-          </g>
+      {/* Decorative modern subtle background watermark */}
+      {isPutri ? (
+        <g opacity="0.07" transform="translate(660, 245)">
+          <circle cx="120" cy="120" r="100" fill="none" stroke={palette.header} strokeWidth="12" />
+          <path d="M 120 20 C 170 70 170 170 120 220 C 70 170 70 70 120 20 Z" fill={palette.header} />
+          <path d="M 20 120 C 70 170 170 170 220 120 C 170 70 70 70 20 120 Z" fill={palette.header} />
+        </g>
+      ) : (
+        <g opacity="0.04">
+          <pattern id={`grid-pattern-${item.id}`} width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="12" cy="12" r="1.8" fill={palette.header} />
+          </pattern>
+          <rect x="21" y="140" width="908" height="355" fill={`url(#grid-pattern-${item.id})`} />
         </g>
       )}
-      <line x1="1" y1="219" x2="979" y2="219" stroke="#d1d5db" strokeWidth="1.4" />
-      <line x1="490" y1="219" x2="490" y2="529" stroke="#e5e7eb" strokeWidth="1.4" />
 
-      <text x="490" y="43" fill="#ffffff" textAnchor="middle" fontSize="34" fontWeight="700" letterSpacing="4">
-        {`KARTU BARANG ${genderLabel}`}
+      {/* Header Banner */}
+      <path
+        d="M 20 30 C 20 24.5 24.5 20 30 20 L 920 20 C 925.5 20 930 24.5 930 30 L 930 135 L 20 135 Z"
+        fill={palette.header}
+      />
+
+      {/* Punch hole guide */}
+      <circle cx="65" cy="75" r="18" fill="none" stroke="#ffffff" strokeWidth="2" strokeDasharray="5 3" opacity="0.75" />
+      <circle cx="65" cy="75" r="3.5" fill="#ffffff" opacity="0.75" />
+
+      {/* Header Info (Left) */}
+      <text x="100" y="56" fill="#ffffff" opacity="0.85" fontSize="17" fontWeight="700" letterSpacing="2.5">
+        LABEL BAGASI SANTRI
       </text>
-      <text x="950" y="42" fill="#ffffff" textAnchor="end" fontSize="27" fontWeight="700">
-        {`NO. ${rosterNumber}`}
-      </text>
-      <text x="490" y="96" fill="#ffffff" textAnchor="middle" fontSize="61" fontWeight="900">
+      <text x="100" y="110" fill="#ffffff" fontSize="38" fontWeight="900" letterSpacing="1">
         {kordaText}
       </text>
 
-      <text x="490" y="190" fill="#111827" textAnchor="middle" fontSize="49" fontWeight="700">
+      {/* Header Chips (Right) */}
+      {/* Gender Chip */}
+      <rect
+        x="635"
+        y="42"
+        width="120"
+        height="64"
+        rx="32"
+        fill="rgba(255, 255, 255, 0.22)"
+        stroke="rgba(255, 255, 255, 0.6)"
+        strokeWidth="1.5"
+      />
+      <text x="695" y="82" fill="#ffffff" textAnchor="middle" fontSize="23" fontWeight="800" letterSpacing="1.5">
+        {genderLabel}
+      </text>
+
+      {/* Roster Number Card */}
+      <rect
+        x="765"
+        y="34"
+        width="150"
+        height="80"
+        rx="12"
+        fill="#ffffff"
+        stroke={palette.border}
+        strokeWidth="1.5"
+      />
+      <text x="840" y="60" fill="#6b7280" textAnchor="middle" fontSize="16" fontWeight="800" letterSpacing="1.5">
+        NO. URUT
+      </text>
+      <text x="840" y="98" fill="#111827" textAnchor="middle" fontSize="36" fontWeight="900" letterSpacing="1">
+        {rosterNumber}
+      </text>
+
+      {/* Accent Strip below Header */}
+      <rect x="20" y="135" width="910" height="6" fill={palette.border} />
+
+      {/* Hero Passenger Name Area */}
+      <text x="60" y="175" fill="#9ca3af" fontSize="17" fontWeight="800" letterSpacing="2">
+        NAMA PENUMPANG / SANTRI
+      </text>
+      <text x="60" y="222" fill="#111827" fontSize="40" fontWeight="900">
         {studentName}
       </text>
 
-      <text x="28" y="255" fill="#6b7280" fontSize="31" fontWeight="700">NIS</text>
-      <text x="28" y="297" fill="#374151" fontSize="38" fontWeight="500">{studentNis}</text>
-      <text x="28" y="412" fill="#6b7280" fontSize="31" fontWeight="700">NO HP ORTU</text>
-      <text x="28" y="454" fill="#1f2937" fontSize="31" fontWeight="700">{parentPhone}</text>
+      {/* Sub Identity: NIS or General Participant */}
+      {studentNis ? (
+        <g transform="translate(60, 238)">
+          <rect width={nisBadgeWidth} height="32" rx="6" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+          <text x="12" y="22" fill="#4b5563" fontSize="19" fontWeight="800" letterSpacing="0.5">
+            NIS: {studentNis}
+          </text>
+        </g>
+      ) : (
+        <g transform="translate(60, 238)">
+          <rect width="180" height="32" rx="6" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+          <text x="12" y="22" fill="#6b7280" fontSize="17" fontWeight="800" letterSpacing="0.5">
+            PESERTA UMUM
+          </text>
+        </g>
+      )}
 
-      <text x="518" y="255" fill="#6b7280" fontSize="31" fontWeight="700">DROP POINT</text>
-      <text x="518" y="297" fill="#1f2937" fontSize="38" fontWeight="700">{dropPoint}</text>
-      <text x="518" y="412" fill="#6b7280" fontSize="31" fontWeight="700">BUS</text>
-      <rect x="518" y="420" width={busBadgeWidth} height="44" fill={palette.header} />
-      <text
-        x={518 + busBadgeWidth / 2}
-        y="451"
-        fill="#ffffff"
-        textAnchor="middle"
-        fontSize="31"
-        fontWeight="700"
-      >
-        {busLabel}
+      {/* Mid Horizontal Separator */}
+      <line x1="55" y1="285" x2="895" y2="285" stroke="#e5e7eb" strokeWidth="1.5" strokeDasharray="6 4" />
+
+      {/* Logistics Columns */}
+      {/* Left Column: Drop Point & Emergency Contact */}
+      <text x="60" y="318" fill="#6b7280" fontSize="18" fontWeight="800" letterSpacing="1.5">
+        TITIK TURUN (DROP POINT)
       </text>
+      <text x="60" y="353" fill="#111827" fontSize="30" fontWeight="800">
+        {dropPointLines[0]}
+      </text>
+      {dropPointLines[1] && (
+        <text x="60" y="388" fill="#111827" fontSize="26" fontWeight="800">
+          {dropPointLines[1]}
+        </text>
+      )}
+
+      <text x="60" y="438" fill="#6b7280" fontSize="17" fontWeight="800" letterSpacing="1.5">
+        KONTAK DARURAT / ORTU
+      </text>
+      <text x="60" y="474" fill="#1f2937" fontSize="27" fontWeight="800">
+        {parentPhone}
+      </text>
+
+      {/* Vertical Column Divider */}
+      <line x1="490" y1="302" x2="490" y2="490" stroke="#e5e7eb" strokeWidth="1.5" />
+
+      {/* Right Column: Armada Bus Focal Point */}
+      <text x="515" y="318" fill="#6b7280" fontSize="18" fontWeight="800" letterSpacing="1.5">
+        ARMADA BUS
+      </text>
+
+      <g transform="translate(515, 334)">
+        {/* Bus Card Badge */}
+        <rect width="390" height="148" rx="14" fill={palette.header} stroke={palette.border} strokeWidth="2" />
+        <path d="M 0 14 C 0 6.2 6.2 0 14 0 L 376 0 C 383.8 0 390 6.2 390 14 L 390 38 L 0 38 Z" fill="rgba(0, 0, 0, 0.12)" />
+        <text x="195" y="26" fill="#ffffff" opacity="0.95" textAnchor="middle" fontSize="17" fontWeight="800" letterSpacing="2">
+          BUS PENUMPANG
+        </text>
+        <text x="195" y="102" fill="#ffffff" textAnchor="middle" fontSize="48" fontWeight="900" letterSpacing="1.5">
+          {busLabel}
+        </text>
+      </g>
     </svg>
   );
 }
@@ -1260,419 +1571,6 @@ function blendWithWhite(color: PdfRgb, ratio: number): PdfRgb {
   ) as PdfRgb;
 }
 
-function drawLeafWatermarkShape(
-  pdf: jsPDF,
-  centerX: number,
-  centerY: number,
-  width: number,
-  height: number,
-  rotationDeg: number,
-  fillColor: PdfRgb,
-  veinColor: PdfRgb,
-) {
-  const halfWidth = width / 2;
-  const halfHeight = height / 2;
-  const rad = (rotationDeg * Math.PI) / 180;
-  const cosRad = Math.cos(rad);
-  const sinRad = Math.sin(rad);
-
-  const rotatePoint = (x: number, y: number) => ({
-    x: centerX + x * cosRad - y * sinRad,
-    y: centerY + x * sinRad + y * cosRad,
-  });
-
-  const basePoints = [
-    rotatePoint(0, -halfHeight),
-    rotatePoint(halfWidth * 0.72, -halfHeight * 0.35),
-    rotatePoint(halfWidth, 0),
-    rotatePoint(halfWidth * 0.72, halfHeight * 0.35),
-    rotatePoint(0, halfHeight),
-    rotatePoint(-halfWidth * 0.72, halfHeight * 0.35),
-    rotatePoint(-halfWidth, 0),
-    rotatePoint(-halfWidth * 0.72, -halfHeight * 0.35),
-  ];
-
-  pdf.setFillColor(...fillColor);
-  pdf.setDrawColor(...fillColor);
-  pdf.setLineWidth(0.05);
-  pdf.lines(
-    basePoints
-      .slice(1)
-      .map((point, index) => [
-        point.x - basePoints[index].x,
-        point.y - basePoints[index].y,
-      ]),
-    basePoints[0].x,
-    basePoints[0].y,
-    [1, 1],
-    "F",
-    true,
-  );
-
-  const veinTop = rotatePoint(0, -halfHeight * 0.7);
-  const veinBottom = rotatePoint(0, halfHeight * 0.7);
-  pdf.setDrawColor(...veinColor);
-  pdf.setLineWidth(0.12);
-  pdf.line(veinTop.x, veinTop.y, veinBottom.x, veinBottom.y);
-}
-
-function drawWatermarkPolyline(
-  pdf: jsPDF,
-  points: Array<{ x: number; y: number }>,
-  color: PdfRgb,
-  lineWidth: number,
-) {
-  if (points.length < 2) {
-    return;
-  }
-
-  pdf.setDrawColor(...color);
-  pdf.setLineWidth(lineWidth);
-  for (let i = 1; i < points.length; i += 1) {
-    pdf.line(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
-  }
-}
-
-function drawWatermarkQuadraticCurve(
-  pdf: jsPDF,
-  start: { x: number; y: number },
-  control: { x: number; y: number },
-  end: { x: number; y: number },
-  color: PdfRgb,
-  lineWidth: number,
-) {
-  const points: Array<{ x: number; y: number }> = [];
-  const segments = 10;
-  for (let index = 0; index <= segments; index += 1) {
-    const t = index / segments;
-    const oneMinusT = 1 - t;
-    points.push({
-      x:
-        oneMinusT * oneMinusT * start.x +
-        2 * oneMinusT * t * control.x +
-        t * t * end.x,
-      y:
-        oneMinusT * oneMinusT * start.y +
-        2 * oneMinusT * t * control.y +
-        t * t * end.y,
-    });
-  }
-  drawWatermarkPolyline(pdf, points, color, lineWidth);
-}
-
-function drawWatermarkFlower(
-  pdf: jsPDF,
-  centerX: number,
-  centerY: number,
-  petals: number,
-  petalDistance: number,
-  petalWidth: number,
-  petalHeight: number,
-  petalColor: PdfRgb,
-  centerColor: PdfRgb,
-) {
-  for (let index = 0; index < petals; index += 1) {
-    const angle = (360 / petals) * index;
-    const rad = (angle * Math.PI) / 180;
-    const petalX = centerX + Math.cos(rad) * petalDistance;
-    const petalY = centerY + Math.sin(rad) * petalDistance;
-    drawLeafWatermarkShape(
-      pdf,
-      petalX,
-      petalY,
-      petalWidth,
-      petalHeight,
-      angle,
-      petalColor,
-      petalColor,
-    );
-  }
-
-  pdf.setFillColor(...centerColor);
-  pdf.circle(centerX, centerY, Math.max(0.25, petalWidth * 0.35), "F");
-  pdf.setFillColor(...blendWithWhite(centerColor, 0.2));
-  pdf.circle(centerX, centerY, Math.max(0.15, petalWidth * 0.17), "F");
-}
-
-function drawWatermarkBud(
-  pdf: jsPDF,
-  centerX: number,
-  centerY: number,
-  size: number,
-  petalColor: PdfRgb,
-  stemColor: PdfRgb,
-) {
-  drawLeafWatermarkShape(
-    pdf,
-    centerX,
-    centerY - size * 0.2,
-    size * 0.7,
-    size * 1.15,
-    0,
-    petalColor,
-    petalColor,
-  );
-
-  pdf.setDrawColor(...stemColor);
-  pdf.setLineWidth(Math.max(0.07, size * 0.05));
-  pdf.line(
-    centerX,
-    centerY + size * 0.12,
-    centerX,
-    centerY + size * 0.7,
-  );
-
-  drawLeafWatermarkShape(
-    pdf,
-    centerX - size * 0.28,
-    centerY + size * 0.45,
-    size * 0.35,
-    size * 0.55,
-    -35,
-    petalColor,
-    petalColor,
-  );
-  drawLeafWatermarkShape(
-    pdf,
-    centerX + size * 0.28,
-    centerY + size * 0.45,
-    size * 0.35,
-    size * 0.55,
-    35,
-    petalColor,
-    petalColor,
-  );
-}
-
-function createReferenceMapper(
-  originX: number,
-  originY: number,
-  width: number,
-  height: number,
-  mirrorX = false,
-  mirrorY = false,
-) {
-  const scaleX = width / 800;
-  const scaleY = height / 600;
-  return (refX: number, refY: number) => ({
-    x: originX + (mirrorX ? 800 - refX : refX) * scaleX,
-    y: originY + (mirrorY ? 600 - refY : refY) * scaleY,
-    scaleX,
-    scaleY,
-  });
-}
-
-function drawCornerFloralCluster(
-  pdf: jsPDF,
-  mapRef: ReturnType<typeof createReferenceMapper>,
-  petalColor: PdfRgb,
-  centerColor: PdfRgb,
-  stemColor: PdfRgb,
-  leafColor: PdfRgb,
-) {
-  const p = (refX: number, refY: number) => mapRef(refX, refY);
-  const unit = Math.max(p(0, 0).scaleX, p(0, 0).scaleY);
-
-  drawWatermarkQuadraticCurve(
-    pdf,
-    p(20, 180),
-    p(60, 120),
-    p(90, 50),
-    stemColor,
-    Math.max(0.08, 3.8 * unit),
-  );
-  drawWatermarkQuadraticCurve(
-    pdf,
-    p(20, 180),
-    p(0, 120),
-    p(30, 60),
-    stemColor,
-    Math.max(0.07, 3.1 * unit),
-  );
-  drawWatermarkQuadraticCurve(
-    pdf,
-    p(40, 160),
-    p(80, 140),
-    p(120, 100),
-    stemColor,
-    Math.max(0.06, 2.5 * unit),
-  );
-
-  const leafBaseWidth = 11.5 * unit;
-  const leafBaseHeight = 27 * unit;
-  [
-    { x: 55, y: 115, r: -40 },
-    { x: 72, y: 88, r: -20 },
-    { x: 28, y: 130, r: 30 },
-    { x: 85, y: 130, r: -60 },
-  ].forEach((leaf) => {
-    const point = p(leaf.x, leaf.y);
-    drawLeafWatermarkShape(
-      pdf,
-      point.x,
-      point.y,
-      leafBaseWidth,
-      leafBaseHeight,
-      leaf.r,
-      leafColor,
-      blendWithWhite(leafColor, 0.16),
-    );
-  });
-
-  const flowerLarge = p(90, 50);
-  drawWatermarkFlower(
-    pdf,
-    flowerLarge.x,
-    flowerLarge.y,
-    8,
-    33 * unit,
-    14 * unit,
-    31 * unit,
-    petalColor,
-    centerColor,
-  );
-
-  [
-    { x: 30, y: 62, scale: 0.8 },
-    { x: 118, y: 100, scale: 0.7 },
-  ].forEach((flower) => {
-    const point = p(flower.x, flower.y);
-    drawWatermarkFlower(
-      pdf,
-      point.x,
-      point.y,
-      6,
-      24 * unit * flower.scale,
-      11 * unit * flower.scale,
-      24 * unit * flower.scale,
-      petalColor,
-      centerColor,
-    );
-  });
-
-  [
-    { x: 65, y: 72, scale: 0.75 },
-    { x: 48, y: 92, scale: 0.6 },
-  ].forEach((bud) => {
-    const point = p(bud.x, bud.y);
-    drawWatermarkBud(
-      pdf,
-      point.x,
-      point.y,
-      11.5 * unit * bud.scale,
-      petalColor,
-      stemColor,
-    );
-  });
-}
-
-function drawPutriFloralWatermarkPdf(
-  pdf: jsPDF,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  palette: PdfKordaPalette,
-) {
-  const petalColor = blendWithWhite(palette.header, 0.78);
-  const centerColor = blendWithWhite(palette.border, 0.68);
-  const stemColor = blendWithWhite(palette.text, 0.56);
-  const leafColor = blendWithWhite(palette.header, 0.7);
-
-  const topLeft = createReferenceMapper(x, y, width, height, false, false);
-  const topRight = createReferenceMapper(x, y, width, height, true, false);
-  const bottomLeft = createReferenceMapper(x, y, width, height, false, true);
-  const bottomRight = createReferenceMapper(x, y, width, height, true, true);
-
-  drawCornerFloralCluster(
-    pdf,
-    topLeft,
-    petalColor,
-    centerColor,
-    stemColor,
-    leafColor,
-  );
-  drawCornerFloralCluster(
-    pdf,
-    topRight,
-    petalColor,
-    centerColor,
-    stemColor,
-    leafColor,
-  );
-  drawCornerFloralCluster(
-    pdf,
-    bottomLeft,
-    petalColor,
-    centerColor,
-    stemColor,
-    leafColor,
-  );
-  drawCornerFloralCluster(
-    pdf,
-    bottomRight,
-    petalColor,
-    centerColor,
-    stemColor,
-    leafColor,
-  );
-
-  const center = createReferenceMapper(x, y, width, height, false, false);
-  const centerPoint = center(400, 300);
-  const unit = Math.max(width / 800, height / 600);
-  drawWatermarkFlower(
-    pdf,
-    centerPoint.x,
-    centerPoint.y,
-    8,
-    30 * unit,
-    15 * unit,
-    33 * unit,
-    blendWithWhite(petalColor, 0.2),
-    blendWithWhite(centerColor, 0.2),
-  );
-
-  [
-    { x: 490, y: 300, scale: 1.06 },
-    { x: 310, y: 300, scale: 1.06 },
-    { x: 400, y: 210, scale: 1.06 },
-    { x: 400, y: 390, scale: 1.06 },
-    { x: 465, y: 365, scale: 0.9 },
-    { x: 335, y: 365, scale: 0.9 },
-    { x: 465, y: 235, scale: 0.9 },
-    { x: 335, y: 235, scale: 0.9 },
-  ].forEach((flower) => {
-    const point = center(flower.x, flower.y);
-    drawWatermarkFlower(
-      pdf,
-      point.x,
-      point.y,
-      6,
-      20 * unit * flower.scale,
-      9 * unit * flower.scale,
-      20 * unit * flower.scale,
-      blendWithWhite(petalColor, 0.26),
-      blendWithWhite(centerColor, 0.26),
-    );
-  });
-
-  const topCurve = [
-    center(140, 35),
-    center(280, 18),
-    center(400, 28),
-    center(520, 18),
-    center(660, 35),
-  ];
-  const bottomCurve = [
-    center(140, 565),
-    center(280, 582),
-    center(400, 572),
-    center(520, 582),
-    center(660, 565),
-  ];
-  drawWatermarkPolyline(pdf, topCurve, blendWithWhite(stemColor, 0.16), Math.max(0.07, 1.7 * unit));
-  drawWatermarkPolyline(pdf, bottomCurve, blendWithWhite(stemColor, 0.16), Math.max(0.07, 1.7 * unit));
-}
 
 function getPdfPalette(kordaName: string): PdfKordaPalette {
   const hexPalette = getHexPalette(kordaName);
@@ -1866,7 +1764,7 @@ function drawBraceletCropMarks(pdf: jsPDF, x: number, y: number, width: number, 
   pdf.line(x + width, y + height + offset, x + width, y + height + offset + length);
 }
 
-function drawLuggageCardToPdf(
+function drawLuggageCardStandardPdf(
   pdf: jsPDF,
   item: PrintDataItem,
   x: number,
@@ -1878,190 +1776,669 @@ function drawLuggageCardToPdf(
   const isPutri = isPutriGender(item.studentGender);
   const genderLabel = isPutri ? "PUTRI" : "PUTRA";
 
-  const headerHeight = 11.8;
-  const dividerHeight = 0.7;
-  const nameHeight = 9.4;
-  const contentTop = y + headerHeight + dividerHeight + nameHeight;
-  const middleX = x + width / 2;
-  const columnWidth = width / 2 - 4.8;
-  const leftColumnX = x + 2.8;
-  const rightColumnX = middleX + 2;
-  const labelColor: PdfRgb = [107, 114, 128];
-
+  // 1. Outer Cutting Border (Subtle Gray) and Plain White Frame
   pdf.setFillColor(255, 255, 255);
-  pdf.rect(x, y, width, height, "F");
-  pdf.setDrawColor(...palette.border);
-  pdf.setLineWidth(0.25);
-  pdf.rect(x, y, width, height, "S");
+  pdf.setDrawColor(209, 213, 219);
+  pdf.setLineWidth(0.18);
+  pdf.rect(x, y, width, height, "FD");
 
+  // Inset inner card (2.0mm plain white frame gap)
+  const margin = 2.0;
+  const ix = x + margin;
+  const iy = y + margin;
+  const iw = width - 2 * margin; // 91mm
+  const ih = height - 2 * margin; // 49mm
+
+  // Inner card background
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(ix, iy, iw, ih, 1.8, 1.8, "F");
+
+  // Modern subtle background accent for Putri
   if (isPutri) {
-    drawPutriFloralWatermarkPdf(pdf, x, y, width, height, palette);
+    const wmColor = blendWithWhite(palette.header, 0.94);
+    pdf.setDrawColor(...wmColor);
+    pdf.setLineWidth(0.8);
+    pdf.circle(ix + iw - 14, iy + ih - 15, 12, "S");
+    pdf.circle(ix + iw - 14, iy + ih - 15, 6, "S");
   }
 
+  // 2. Header Banner (height 11.5mm)
+  const headerHeight = 11.5;
   pdf.setFillColor(...palette.header);
-  pdf.rect(x, y, width, headerHeight, "F");
+  pdf.roundedRect(ix, iy, iw, headerHeight, 1.8, 1.8, "F");
+  pdf.rect(ix, iy + 2.0, iw, headerHeight - 2.0, "F");
 
+  // Hole punch guide
+  const punchX = ix + 4.8;
+  const punchY = iy + 5.8;
+  pdf.setDrawColor(255, 255, 255);
+  pdf.setLineWidth(0.18);
+  pdf.circle(punchX, punchY, 1.8, "S");
+  pdf.setFillColor(255, 255, 255);
+  pdf.circle(punchX, punchY, 0.35, "F");
+
+  // Header Title & Korda Name
   pdf.setTextColor(255, 255, 255);
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(8.1);
-  pdf.text(`KARTU BARANG ${genderLabel}`, x + width / 2, y + 4, {
-    align: "center",
-  });
-  pdf.setFontSize(6.4);
-  pdf.text(`NO. ${String(item.rosterNumber).padStart(3, "0")}`, x + width - 2, y + 4, {
-    align: "right",
-  });
+  pdf.setFontSize(5.2);
+  pdf.text("LABEL BAGASI SANTRI", ix + 8.2, iy + 4.2);
 
   const kordaHeader = fitSingleLineText(
     pdf,
     normalizeText(item.kordaName).toUpperCase(),
-    width - 8,
-    14.2,
-    9.4,
+    iw - 38,
+    10.8,
+    7.5,
     "bold",
   );
-  pdf.setFont("helvetica", "bold");
   pdf.setFontSize(kordaHeader.fontSize);
-  pdf.text(kordaHeader.text, x + width / 2, y + 9.1, { align: "center" });
+  pdf.text(kordaHeader.text, ix + 8.2, iy + 9.2);
 
-  pdf.setFillColor(...palette.border);
-  pdf.rect(x, y + headerHeight, width, dividerHeight, "F");
-
-  pdf.setFillColor(...palette.bg);
-  pdf.rect(x, y + headerHeight + dividerHeight, width, nameHeight, "F");
-  pdf.setDrawColor(209, 213, 219);
+  // Header Right Chips:
+  // Gender Pill
+  const genderPillW = 11.5;
+  const genderPillH = 6.0;
+  const genderPillX = ix + iw - 29.0;
+  const genderPillY = iy + 2.6;
+  pdf.setFillColor(...blendWithWhite(palette.header, 0.25));
+  pdf.roundedRect(genderPillX, genderPillY, genderPillW, genderPillH, 1.2, 1.2, "F");
+  pdf.setDrawColor(255, 255, 255);
   pdf.setLineWidth(0.15);
-  pdf.line(
-    x,
-    y + headerHeight + dividerHeight + nameHeight,
-    x + width,
-    y + headerHeight + dividerHeight + nameHeight,
-  );
+  pdf.roundedRect(genderPillX, genderPillY, genderPillW, genderPillH, 1.2, 1.2, "S");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(6.2);
+  pdf.text(genderLabel, genderPillX + genderPillW / 2, genderPillY + 4.2, { align: "center" });
+
+  // Roster Number Badge (White Card)
+  const rosterBadgeW = 14.5;
+  const rosterBadgeH = 7.6;
+  const rosterBadgeX = ix + iw - 16.0;
+  const rosterBadgeY = iy + 1.8;
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(rosterBadgeX, rosterBadgeY, rosterBadgeW, rosterBadgeH, 1.4, 1.4, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.2);
+  pdf.roundedRect(rosterBadgeX, rosterBadgeY, rosterBadgeW, rosterBadgeH, 1.4, 1.4, "S");
+
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(4.8);
+  pdf.text("NO. URUT", rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 2.6, { align: "center" });
+  pdf.setTextColor(17, 24, 39);
+  pdf.setFontSize(9.0);
+  pdf.text(String(item.rosterNumber).padStart(3, "0"), rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 6.5, { align: "center" });
+
+  // Accent Line below Header
+  pdf.setFillColor(...palette.border);
+  pdf.rect(ix, iy + headerHeight, iw, 0.6, "F");
+
+  // 3. Hero Passenger Section
+  pdf.setTextColor(156, 163, 175);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.0);
+  pdf.text("NAMA PENUMPANG / SANTRI", ix + 4.2, iy + 15.6);
 
   const studentName = fitSingleLineText(
     pdf,
     normalizeText(item.studentName).toUpperCase(),
-    width - 8,
-    11.6,
-    8.4,
+    iw - 8.0,
+    11.2,
+    7.5,
     "bold",
   );
   pdf.setTextColor(17, 24, 39);
-  pdf.setFont("helvetica", "bold");
   pdf.setFontSize(studentName.fontSize);
-  pdf.text(
-    studentName.text,
-    x + width / 2,
-    y + headerHeight + dividerHeight + 6.3,
-    {
-      align: "center",
-    },
-  );
-
-  pdf.setDrawColor(229, 231, 235);
-  pdf.setLineWidth(0.15);
-  pdf.line(middleX, contentTop, middleX, y + height);
-
-  const topLabelY = contentTop + 3.2;
-  const topValueY = contentTop + 6.8;
-  const bottomLabelY = contentTop + 14.6;
-  const bottomValueY = contentTop + 18.2;
-
-  pdf.setTextColor(...labelColor);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("NIS", leftColumnX, topLabelY);
+  pdf.text(studentName.text, ix + 4.2, iy + 20.2);
 
   if (item.studentNis) {
-    const nisValue = fitSingleLineText(
-      pdf,
-      item.studentNis,
-      columnWidth,
-      9.2,
-      7.2,
-      "normal",
-    );
-    pdf.setTextColor(55, 65, 81);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(nisValue.fontSize);
-    pdf.text(nisValue.text, leftColumnX, topValueY);
+    const nisText = fitSingleLineText(pdf, `NIS: ${item.studentNis}`, 30, 6.0, 4.8, "bold");
+    const nisBadgeW = pdf.getTextWidth(nisText.text) + 3.0;
+    pdf.setFillColor(243, 244, 246);
+    pdf.roundedRect(ix + 4.2, iy + 21.8, nisBadgeW, 3.4, 0.8, 0.8, "F");
+    pdf.setTextColor(75, 85, 99);
+    pdf.setFontSize(nisText.fontSize);
+    pdf.text(nisText.text, ix + 5.7, iy + 24.3);
+  } else {
+    pdf.setFillColor(243, 244, 246);
+    pdf.roundedRect(ix + 4.2, iy + 21.8, 19.0, 3.4, 0.8, 0.8, "F");
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(5.2);
+    pdf.text("PESERTA UMUM", ix + 5.2, iy + 24.3);
   }
 
-  pdf.setTextColor(...labelColor);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("NO HP ORTU", leftColumnX, bottomLabelY);
+  // 4. Mid Horizontal Divider
+  pdf.setDrawColor(229, 231, 235);
+  pdf.setLineWidth(0.15);
+  pdf.line(ix + 3.5, iy + 26.8, ix + iw - 3.5, iy + 26.8);
 
-  const parentPhoneValue = fitMultilineText(
-    pdf,
-    item.parrentPhone,
-    columnWidth,
-    2,
-    8.2,
-    6.6,
-    "normal",
-  );
-  pdf.setTextColor(31, 41, 55);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(parentPhoneValue.fontSize);
-  const addressLineHeight = Math.max(2.8, parentPhoneValue.fontSize * 0.38);
-  parentPhoneValue.lines.forEach((line, index) => {
-    pdf.text(line, leftColumnX, bottomValueY + index * addressLineHeight);
-  });
-
-  pdf.setTextColor(...labelColor);
+  // 5. Logistics Grid
+  // Left: Drop Point
+  pdf.setTextColor(107, 114, 128);
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("DROP POINT", rightColumnX, topLabelY);
+  pdf.setFontSize(5.2);
+  pdf.text("TITIK TURUN (DROP POINT)", ix + 4.2, iy + 30.2);
 
   const dropPointValue = fitMultilineText(
     pdf,
     item.dropPointName,
-    columnWidth,
+    39.0,
     2,
-    8.8,
-    7.2,
+    7.8,
+    6.2,
     "bold",
   );
   pdf.setTextColor(31, 41, 55);
-  pdf.setFont("helvetica", "bold");
   pdf.setFontSize(dropPointValue.fontSize);
-  const dropPointLineHeight = Math.max(3.1, dropPointValue.fontSize * 0.38);
+  const dropLineHeight = Math.max(2.8, dropPointValue.fontSize * 0.38);
   dropPointValue.lines.forEach((line, index) => {
-    pdf.text(line, rightColumnX, topValueY + index * dropPointLineHeight);
+    pdf.text(line, ix + 4.2, iy + 34.0 + index * dropLineHeight);
   });
 
-  const busLabelY = bottomLabelY;
-  pdf.setTextColor(...labelColor);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("BUS", rightColumnX, busLabelY);
+  // Left: Emergency Parent Phone
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(5.0);
+  pdf.text("KONTAK DARURAT / ORTU", ix + 4.2, iy + 41.6);
 
-  const busValue = fitSingleLineText(
-    pdf,
-    item.busLabel,
-    columnWidth - 2.2,
-    8.8,
-    7.2,
-    "bold",
-  );
-  const badgePaddingX = 1.2;
-  const badgeHeight = 4.4;
-  const badgeWidth = Math.min(
-    columnWidth,
-    pdf.getTextWidth(busValue.text) + badgePaddingX * 2,
-  );
-  const badgeY = bottomValueY - 3.1;
+  const parentPhone = fitSingleLineText(pdf, item.parrentPhone || "-", 39.0, 7.5, 6.2, "bold");
+  pdf.setTextColor(55, 65, 81);
+  pdf.setFontSize(parentPhone.fontSize);
+  pdf.text(parentPhone.text, ix + 4.2, iy + 45.4);
 
+  // Column Divider Line
+  pdf.setDrawColor(229, 231, 235);
+  pdf.setLineWidth(0.15);
+  pdf.line(ix + 46.5, iy + 28.5, ix + 46.5, iy + 46.8);
+
+  // Right: Armada Bus Focal Point Card
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(5.2);
+  pdf.text("ARMADA BUS", ix + 48.5, iy + 30.2);
+
+  const busCardX = ix + 48.5;
+  const busCardY = iy + 31.8;
+  const busCardW = 38.5;
+  const busCardH = 14.2;
   pdf.setFillColor(...palette.header);
-  pdf.roundedRect(rightColumnX, badgeY, badgeWidth, badgeHeight, 0.8, 0.8, "F");
+  pdf.roundedRect(busCardX, busCardY, busCardW, busCardH, 1.6, 1.6, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.2);
+  pdf.roundedRect(busCardX, busCardY, busCardW, busCardH, 1.6, 1.6, "S");
+
+  // Inner top strip inside Bus Badge
+  const busHeaderStrip = palette.header.map((c) => Math.round(c * 0.85)) as PdfRgb;
+  pdf.setFillColor(...busHeaderStrip);
+  pdf.roundedRect(busCardX, busCardY, busCardW, 3.6, 1.6, 1.6, "F");
+  pdf.rect(busCardX, busCardY + 2.0, busCardW, 1.6, "F");
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(4.6);
+  pdf.text("BUS PENUMPANG", busCardX + busCardW / 2, busCardY + 2.6, { align: "center" });
+
+  const busValue = fitSingleLineText(pdf, item.busLabel || "-", busCardW - 2.5, 11.2, 7.2, "bold");
+  pdf.setFontSize(busValue.fontSize);
+  pdf.text(busValue.text, busCardX + busCardW / 2, busCardY + 9.8, { align: "center" });
+
+  // 6. Inner Card Border (Clean rounded corners without bottom block clash)
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.25);
+  pdf.roundedRect(ix, iy, iw, ih, 1.8, 1.8, "S");
+}
+
+function drawLuggageCardPortraitPdf(
+  pdf: jsPDF,
+  item: PrintDataItem,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const palette = getPdfPalette(item.kordaName);
+  const isPutri = isPutriGender(item.studentGender);
+  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
+
+  // 1. Outer Cutting Border (Subtle Gray) and Plain White Frame
+  pdf.setFillColor(255, 255, 255);
+  pdf.setDrawColor(209, 213, 219);
+  pdf.setLineWidth(0.18);
+  pdf.rect(x, y, width, height, "FD");
+
+  // Inset inner card (2.5mm plain white frame gap)
+  const margin = 2.5;
+  const ix = x + margin;
+  const iy = y + margin;
+  const iw = width - 2 * margin; // 72mm
+  const ih = height - 2 * margin; // 122mm
+
+  // Inner card background
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(ix, iy, iw, ih, 2.2, 2.2, "F");
+
+  // Subtle watermark for Putri
+  if (isPutri) {
+    const wmColor = blendWithWhite(palette.header, 0.94);
+    pdf.setDrawColor(...wmColor);
+    pdf.setLineWidth(0.8);
+    pdf.circle(ix + iw - 16, iy + ih - 22, 14, "S");
+    pdf.circle(ix + iw - 16, iy + ih - 22, 7, "S");
+  }
+
+  // 2. Header Banner (height 19.5mm)
+  const headerHeight = 19.5;
+  pdf.setFillColor(...palette.header);
+  pdf.roundedRect(ix, iy, iw, headerHeight, 2.2, 2.2, "F");
+  pdf.rect(ix, iy + 2.0, iw, headerHeight - 2.0, "F");
+
+  // Center punch hole guide
+  const punchX = ix + iw / 2;
+  const punchY = iy + 4.8;
+  pdf.setDrawColor(255, 255, 255);
+  pdf.setLineWidth(0.2);
+  pdf.circle(punchX, punchY, 1.8, "S");
+  pdf.setFillColor(255, 255, 255);
+  pdf.circle(punchX, punchY, 0.35, "F");
 
   pdf.setTextColor(255, 255, 255);
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(busValue.fontSize);
-  pdf.text(busValue.text, rightColumnX + badgeWidth / 2, badgeY + 3, {
-    align: "center",
+  pdf.setFontSize(5.8);
+  pdf.text("LABEL BAGASI SANTRI", punchX, iy + 10.5, { align: "center" });
+
+  const kordaHeader = fitSingleLineText(
+    pdf,
+    normalizeText(item.kordaName).toUpperCase(),
+    iw - 10,
+    11.8,
+    7.8,
+    "bold",
+  );
+  pdf.setFontSize(kordaHeader.fontSize);
+  pdf.text(kordaHeader.text, punchX, iy + 16.0, { align: "center" });
+
+  pdf.setFillColor(...palette.border);
+  pdf.rect(ix, iy + headerHeight, iw, 0.6, "F");
+
+  // 3. Sub Header: Gender Pill & Roster Badge Strip
+  pdf.setFillColor(248, 250, 252);
+  pdf.rect(ix, iy + headerHeight + 0.6, iw, 10.5, "F");
+
+  const genderW = 21.0;
+  const genderH = 6.2;
+  const genderX = ix + 4.5;
+  const genderY = iy + headerHeight + 2.6;
+  pdf.setFillColor(...palette.header);
+  pdf.roundedRect(genderX, genderY, genderW, genderH, 1.4, 1.4, "F");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(7.2);
+  pdf.text(genderLabel, genderX + genderW / 2, genderY + 4.4, { align: "center" });
+
+  const rosterW = 21.0;
+  const rosterH = 7.8;
+  const rosterX = ix + iw - 25.5;
+  const rosterY = iy + headerHeight + 1.8;
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(rosterX, rosterY, rosterW, rosterH, 1.4, 1.4, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.2);
+  pdf.roundedRect(rosterX, rosterY, rosterW, rosterH, 1.4, 1.4, "S");
+
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(4.8);
+  pdf.text("NO. URUT", rosterX + rosterW / 2, rosterY + 2.6, { align: "center" });
+  pdf.setTextColor(17, 24, 39);
+  pdf.setFontSize(9.8);
+  pdf.text(String(item.rosterNumber).padStart(3, "0"), rosterX + rosterW / 2, rosterY + 6.6, { align: "center" });
+
+  pdf.setDrawColor(226, 232, 240);
+  pdf.setLineWidth(0.15);
+  pdf.line(ix, iy + headerHeight + 11.1, ix + iw, iy + headerHeight + 11.1);
+
+  // 4. Passenger Hero Name
+  pdf.setTextColor(156, 163, 175);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(5.5);
+  pdf.text("NAMA PENUMPANG / SANTRI", ix + 5.0, iy + 35.5);
+
+  const studentName = fitSingleLineText(
+    pdf,
+    normalizeText(item.studentName).toUpperCase(),
+    iw - 10.0,
+    12.2,
+    8.0,
+    "bold",
+  );
+  pdf.setTextColor(17, 24, 39);
+  pdf.setFontSize(studentName.fontSize);
+  pdf.text(studentName.text, ix + 5.0, iy + 40.5);
+
+  if (item.studentNis) {
+    const nisText = fitSingleLineText(pdf, `NIS: ${item.studentNis}`, 34, 6.4, 5.0, "bold");
+    const nisBadgeW = pdf.getTextWidth(nisText.text) + 3.5;
+    pdf.setFillColor(243, 244, 246);
+    pdf.roundedRect(ix + 5.0, iy + 42.8, nisBadgeW, 3.8, 0.8, 0.8, "F");
+    pdf.setTextColor(75, 85, 99);
+    pdf.setFontSize(nisText.fontSize);
+    pdf.text(nisText.text, ix + 6.8, iy + 45.5);
+  } else {
+    pdf.setFillColor(243, 244, 246);
+    pdf.roundedRect(ix + 5.0, iy + 42.8, 21.0, 3.8, 0.8, 0.8, "F");
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(5.6);
+    pdf.text("PESERTA UMUM", ix + 5.8, iy + 45.5);
+  }
+
+  pdf.setDrawColor(229, 231, 235);
+  pdf.setLineWidth(0.15);
+  pdf.line(ix + 4.5, iy + 49.5, ix + iw - 4.5, iy + 49.5);
+
+  // 5. Drop Point Section (Inside styled container box)
+  const dropBoxX = ix + 4.5;
+  const dropBoxY = iy + 52.5;
+  const dropBoxW = iw - 9.0;
+  const dropBoxH = 16.0;
+  pdf.setFillColor(248, 250, 252);
+  pdf.roundedRect(dropBoxX, dropBoxY, dropBoxW, dropBoxH, 1.6, 1.6, "F");
+  pdf.setDrawColor(226, 232, 240);
+  pdf.setLineWidth(0.18);
+  pdf.roundedRect(dropBoxX, dropBoxY, dropBoxW, dropBoxH, 1.6, 1.6, "S");
+
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(5.2);
+  pdf.text("TITIK TURUN (DROP POINT)", dropBoxX + 3.5, dropBoxY + 4.2);
+
+  const dropPointValue = fitMultilineText(pdf, item.dropPointName, dropBoxW - 7.0, 2, 9.2, 7.2, "bold");
+  pdf.setTextColor(31, 41, 55);
+  pdf.setFontSize(dropPointValue.fontSize);
+  const dropLineH = Math.max(3.4, dropPointValue.fontSize * 0.38);
+  dropPointValue.lines.forEach((line, index) => {
+    pdf.text(line, dropBoxX + 3.5, dropBoxY + 8.8 + index * dropLineH);
   });
+
+  // 6. Emergency Contact (Inside styled container box)
+  const phoneBoxX = ix + 4.5;
+  const phoneBoxY = iy + 71.0;
+  const phoneBoxW = iw - 9.0;
+  const phoneBoxH = 14.5;
+  pdf.setFillColor(248, 250, 252);
+  pdf.roundedRect(phoneBoxX, phoneBoxY, phoneBoxW, phoneBoxH, 1.6, 1.6, "F");
+  pdf.setDrawColor(226, 232, 240);
+  pdf.setLineWidth(0.18);
+  pdf.roundedRect(phoneBoxX, phoneBoxY, phoneBoxW, phoneBoxH, 1.6, 1.6, "S");
+
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(5.2);
+  pdf.text("KONTAK DARURAT / ORTU", phoneBoxX + 3.5, phoneBoxY + 4.2);
+
+  const parentPhone = fitSingleLineText(pdf, item.parrentPhone || "-", phoneBoxW - 7.0, 9.2, 7.2, "bold");
+  pdf.setTextColor(55, 65, 81);
+  pdf.setFontSize(parentPhone.fontSize);
+  pdf.text(parentPhone.text, phoneBoxX + 3.5, phoneBoxY + 9.8);
+
+  // 7. Armada Bus Section (MOVED TO BOTTOM SECTION)
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(5.5);
+  pdf.text("ARMADA BUS", ix + 5.0, iy + 89.2);
+
+  const busCardW = iw - 9.0; // 63mm
+  const busCardH = 24.0;
+  const busCardX = ix + 4.5;
+  const busCardY = iy + 91.2;
+
+  pdf.setFillColor(...palette.header);
+  pdf.roundedRect(busCardX, busCardY, busCardW, busCardH, 2.2, 2.2, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.25);
+  pdf.roundedRect(busCardX, busCardY, busCardW, busCardH, 2.2, 2.2, "S");
+
+  const busHeaderStrip = palette.header.map((c) => Math.round(c * 0.85)) as PdfRgb;
+  pdf.setFillColor(...busHeaderStrip);
+  pdf.roundedRect(busCardX, busCardY, busCardW, 4.8, 2.2, 2.2, "F");
+  pdf.rect(busCardX, busCardY + 2.6, busCardW, 2.2, "F");
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(5.2);
+  pdf.text("BUS PENUMPANG", busCardX + busCardW / 2, busCardY + 3.5, { align: "center" });
+
+  const busValue = fitSingleLineText(pdf, item.busLabel || "-", busCardW - 5.0, 16.5, 9.5, "bold");
+  pdf.setFontSize(busValue.fontSize);
+  pdf.text(busValue.text, busCardX + busCardW / 2, busCardY + 16.0, { align: "center" });
+
+  // 8. Inner Card Border (Clean rounded corners without bottom block clash)
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.25);
+  pdf.roundedRect(ix, iy, iw, ih, 2.2, 2.2, "S");
+}
+
+function drawLuggageCardLargeLandscapePdf(
+  pdf: jsPDF,
+  item: PrintDataItem,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const palette = getPdfPalette(item.kordaName);
+  const isPutri = isPutriGender(item.studentGender);
+  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
+
+  // 1. Outer Cutting Border (Subtle Gray) and Plain White Frame
+  pdf.setFillColor(255, 255, 255);
+  pdf.setDrawColor(209, 213, 219);
+  pdf.setLineWidth(0.18);
+  pdf.rect(x, y, width, height, "FD");
+
+  // Inset inner card (2.5mm plain white frame gap)
+  const margin = 2.5;
+  const ix = x + margin;
+  const iy = y + margin;
+  const iw = width - 2 * margin; // 122mm
+  const ih = height - 2 * margin; // 72mm
+
+  // Inner card background
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(ix, iy, iw, ih, 2.0, 2.0, "F");
+
+  // Subtle watermark for Putri
+  if (isPutri) {
+    const wmColor = blendWithWhite(palette.header, 0.94);
+    pdf.setDrawColor(...wmColor);
+    pdf.setLineWidth(0.8);
+    pdf.circle(ix + iw - 18, iy + ih - 20, 16, "S");
+    pdf.circle(ix + iw - 18, iy + ih - 20, 8, "S");
+  }
+
+  // 2. Header Banner (height 15.5mm)
+  const headerHeight = 15.5;
+  pdf.setFillColor(...palette.header);
+  pdf.roundedRect(ix, iy, iw, headerHeight, 2.0, 2.0, "F");
+  pdf.rect(ix, iy + 2.0, iw, headerHeight - 2.0, "F");
+
+  // Hole punch guide
+  const punchX = ix + 6.0;
+  const punchY = iy + 7.8;
+  pdf.setDrawColor(255, 255, 255);
+  pdf.setLineWidth(0.2);
+  pdf.circle(punchX, punchY, 2.0, "S");
+  pdf.setFillColor(255, 255, 255);
+  pdf.circle(punchX, punchY, 0.4, "F");
+
+  // Title & Korda Name
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(6.4);
+  pdf.text("LABEL BAGASI SANTRI", ix + 10.0, iy + 5.5);
+
+  const kordaHeader = fitSingleLineText(
+    pdf,
+    normalizeText(item.kordaName).toUpperCase(),
+    iw - 50,
+    13.5,
+    9.0,
+    "bold",
+  );
+  pdf.setFontSize(kordaHeader.fontSize);
+  pdf.text(kordaHeader.text, ix + 10.0, iy + 12.0);
+
+  // Right Badges: Gender & Roster
+  const genderPillW = 14.5;
+  const genderPillH = 8.0;
+  const genderPillX = ix + iw - 38.0;
+  const genderPillY = iy + 3.8;
+  pdf.setFillColor(...blendWithWhite(palette.header, 0.25));
+  pdf.roundedRect(genderPillX, genderPillY, genderPillW, genderPillH, 1.6, 1.6, "F");
+  pdf.setDrawColor(255, 255, 255);
+  pdf.setLineWidth(0.18);
+  pdf.roundedRect(genderPillX, genderPillY, genderPillW, genderPillH, 1.6, 1.6, "S");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(7.6);
+  pdf.text(genderLabel, genderPillX + genderPillW / 2, genderPillY + 5.5, { align: "center" });
+
+  const rosterBadgeW = 19.0;
+  const rosterBadgeH = 10.0;
+  const rosterBadgeX = ix + iw - 21.5;
+  const rosterBadgeY = iy + 2.8;
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(rosterBadgeX, rosterBadgeY, rosterBadgeW, rosterBadgeH, 1.8, 1.8, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.2);
+  pdf.roundedRect(rosterBadgeX, rosterBadgeY, rosterBadgeW, rosterBadgeH, 1.8, 1.8, "S");
+
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(5.2);
+  pdf.text("NO. URUT", rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 3.4, { align: "center" });
+  pdf.setTextColor(17, 24, 39);
+  pdf.setFontSize(11.5);
+  pdf.text(String(item.rosterNumber).padStart(3, "0"), rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 8.4, { align: "center" });
+
+  // Accent line
+  pdf.setFillColor(...palette.border);
+  pdf.rect(ix, iy + headerHeight, iw, 0.7, "F");
+
+  // 3. Hero Passenger Section
+  pdf.setTextColor(156, 163, 175);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(6.2);
+  pdf.text("NAMA PENUMPANG / SANTRI", ix + 5.5, iy + 20.8);
+
+  const studentName = fitSingleLineText(
+    pdf,
+    normalizeText(item.studentName).toUpperCase(),
+    iw - 11.0,
+    13.8,
+    9.5,
+    "bold",
+  );
+  pdf.setTextColor(17, 24, 39);
+  pdf.setFontSize(studentName.fontSize);
+  pdf.text(studentName.text, ix + 5.5, iy + 26.8);
+
+  if (item.studentNis) {
+    const nisText = fitSingleLineText(pdf, `NIS: ${item.studentNis}`, 40, 7.2, 5.8, "bold");
+    const nisBadgeW = pdf.getTextWidth(nisText.text) + 4.0;
+    pdf.setFillColor(243, 244, 246);
+    pdf.roundedRect(ix + 5.5, iy + 29.2, nisBadgeW, 4.0, 1.0, 1.0, "F");
+    pdf.setTextColor(75, 85, 99);
+    pdf.setFontSize(nisText.fontSize);
+    pdf.text(nisText.text, ix + 7.5, iy + 32.2);
+  } else {
+    pdf.setFillColor(243, 244, 246);
+    pdf.roundedRect(ix + 5.5, iy + 29.2, 24.0, 4.0, 1.0, 1.0, "F");
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(6.2);
+    pdf.text("PESERTA UMUM", ix + 6.5, iy + 32.2);
+  }
+
+  // Mid divider
+  pdf.setDrawColor(229, 231, 235);
+  pdf.setLineWidth(0.18);
+  pdf.line(ix + 4.5, iy + 35.0, ix + iw - 4.5, iy + 35.0);
+
+  // 4. Logistics Grid
+  // Left: Drop Point
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(6.5);
+  pdf.text("TITIK TURUN (DROP POINT)", ix + 5.5, iy + 39.5);
+
+  const dropPointValue = fitMultilineText(
+    pdf,
+    item.dropPointName,
+    54.0,
+    2,
+    9.5,
+    7.5,
+    "bold",
+  );
+  pdf.setTextColor(31, 41, 55);
+  pdf.setFontSize(dropPointValue.fontSize);
+  const dropLineHeight = Math.max(3.6, dropPointValue.fontSize * 0.38);
+  dropPointValue.lines.forEach((line, index) => {
+    pdf.text(line, ix + 5.5, iy + 44.5 + index * dropLineHeight);
+  });
+
+  // Left: Emergency Parent Phone
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(6.2);
+  pdf.text("KONTAK DARURAT / ORTU", ix + 5.5, iy + 56.5);
+
+  const parentPhone = fitSingleLineText(pdf, item.parrentPhone || "-", 54.0, 9.2, 7.2, "bold");
+  pdf.setTextColor(55, 65, 81);
+  pdf.setFontSize(parentPhone.fontSize);
+  pdf.text(parentPhone.text, ix + 5.5, iy + 61.5);
+
+  // Column Divider Line
+  pdf.setDrawColor(229, 231, 235);
+  pdf.setLineWidth(0.18);
+  pdf.line(ix + 64.0, iy + 37.0, ix + 64.0, iy + 67.0);
+
+  // Right: Armada Bus Focal Point Card
+  pdf.setTextColor(107, 114, 128);
+  pdf.setFontSize(6.5);
+  pdf.text("ARMADA BUS", ix + 67.5, iy + 39.5);
+
+  const busCardX = ix + 67.5;
+  const busCardY = iy + 41.5;
+  const busCardW = 50.0;
+  const busCardH = 20.5;
+  pdf.setFillColor(...palette.header);
+  pdf.roundedRect(busCardX, busCardY, busCardW, busCardH, 2.0, 2.0, "F");
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.25);
+  pdf.roundedRect(busCardX, busCardY, busCardW, busCardH, 2.0, 2.0, "S");
+
+  const busHeaderStrip = palette.header.map((c) => Math.round(c * 0.85)) as PdfRgb;
+  pdf.setFillColor(...busHeaderStrip);
+  pdf.roundedRect(busCardX, busCardY, busCardW, 4.8, 2.0, 2.0, "F");
+  pdf.rect(busCardX, busCardY + 2.8, busCardW, 2.0, "F");
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(5.5);
+  pdf.text("BUS PENUMPANG", busCardX + busCardW / 2, busCardY + 3.6, { align: "center" });
+
+  const busValue = fitSingleLineText(pdf, item.busLabel || "-", busCardW - 4.0, 14.5, 9.0, "bold");
+  pdf.setFontSize(busValue.fontSize);
+  pdf.text(busValue.text, busCardX + busCardW / 2, busCardY + 14.5, { align: "center" });
+
+  // 5. Inner Card Border (Clean rounded corners without bottom block clash)
+  pdf.setDrawColor(...palette.border);
+  pdf.setLineWidth(0.25);
+  pdf.roundedRect(ix, iy, iw, ih, 2.0, 2.0, "S");
+}
+
+function drawLuggageCardToPdf(
+  pdf: jsPDF,
+  item: PrintDataItem,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  cardSize: LuggageCardSize = "standard",
+) {
+  if (cardSize === "large_portrait") {
+    drawLuggageCardPortraitPdf(pdf, item, x, y, width, height);
+    return;
+  }
+  if (cardSize === "large_landscape") {
+    drawLuggageCardLargeLandscapePdf(pdf, item, x, y, width, height);
+    return;
+  }
+  drawLuggageCardStandardPdf(pdf, item, x, y, width, height);
 }
 
 function drawTicketToPdf(
