@@ -243,6 +243,11 @@ export function PrintWorkspace({
       const pageChunks = buildPrintPages(previewData, cardsPerPage);
       const totalPages = pageChunks.length;
 
+      let logoData: string | null = null;
+      if (printType === "bracelet") {
+        logoData = await getLogoDataUrl();
+      }
+
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
         if (pageIndex > 0) {
           pdf.addPage();
@@ -271,7 +276,17 @@ export function PrintWorkspace({
             drawTicketToPdf(pdf, item, x, y, layout.cardWidth, layout.cardHeight);
             return;
           }
-          drawBraceletToPdf(pdf, item, eventName, selectedJourneyType, x, y, layout.cardWidth, layout.cardHeight);
+          drawBraceletToPdf(
+            pdf,
+            item,
+            eventName,
+            selectedJourneyType,
+            x,
+            y,
+            layout.cardWidth,
+            layout.cardHeight,
+            logoData,
+          );
           drawBraceletCropMarks(pdf, x, y, layout.cardWidth, layout.cardHeight);
         });
       }
@@ -1400,30 +1415,292 @@ function PreviewBraceletCropMarks({ unitPx }: { unitPx: number }) {
   return <div aria-hidden="true" className="pointer-events-none absolute inset-0">{marks.map((mark, index) => <span key={index} style={{ ...stroke, ...mark }} />)}</div>;
 }
 
-function PreviewBracelet({ item, eventName, journeyType }: { item: PrintDataItem; eventName: string; journeyType: "outbound" | "return" }) {
+let cachedLogoDataUrl: string | null = null;
+async function getLogoDataUrl(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  if (cachedLogoDataUrl) return cachedLogoDataUrl;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+          cachedLogoDataUrl = dataUrl;
+          resolve(dataUrl);
+          return;
+        }
+      } catch (err) {
+        console.warn("Canvas export for logo failed:", err);
+      }
+      resolve(img.src);
+    };
+    img.onerror = () => {
+      resolve(null);
+    };
+    img.src = "/logo.png";
+  });
+}
+
+function formatSpacedEventTitle(eventName: string): string {
+  const clean = normalizeText(eventName).toUpperCase().replace(/[^A-Z0-9. ]/g, "").trim();
+  if (clean.includes("MABAR") || clean.includes("ANTEGA") || !clean) {
+    return "M A B A R A T I   0 . 5";
+  }
+  if (clean.length <= 15) {
+    return clean.split("").join(" ");
+  }
+  return clean.slice(0, 15).split("").join(" ");
+}
+
+function generateBraceletBarcodeBars(
+  seed: string,
+  targetWidth: number,
+): Array<{ x: number; width: number }> {
+  const baseSequence = [
+    2, 1, 1, 2, // start guard
+    1, 2, 2, 1, 3, 1, 1, 2, 1, 3, 2, 1, 1, 2, 2, 1,
+    3, 1, 1, 2, 1, 1, 3, 2, 1, 2, 1, 3, 1, 2, 2, 1,
+    1, 3, 2, 1, 2, 1, 1, 3, 2, 1, 1, 2, 3, 1, 1, 2,
+    2, 1, 2, // stop guard
+  ];
+  const hash = hashText(seed);
+  const adjusted = baseSequence.map((w, idx) => {
+    if (idx < 4 || idx >= baseSequence.length - 3) return w;
+    const bit = (hash >> (idx % 16)) & 1;
+    return Math.max(1, Math.min(3, w + (bit === 1 && w === 1 ? 1 : 0)));
+  });
+
+  const total = adjusted.reduce((acc, val) => acc + val, 0);
+  const scale = targetWidth / total;
+
+  const bars: Array<{ x: number; width: number }> = [];
+  let currentX = 0;
+  for (let i = 0; i < adjusted.length; i++) {
+    const w = adjusted[i] * scale;
+    if (i % 2 === 0) {
+      bars.push({ x: currentX, width: Math.max(0.5, w) });
+    }
+    currentX += w;
+  }
+  return bars;
+}
+
+function PreviewBracelet({
+  item,
+  eventName,
+  journeyType,
+}: {
+  item: PrintDataItem;
+  eventName: string;
+  journeyType: "outbound" | "return";
+}) {
   const palette = getHexPalette(item.kordaName);
-  const eventText = truncatePreviewText(eventName, 22);
-  const studentName = truncatePreviewText(item.studentName, 30);
-  const kordaLines = wrapPreviewLines(item.kordaName, 15, 2);
+  const eventText = truncatePreviewText(eventName || "Mabar'ati 0.5", 22);
+  const studentName = truncatePreviewText(item.studentName, 26).toUpperCase();
   const journeyLabel = journeyType === "outbound" ? "PULANG" : "KEMBALI";
-  const headerText = contrastTextColor(palette.header);
-  const nameClipId = `bracelet-name-${item.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
+  const isPutri = isPutriGender(item.studentGender);
+  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
+  const spacedTitle = formatSpacedEventTitle(eventName);
+
+  const isDarkBg = contrastTextColor(palette.header) === "#ffffff";
+  const textColor = isDarkBg ? "#ffffff" : "#0f172a";
+  const eventTextColor = isDarkBg ? "#f8fafc" : "#334155";
+  const spacedTitleColor = isDarkBg ? "#ffffff" : "#0f172a";
+
+  // Bus card contrast
+  const busTextColor = contrastTextColor(palette.header);
+  const busBorderColor = busTextColor === "#ffffff" ? "#ffffff" : "#0f172a";
+
+  // Clean, soft lighting gradient matching reference (no muddy vignette)
+  const topGrad = blendHexColors(palette.header, "#ffffff", 0.25);
+  const bottomGrad = palette.header;
+
+  const barcodeBars = generateBraceletBarcodeBars(
+    item.studentNis || `${item.rosterNumber}-${item.id.slice(-6)}`,
+    420,
+  );
+
+  const gradId = `bracelet-grad-${item.id}`;
+
+  const kordaDisplay = truncatePreviewText(item.kordaName, 22).toUpperCase();
+  const dropPointDisplay = truncatePreviewText(item.dropPointName, 28).toUpperCase();
+  const busDisplay = truncatePreviewText(item.busLabel || "-", 12).toUpperCase();
+
+  const nisText = item.studentNis ? `NIS: ${item.studentNis}` : "PESERTA UMUM";
+  const nisWidth = Math.max(120, Math.min(240, nisText.length * 11 + 40));
 
   return (
-    <svg viewBox="0 0 2200 200" className="h-full w-full" preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Preview gelang ${studentName}`}>
-      <defs><clipPath id={nameClipId}><rect x="540" y="80" width="1060" height="88" /></clipPath></defs>
-      <rect x="2" y="2" width="2196" height="196" fill={palette.header} stroke={palette.border} strokeWidth="4" />
-      <rect x="3" y="3" width="480" height="194" fill={palette.text} />
-      <rect x="483" y="3" width="1197" height="194" fill={palette.bg} />
-      <line x1="483" y1="3" x2="483" y2="197" stroke={palette.border} strokeWidth="3" />
-      <line x1="1680" y1="3" x2="1680" y2="197" stroke={palette.border} strokeWidth="3" />
-      <text x="243" y="72" fill="#ffffff" textAnchor="middle" fontSize="19" fontWeight="700" letterSpacing="2">EVENT</text>
-      <text x="243" y="143" fill="#ffffff" textAnchor="middle" fontSize="27" fontWeight="600">{eventText}</text>
-      <text x="540" y="57" fill={palette.text} fontSize="16" fontWeight="700" letterSpacing="2">AKSES PERJALANAN / {journeyLabel}</text>
-      <line x1="540" y1="77" x2="1625" y2="77" stroke={palette.border} strokeWidth="2" />
-      <text x="540" y="145" fill={palette.text} fontSize="69" fontWeight="800" clipPath={`url(#${nameClipId})`}>{studentName}</text>
-      <text x="1940" y="65" fill={headerText} textAnchor="middle" fontSize="19" fontWeight="700" letterSpacing="2">KORDA</text>
-      {kordaLines.map((line, index) => <text key={`${line}-${index}`} x="1940" y={kordaLines.length === 1 ? 143 : 119 + index * 34} fill={headerText} textAnchor="middle" fontSize="32" fontWeight="800">{line}</text>)}
+    <svg
+      viewBox="0 0 2200 200"
+      className="h-full w-full"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label={`Preview gelang ${studentName}`}
+    >
+      <defs>
+        {/* Soft, continuous vertical lighting gradient matching reference */}
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={topGrad} />
+          <stop offset="100%" stopColor={bottomGrad} />
+        </linearGradient>
+      </defs>
+
+      {/* 1. Base Gradient Background */}
+      <rect x="0" y="0" width="2200" height="200" fill={`url(#${gradId})`} />
+
+      {/* Subtle Outer Hairline Border */}
+      <rect x="0.5" y="0.5" width="2199" height="199" fill="none" stroke="rgba(0, 0, 0, 0.15)" strokeWidth="1" />
+
+      {/* 2. Security Watermark Vertical Stripes on the Right (persis referensi) */}
+      <rect x="1635" y="0" width="10" height="200" fill="#ffffff" opacity="0.12" />
+      <rect x="1650" y="0" width="6" height="200" fill="#000000" opacity="0.05" />
+      <rect x="1750" y="0" width="14" height="200" fill="#ffffff" opacity="0.1" />
+      <rect x="1890" y="0" width="8" height="200" fill="#000000" opacity="0.04" />
+      <rect x="2140" y="0" width="12" height="200" fill="#ffffff" opacity="0.14" />
+      <rect x="2155" y="0" width="8" height="200" fill="#ffffff" opacity="0.1" />
+      <rect x="2170" y="0" width="6" height="200" fill="#000000" opacity="0.06" />
+      <rect x="2185" y="0" width="14" height="200" fill="#ffffff" opacity="0.18" />
+
+      {/* 3. Left Section: Logo (Sebelah Kiri Ganti Logo) */}
+      <image
+        href="/logo.png"
+        x="35"
+        y="24"
+        width="228"
+        height="152"
+        preserveAspectRatio="xMidYMid meet"
+      />
+
+      {/* Translucent vertical divider after logo */}
+      <line
+        x1="285"
+        y1="22"
+        x2="285"
+        y2="178"
+        stroke="#ffffff"
+        strokeOpacity="0.4"
+        strokeWidth="2"
+        strokeDasharray="6 4"
+      />
+
+      {/* 4. Center Section: Modern Participant Data */}
+      {/* Top Row: Badges */}
+      {/* Journey Badge (PULANG / KEMBALI) */}
+      <rect x="305" y="22" width="145" height="34" rx="17" fill="#0f172a" fillOpacity="0.88" />
+      <text x="377" y="44" fill="#ffffff" textAnchor="middle" fontSize="15" fontWeight="900" letterSpacing="1">
+        AKSES {journeyLabel}
+      </text>
+
+      {/* Gender Badge */}
+      <rect x="460" y="22" width="90" height="34" rx="17" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
+      <text x="505" y="44" fill="#0f172a" textAnchor="middle" fontSize="15" fontWeight="900" letterSpacing="0.5">
+        {genderLabel}
+      </text>
+
+      {/* Roster Badge */}
+      <rect x="560" y="22" width="110" height="34" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
+      <text x="615" y="45" fill="#0f172a" textAnchor="middle" fontSize="17" fontWeight="900" letterSpacing="0.5">
+        NO. {rosterNumber}
+      </text>
+
+      {/* Event Name Tag */}
+      <text x="685" y="45" fill={eventTextColor} fontSize="16" fontWeight="800" letterSpacing="1">
+        {eventText.toUpperCase()}
+      </text>
+
+      {/* Middle Row: Student Hero Name */}
+      <text
+        x="305"
+        y="112"
+        fill={textColor}
+        fontSize="50"
+        fontWeight="900"
+        letterSpacing="0.5"
+        style={{
+          filter: isDarkBg
+            ? "drop-shadow(0px 1px 2px rgba(0,0,0,0.5))"
+            : "drop-shadow(0px 1px 1px rgba(255,255,255,0.7))",
+        }}
+      >
+        {studentName}
+      </text>
+
+      {/* NIS Badge */}
+      <g transform={`translate(${Math.min(1380, 310 + studentName.length * 28)}, 78)`}>
+        <rect width={nisWidth} height="34" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
+        <text x={nisWidth / 2} y="23" fill="#0f172a" textAnchor="middle" fontSize="17" fontWeight="800" letterSpacing="0.5">
+          {nisText}
+        </text>
+      </g>
+
+      {/* Bottom Row: Logistics Cards (Korda, Drop Point, Bus) */}
+      {/* Korda Card */}
+      <g transform="translate(305, 138)">
+        <rect width="380" height="42" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.2" />
+        <text x="14" y="26" fill="#64748b" fontSize="13" fontWeight="800" letterSpacing="1">
+          KORDA:
+        </text>
+        <text x="76" y="27" fill="#0f172a" fontSize="17" fontWeight="900">
+          {kordaDisplay}
+        </text>
+      </g>
+
+      {/* Drop Point Card */}
+      <g transform="translate(695, 138)">
+        <rect width="480" height="42" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.2" />
+        <text x="14" y="26" fill="#64748b" fontSize="13" fontWeight="800" letterSpacing="1">
+          TURUN:
+        </text>
+        <text x="76" y="27" fill="#0f172a" fontSize="17" fontWeight="900">
+          {dropPointDisplay}
+        </text>
+      </g>
+
+      {/* Armada Bus Card */}
+      <g transform="translate(1185, 138)">
+        <rect width="425" height="42" rx="8" fill={palette.header} stroke={busBorderColor} strokeWidth="1.5" />
+        <text x="14" y="26" fill={busTextColor} fillOpacity="0.85" fontSize="13" fontWeight="800" letterSpacing="1">
+          ARMADA:
+        </text>
+        <text x="88" y="27" fill={busTextColor} fontSize="20" fontWeight="900" letterSpacing="0.5">
+          {busDisplay}
+        </text>
+      </g>
+
+      {/* 5. Right Section: Spaced Text + Barcode (Persis Referensi) */}
+      <text
+        x="1905"
+        y="50"
+        fill={spacedTitleColor}
+        textAnchor="middle"
+        fontSize="19"
+        fontWeight="900"
+        letterSpacing="4"
+      >
+        {spacedTitle}
+      </text>
+
+      {/* White Barcode Card */}
+      <rect x="1660" y="66" width="490" height="110" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
+
+      {/* Vector Barcode Lines */}
+      {barcodeBars.map((bar, idx) => (
+        <rect
+          key={idx}
+          x={1695 + bar.x}
+          y="74"
+          width={bar.width}
+          height="94"
+          fill="#000000"
+        />
+      ))}
     </svg>
   );
 }
@@ -1571,6 +1848,15 @@ function blendWithWhite(color: PdfRgb, ratio: number): PdfRgb {
   ) as PdfRgb;
 }
 
+function blendRgb(colorA: PdfRgb, colorB: PdfRgb, ratio: number): PdfRgb {
+  const safeRatio = Math.min(1, Math.max(0, ratio));
+  return [
+    Math.round(colorA[0] * (1 - safeRatio) + colorB[0] * safeRatio),
+    Math.round(colorA[1] * (1 - safeRatio) + colorB[1] * safeRatio),
+    Math.round(colorA[2] * (1 - safeRatio) + colorB[2] * safeRatio),
+  ] as PdfRgb;
+}
+
 
 function getPdfPalette(kordaName: string): PdfKordaPalette {
   const hexPalette = getHexPalette(kordaName);
@@ -1694,59 +1980,187 @@ function drawBraceletToPdf(
   y: number,
   width: number,
   height: number,
+  logoData?: string | null,
 ) {
   const palette = getPdfPalette(item.kordaName);
-  const headerText = hexToRgb(contrastTextColor(rgbToHex(palette.header)));
-  const eventBlockWidth = 48;
-  const kordaBlockWidth = 52;
-  const nameBlockWidth = width - eventBlockWidth - kordaBlockWidth;
-  const event = fitSingleLineText(pdf, eventName, eventBlockWidth - 8, 7.4, 5.8, "bold");
   const journeyLabel = journeyType === "outbound" ? "PULANG" : "KEMBALI";
-  const journey = fitSingleLineText(pdf, `AKSES PERJALANAN / ${journeyLabel}`, nameBlockWidth - 14, 5.4, 4.8, "bold");
-  const name = truncateSingleLineText(pdf, item.studentName, nameBlockWidth - 14, 19.5, "bold");
-  const korda = fitMultilineText(pdf, item.kordaName, kordaBlockWidth - 8, 2, 10, 7.2, "bold");
+  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
+  const isPutri = isPutriGender(item.studentGender);
+  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
+  const spacedTitle = formatSpacedEventTitle(eventName);
 
-  pdf.setFillColor(...palette.header);
-  pdf.rect(x, y, width, height, "F");
-  pdf.setFillColor(...palette.text);
-  pdf.rect(x, y, eventBlockWidth, height, "F");
-  pdf.setFillColor(...palette.bg);
-  pdf.rect(x + eventBlockWidth, y, nameBlockWidth, height, "F");
-  pdf.setDrawColor(...palette.border);
-  pdf.setLineWidth(0.35);
-  pdf.rect(x + 0.15, y + 0.15, width - 0.3, height - 0.3, "S");
-  pdf.line(x + eventBlockWidth, y, x + eventBlockWidth, y + height);
-  pdf.line(x + width - kordaBlockWidth, y, x + width - kordaBlockWidth, y + height);
+  const isDarkBg = contrastTextColor(rgbToHex(palette.header)) === "#ffffff";
+  const textColor: PdfRgb = isDarkBg ? [255, 255, 255] : [15, 23, 42];
+  const eventTextRgb: PdfRgb = isDarkBg ? [241, 245, 249] : [51, 65, 85];
+  const spacedTitleRgb: PdfRgb = isDarkBg ? [255, 255, 255] : [15, 23, 42];
 
+  // Bus card contrast
+  const busTextContrast = contrastTextColor(rgbToHex(palette.header));
+  const busTextRgb: PdfRgb = busTextContrast === "#ffffff" ? [255, 255, 255] : [15, 23, 42];
+  const busBorderRgb: PdfRgb = busTextContrast === "#ffffff" ? [255, 255, 255] : [15, 23, 42];
+
+  // 1. Ultra-smooth continuous vector lighting gradient in PDF (50 micro-slices across 20mm -> 0.4mm each)
+  const topColor = blendWithWhite(palette.header, 0.25);
+  const bottomColor = palette.header;
+  const steps = 50;
+  const stepH = height / steps;
+  for (let i = 0; i < steps; i++) {
+    const ratio = i / (steps - 1);
+    const stripColor = blendRgb(topColor, bottomColor, ratio);
+    pdf.setFillColor(...stripColor);
+    pdf.rect(x, y + i * stepH, width, stepH + 0.05, "F");
+  }
+
+  // Outer hairline border
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.12);
+  pdf.rect(x, y, width, height, "S");
+
+  // 2. Vertical security watermark stripes on right (persis referensi)
+  pdf.setFillColor(...blendWithWhite(palette.header, 0.55));
+  pdf.rect(x + 163.5, y, 1.0, height, "F");
+  pdf.rect(x + 175.0, y, 1.4, height, "F");
+  pdf.rect(x + 214.0, y, 1.2, height, "F");
+  pdf.rect(x + 215.5, y, 0.8, height, "F");
+  pdf.rect(x + 218.5, y, 1.4, height, "F");
+
+  // 3. Left Section: Logo (Sebelah Kiri Ganti Logo)
+  if (logoData) {
+    try {
+      pdf.addImage(logoData, "PNG", x + 3.5, y + 2.4, 22.8, 15.2);
+    } catch (e) {
+      console.warn("Failed to add logo to PDF:", e);
+    }
+  }
+
+  // Translucent vertical divider after logo
+  pdf.setDrawColor(255, 255, 255);
+  pdf.setLineWidth(0.2);
+  pdf.line(x + 28.5, y + 2.2, x + 28.5, y + 17.8);
+
+  // 4. Center Section: Participant Data
+  // Top Row: Badges
+  // Journey Badge (PULANG / KEMBALI)
+  pdf.setFillColor(15, 23, 42);
+  pdf.roundedRect(x + 30.5, y + 2.2, 14.5, 3.4, 1.7, 1.7, "F");
   pdf.setTextColor(255, 255, 255);
   pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(4.8);
+  pdf.text(`AKSES ${journeyLabel}`, x + 37.75, y + 4.5, { align: "center" });
+
+  // Gender Badge
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(x + 46.0, y + 2.2, 9.0, 3.4, 1.7, 1.7, "F");
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.12);
+  pdf.roundedRect(x + 46.0, y + 2.2, 9.0, 3.4, 1.7, 1.7, "S");
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFontSize(4.8);
+  pdf.text(genderLabel, x + 50.5, y + 4.5, { align: "center" });
+
+  // Roster Badge
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(x + 56.0, y + 2.2, 11.0, 3.4, 0.8, 0.8, "F");
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.12);
+  pdf.roundedRect(x + 56.0, y + 2.2, 11.0, 3.4, 0.8, 0.8, "S");
+  pdf.setTextColor(15, 23, 42);
   pdf.setFontSize(5.2);
-  pdf.text("EVENT", x + eventBlockWidth / 2, y + 6.1, { align: "center" });
-  pdf.setFontSize(event.fontSize);
-  pdf.text(event.text, x + eventBlockWidth / 2, y + 14.1, { align: "center" });
+  pdf.text(`NO. ${rosterNumber}`, x + 61.5, y + 4.6, { align: "center" });
 
-  pdf.setTextColor(...palette.text);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(journey.fontSize);
-  pdf.text(journey.text, x + eventBlockWidth + 7, y + 5.7);
-  pdf.setDrawColor(...palette.border);
-  pdf.setLineWidth(0.18);
-  pdf.line(x + eventBlockWidth + 7, y + 7.7, x + width - kordaBlockWidth - 7, y + 7.7);
+  // Event Name Tag
+  pdf.setTextColor(...eventTextRgb);
+  pdf.setFontSize(5.0);
+  pdf.text(normalizeText(eventName || "Mabar'ati 0.5").toUpperCase(), x + 68.5, y + 4.5);
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(name.fontSize);
-  pdf.text(name.text, x + eventBlockWidth + 7, y + 15.2);
+  // Middle Row: Hero Student Name
+  pdf.setTextColor(...textColor);
+  const studentName = truncateSingleLineText(
+    pdf,
+    normalizeText(item.studentName).toUpperCase(),
+    72.0,
+    13.0,
+    "bold",
+  );
+  pdf.setFontSize(studentName.fontSize);
+  pdf.text(studentName.text, x + 30.5, y + 11.2);
 
-  pdf.setTextColor(...headerText);
+  // NIS Badge
+  const nisW = item.studentNis ? 22.0 : 25.0;
+  const nisX = Math.min(x + 138.0, x + 31.0 + pdf.getTextWidth(studentName.text) + 2.5);
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(nisX, y + 7.8, nisW, 3.4, 0.8, 0.8, "F");
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.12);
+  pdf.roundedRect(nisX, y + 7.8, nisW, 3.4, 0.8, 0.8, "S");
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFontSize(4.8);
+  pdf.text(item.studentNis ? `NIS: ${item.studentNis}` : "PESERTA UMUM", nisX + nisW / 2, y + 10.1, { align: "center" });
+
+  // Bottom Row: Logistics Cards (Korda, Drop Point, Bus)
+  // Korda Card (Solid white card with clear contrast)
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(x + 30.5, y + 13.8, 38.0, 4.2, 0.8, 0.8, "F");
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.12);
+  pdf.roundedRect(x + 30.5, y + 13.8, 38.0, 4.2, 0.8, 0.8, "S");
+  pdf.setTextColor(100, 116, 139);
+  pdf.setFontSize(4.2);
+  pdf.text("KORDA:", x + 32.0, y + 16.5);
+  pdf.setTextColor(15, 23, 42);
+  const kordaText = fitSingleLineText(pdf, normalizeText(item.kordaName).toUpperCase(), 28.0, 5.0, 3.8, "bold");
+  pdf.setFontSize(kordaText.fontSize);
+  pdf.text(kordaText.text, x + 39.5, y + 16.5);
+
+  // Drop Point Card (Solid white card with clear contrast)
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(x + 69.5, y + 13.8, 48.0, 4.2, 0.8, 0.8, "F");
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.12);
+  pdf.roundedRect(x + 69.5, y + 13.8, 48.0, 4.2, 0.8, 0.8, "S");
+  pdf.setTextColor(100, 116, 139);
+  pdf.setFontSize(4.2);
+  pdf.text("TURUN:", x + 71.0, y + 16.5);
+  pdf.setTextColor(15, 23, 42);
+  const dropText = fitSingleLineText(pdf, normalizeText(item.dropPointName).toUpperCase(), 37.0, 5.0, 3.8, "bold");
+  pdf.setFontSize(dropText.fontSize);
+  pdf.text(dropText.text, x + 78.5, y + 16.5);
+
+  // Bus Card (Dynamic contrast based on palette.header)
+  pdf.setFillColor(...palette.header);
+  pdf.roundedRect(x + 118.5, y + 13.8, 42.5, 4.2, 0.8, 0.8, "F");
+  pdf.setDrawColor(...busBorderRgb);
+  pdf.setLineWidth(0.2);
+  pdf.roundedRect(x + 118.5, y + 13.8, 42.5, 4.2, 0.8, 0.8, "S");
+  pdf.setTextColor(...busTextRgb);
+  pdf.setFontSize(4.2);
+  pdf.text("ARMADA:", x + 120.0, y + 16.5);
+  const busText = fitSingleLineText(pdf, (item.busLabel || "-").toUpperCase(), 30.0, 5.8, 4.0, "bold");
+  pdf.setFontSize(busText.fontSize);
+  pdf.text(busText.text, x + 128.5, y + 16.6);
+
+  // 5. Right Section: Spaced Text + Barcode (Persis Referensi)
+  pdf.setTextColor(...spacedTitleRgb);
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(5.2);
-  pdf.text("KORDA", x + width - kordaBlockWidth / 2, y + 5.8, { align: "center" });
-  pdf.setFontSize(korda.fontSize);
-  if (korda.lines.length === 1) {
-    pdf.text(korda.lines[0], x + width - kordaBlockWidth / 2, y + 14.1, { align: "center" });
-  } else {
-    pdf.text(korda.lines, x + width - kordaBlockWidth / 2, y + 10.6, { align: "center", lineHeightFactor: 1.1 });
-  }
+  pdf.setFontSize(6.2);
+  pdf.text(spacedTitle, x + 190.5, y + 5.0, { align: "center" });
+
+  // White Barcode Card
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(x + 166.0, y + 6.6, 49.0, 11.0, 0.8, 0.8, "F");
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.15);
+  pdf.roundedRect(x + 166.0, y + 6.6, 49.0, 11.0, 0.8, 0.8, "S");
+
+  // Barcode Lines inside white box
+  const barcodeBars = generateBraceletBarcodeBars(
+    item.studentNis || `${item.rosterNumber}-${item.id.slice(-6)}`,
+    42.0,
+  );
+  pdf.setFillColor(0, 0, 0);
+  barcodeBars.forEach((bar) => {
+    pdf.rect(x + 169.5 + bar.x, y + 7.4, bar.width, 9.4, "F");
+  });
 }
 
 function drawBraceletCropMarks(pdf: jsPDF, x: number, y: number, width: number, height: number) {
