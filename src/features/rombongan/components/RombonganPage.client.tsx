@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Bus,
@@ -77,6 +77,20 @@ function assignmentsNeedingReview(bus: BusWithDetails) {
   ).length;
 }
 
+function CapacityBar({ assigned, capacity, label }: { assigned: number; capacity: number; label: string }) {
+  const pct = capacity > 0 ? Math.min(100, Math.round((assigned / capacity) * 100)) : 0;
+  const barColor = pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{assigned}/{capacity}</span>
+    </div>
+  );
+}
+
 function busEmptyMessage(canManageBuses: boolean, canWriteEvent: boolean) {
   if (!canWriteEvent) return "Belum ada bus untuk event ini. Event tidak aktif; pengelolaan armada dinonaktifkan.";
   if (canManageBuses) return "Belum ada bus. Klik “Tambah Bus” untuk menambahkan.";
@@ -134,30 +148,30 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId, selectedKorwilId, selectedKordaId]);
 
-  useEffect(() => {
+  const loadUnassignedCounts = useCallback(async () => {
     if (!selectedEventId) {
       setUnassignedCounts({ outbound: 0, returning: 0 });
       return;
     }
-    let current = true;
     setUnassignedLoading(true);
     setUnassignedError(null);
-    getUnassignedJourneyCounts({
-      eventId: selectedEventId,
-      korwilId: selectedKorwilId,
-      kordaId: selectedKordaId,
-    })
-      .then((counts) => {
-        if (current) setUnassignedCounts(counts);
-      })
-      .catch((error) => {
-        if (current) setUnassignedError(error instanceof Error ? error.message : "Gagal memuat perjalanan tanpa armada.");
-      })
-      .finally(() => {
-        if (current) setUnassignedLoading(false);
+    try {
+      const counts = await getUnassignedJourneyCounts({
+        eventId: selectedEventId,
+        korwilId: selectedKorwilId,
+        kordaId: selectedKordaId,
       });
-    return () => { current = false; };
+      setUnassignedCounts(counts);
+    } catch (error) {
+      setUnassignedError(error instanceof Error ? error.message : "Gagal memuat perjalanan tanpa armada.");
+    } finally {
+      setUnassignedLoading(false);
+    }
   }, [selectedEventId, selectedKorwilId, selectedKordaId]);
+
+  useEffect(() => {
+    void loadUnassignedCounts();
+  }, [loadUnassignedCounts]);
 
   async function loadData() {
     try {
@@ -520,10 +534,10 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
                       <p className="text-[11px] text-muted-foreground">
                         Kapasitas
                       </p>
-                      <p className="text-sm font-medium">
-                        {outboundAssigned} pulang · {returnAssigned} kembali
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">Kapasitas tiap perjalanan: {bus.capacity} kursi</p>
+                      <div className="mt-1.5 space-y-1.5">
+                        <CapacityBar assigned={outboundAssigned} capacity={bus.capacity} label="Pulang" />
+                        <CapacityBar assigned={returnAssigned} capacity={bus.capacity} label="Kembali" />
+                      </div>
                     </div>
                     <div className="rounded-md bg-muted/40 p-2">
                       <p className="text-[11px] text-muted-foreground">
@@ -625,11 +639,9 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm">
-                      <span className="font-medium">{assignedCount(bus, "OUTBOUND")} pulang · {assignedCount(bus, "RETURN")} kembali</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Kapasitas tiap perjalanan: {bus.capacity} kursi
+                    <div className="min-w-40 space-y-1.5">
+                      <CapacityBar assigned={assignedCount(bus, "OUTBOUND")} capacity={bus.capacity} label="Pulang" />
+                      <CapacityBar assigned={assignedCount(bus, "RETURN")} capacity={bus.capacity} label="Kembali" />
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
@@ -741,6 +753,10 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
         korwilId={selectedKorwilId}
         kordaId={selectedKordaId}
         onChooseKorda={showBusesForKorda}
+        onAssigned={() => {
+          void loadBuses();
+          void loadUnassignedCounts();
+        }}
       />}
       <AlertDialog
         open={busPendingDelete !== null}

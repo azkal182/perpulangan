@@ -525,6 +525,170 @@ export async function getAssignableRegistrations(
 }
 
 /**
+ * Get buses eligible to receive a specific journey (matching korda, same event, active, with remaining capacity).
+ */
+export interface EligibleBusOption {
+  id: string;
+  label: string;
+  capacity: number;
+  assigned: number;
+}
+
+export async function getEligibleBusesForJourney(
+  journeyId: string,
+): Promise<EligibleBusOption[]> {
+  try {
+    const scope = await getRegionalAccessScope();
+    const journey = await prisma.journey.findFirst({
+      where: {
+        id: journeyId,
+        status: "REGISTERED",
+        registration: registrationScopeWhere(scope),
+      },
+      select: {
+        direction: true,
+        destinationKordaId: true,
+        registration: { select: { eventId: true } },
+      },
+    });
+    if (!journey) throw new Error("Perjalanan tidak ditemukan.");
+
+    const buses = await prisma.bus.findMany({
+      where: andWhere(
+        {
+          eventId: journey.registration.eventId,
+          isActive: true,
+          kordas: { some: { kordaId: journey.destinationKordaId } },
+        },
+        busScopeWhere(scope),
+      ),
+      select: {
+        id: true,
+        label: true,
+        capacity: true,
+        journeyAssignments: {
+          where: { journey: { direction: journey.direction, status: "REGISTERED" } },
+          select: { id: true },
+        },
+      },
+      orderBy: { label: "asc" },
+    });
+
+    return buses
+      .map((b) => ({
+        id: b.id,
+        label: b.label,
+        capacity: b.capacity,
+        assigned: b.journeyAssignments.length,
+      }))
+      .filter((b) => b.assigned < b.capacity);
+  } catch (error) {
+    if (error instanceof AccessDeniedError) throw new Error(error.message);
+    logger.error({ error, journeyId }, "passenger.getEligibleBusesForJourney.failed");
+    throw new Error(error instanceof Error ? error.message : "Gagal memuat daftar bus.");
+  }
+}
+
+/**
+ * Assign a journey directly by journeyId to a bus (used by quick-assign from unassigned dialog).
+ */
+export async function assignJourneyToBus(
+  journeyId: string,
+  busId: string,
+): Promise<void> {
+  try {
+    const scope = await getRegionalAccessScope();
+    const [bus, journeyRecord] = await Promise.all([
+      prisma.bus.findFirst({
+        where: andWhere({ id: busId }, busScopeWhere(scope)),
+        select: {
+          id: true,
+          label: true,
+          eventId: true,
+          capacity: true,
+          kordas: { select: { kordaId: true } },
+        },
+      }),
+      prisma.journey.findFirst({
+        where: {
+          id: journeyId,
+          status: "REGISTERED",
+          registration: registrationScopeWhere(scope),
+        },
+        include: {
+          registration: { select: { id: true, eventId: true } },
+          busAssignment: { include: { bus: { select: { label: true } } } },
+        },
+      }),
+    ]);
+
+    if (!bus) throw new AccessDeniedError("Bus di luar cakupan akses");
+    if (!journeyRecord) throw new AccessDeniedError("Perjalanan di luar cakupan akses");
+    if (journeyRecord.registration.eventId !== bus.eventId) {
+      throw new Error("Registrasi tidak sesuai event bus");
+    }
+
+    const busKordaIds = bus.kordas.map((item) => item.kordaId);
+    if (!busKordaIds.includes(journeyRecord.destinationKordaId)) {
+      throw new Error("Korda tujuan peserta tidak sesuai dengan korda bus");
+    }
+    await ensureKordaInScope(scope, journeyRecord.destinationKordaId);
+
+    await prisma.$transaction(async (tx) => {
+      await assertEventWritable(tx, bus.eventId);
+      await tx.$queryRaw`SELECT "id" FROM "Bus" WHERE "id" = ${busId} FOR UPDATE`;
+      const current = await tx.journeyBusAssignment.findUnique({
+        where: { journeyId },
+        include: { bus: { select: { label: true } } },
+      });
+      if (current?.busId === busId) return;
+      const occupied = await tx.journeyBusAssignment.count({
+        where: {
+          busId,
+          journey: { status: "REGISTERED", direction: journeyRecord.direction },
+        },
+      });
+      if (occupied >= bus.capacity) {
+        throw new Error(`Kapasitas bus penuh (${occupied}/${bus.capacity} kursi)`);
+      }
+      const changed = Boolean(current?.busId && current.busId !== busId);
+      const previousBusLabelSnapshot = changed
+        ? current?.bus?.label ?? null
+        : current?.previousBusLabelSnapshot ?? null;
+      const assignment = await tx.journeyBusAssignment.upsert({
+        where: { journeyId },
+        create: { journeyId, busId },
+        update: {
+          busId,
+          ...(changed ? { previousBusLabelSnapshot, changedAt: new Date(), changedByUserId: scope.userId } : {}),
+        },
+      });
+      await tx.journeyBusAssignmentHistory.create({
+        data: {
+          assignmentId: assignment.id,
+          action: current ? "REASSIGNED" : "ASSIGNED",
+          fromBusLabelSnapshot: current?.bus?.label ?? current?.previousBusLabelSnapshot ?? null,
+          toBusLabelSnapshot: bus.label,
+          actorUserId: scope.userId,
+        },
+      });
+      // Update legacy registration bus field
+      const journeyDirection = journeyRecord.direction === "OUTBOUND" ? "outbound" : "return";
+      await tx.registration.update({
+        where: { id: journeyRecord.registration.id },
+        data: journeyDirection === "outbound" ? { outboundBusId: busId } : { returnBusId: busId },
+      });
+    });
+    logger.info({ journeyId, busId }, "passenger.quickAssigned");
+    revalidatePath("/rombongan");
+  } catch (error) {
+    if (error instanceof AccessDeniedError) throw new Error(error.message);
+    logger.error({ error, journeyId, busId }, "passenger.assignJourneyToBus.failed");
+    throw new Error(error instanceof Error ? error.message : "Gagal menempatkan peserta ke bus.");
+  }
+}
+
+/**
  * Assign a registration to a bus for a specific journey
  */
 export async function assignToBus(
