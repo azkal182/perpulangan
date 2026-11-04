@@ -437,8 +437,8 @@ export function PrintWorkspace({
               <SelectValue placeholder="Pilih perjalanan" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="outbound">Keberangkatan</SelectItem>
-              <SelectItem value="return">Kepulangan</SelectItem>
+              <SelectItem value="outbound">Pulang</SelectItem>
+              <SelectItem value="return">Kembali</SelectItem>
             </SelectContent>
           </Select>
         </div>

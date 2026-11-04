@@ -9,7 +9,7 @@ import { EventScopeBanner } from "@/features/event/components/EventScopeBanner";
 
 export const metadata: Metadata = {
   title: "Registrasi Kembali Saja | Perpulangan Santri",
-  description: "Halaman khusus untuk pendaftaran kepulangan santri (One Way)",
+  description: "Halaman khusus untuk pendaftaran kembali santri (One Way)",
 };
 
 export default async function ReturnOnlyRegistrationPage() {

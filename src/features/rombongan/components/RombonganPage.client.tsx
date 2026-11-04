@@ -279,7 +279,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
       }
 
       const journeyKey =
-        journey === "outbound" ? "keberangkatan" : "kepulangan";
+        journey === "outbound" ? "pulang" : "kembali";
       const dateKey = new Date().toISOString().slice(0, 10);
       pdf.save(`absensi-bus-${journeyKey}-${dateKey}.pdf`);
     } catch (error) {
