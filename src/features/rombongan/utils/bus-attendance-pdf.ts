@@ -35,7 +35,7 @@ interface BuildBusAttendancePdfParams {
 }
 
 function getJourneyLabel(journey: JourneyType): string {
-  return journey === "outbound" ? "Keberangkatan" : "Kepulangan";
+  return journey === "outbound" ? "Pulang" : "Kembali";
 }
 
 function formatGeneratedAt(date: Date): string {

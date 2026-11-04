@@ -105,7 +105,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBus, setEditingBus] = useState<BusWithDetails | null>(null);
   const [managingBus, setManagingBus] = useState<BusWithDetails | null>(null);
-  const [managingJourney, setManagingJourney] = useState<"outbound" | "return">("return");
+  const [managingJourney, setManagingJourney] = useState<"outbound" | "return">("outbound");
   const [unassignedDirection, setUnassignedDirection] = useState<"OUTBOUND" | "RETURN" | null>(null);
   const [unassignedCounts, setUnassignedCounts] = useState({ outbound: 0, returning: 0 });
   const [unassignedLoading, setUnassignedLoading] = useState(false);
@@ -324,7 +324,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
                 }}
               >
                 <Printer className="mr-2 h-4 w-4" />
-                Preview/Cetak Keberangkatan
+                Preview/Cetak Pulang
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!!attendanceLoadingKey}
@@ -334,7 +334,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
                 }}
               >
                 <FileDown className="mr-2 h-4 w-4" />
-                Download PDF Keberangkatan
+                Download PDF Pulang
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -345,7 +345,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
                 }}
               >
                 <Printer className="mr-2 h-4 w-4" />
-                Preview/Cetak Kepulangan
+                Preview/Cetak Kembali
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!!attendanceLoadingKey}
@@ -355,7 +355,7 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
                 }}
               >
                 <FileDown className="mr-2 h-4 w-4" />
-                Download PDF Kepulangan
+                Download PDF Kembali
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

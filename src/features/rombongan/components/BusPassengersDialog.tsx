@@ -259,7 +259,7 @@ export function BusPassengersDialog({
   open,
   onOpenChange,
   bus,
-  initialJourney = "return",
+  initialJourney = "outbound",
   onPassengerChange,
   canWrite,
 }: BusPassengersDialogProps) {
@@ -278,16 +278,16 @@ export function BusPassengersDialog({
 
         <Tabs key={`${bus.id}-${initialJourney}`} defaultValue={initialJourney} className="mt-2">
           <TabsList className="w-full">
-            <TabsTrigger value="return" className="flex-1">
-              Kepulangan
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {bus._count.returnRegistrations}
-              </Badge>
-            </TabsTrigger>
             <TabsTrigger value="outbound" className="flex-1">
-              Keberangkatan
+              Pulang
               <Badge variant="secondary" className="ml-2 text-xs">
                 {bus._count.outboundRegistrations}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="return" className="flex-1">
+              Kembali
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {bus._count.returnRegistrations}
               </Badge>
             </TabsTrigger>
           </TabsList>

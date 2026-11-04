@@ -42,7 +42,7 @@ export function AddPassengerSheet({
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState<string | null>(null);
 
-  const journeyLabel = journey === "outbound" ? "Keberangkatan" : "Kepulangan";
+  const journeyLabel = journey === "outbound" ? "Pulang" : "Kembali";
 
   const loadRegistrations = useCallback(async () => {
     setLoading(true);
