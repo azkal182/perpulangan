@@ -28,17 +28,17 @@ export const LUGGAGE_CARD_SIZES: Record<
     orientation: "portrait",
   },
   large_portrait: {
-    width: 77,
-    height: 127,
+    width: 72,
+    height: 115,
     name: "Besar Tegak",
-    label: "7.7 × 12.7 cm (Portrait)",
+    label: "7.2 × 11.5 cm (Portrait)",
     orientation: "portrait",
   },
   large_landscape: {
-    width: 127,
-    height: 77,
+    width: 115,
+    height: 72,
     name: "Besar Mendatar",
-    label: "12.7 × 7.7 cm (Landscape)",
+    label: "11.5 × 7.2 cm (Landscape)",
     orientation: "landscape",
   },
 };
@@ -327,8 +327,8 @@ export function calculateLayout(
 
   if (printType === "luggage_card") {
     if (luggageCardSize === "large_portrait") {
-      const cardWidth = 77;
-      const cardHeight = 127;
+      const cardWidth = 72;
+      const cardHeight = 115;
 
       switch (paperSize) {
         case "A4":
@@ -337,8 +337,8 @@ export function calculateLayout(
             rows: 2,
             cardWidth,
             cardHeight,
-            marginX: 28, // (210 - (77*2)) / 2 = 28
-            marginY: 21.5, // (297 - (127*2)) / 2 = 21.5
+            marginX: 33, // (210 - (72*2)) / 2 = 33
+            marginY: 33.5, // (297 - (115*2)) / 2 = 33.5
             gapX: 0,
             gapY: 0,
           };
@@ -348,8 +348,8 @@ export function calculateLayout(
             rows: 2,
             cardWidth,
             cardHeight,
-            marginX: 30.5, // (215 - (77*2)) / 2 = 30.5
-            marginY: 38, // (330 - (127*2)) / 2 = 38
+            marginX: 35.5, // (215 - (72*2)) / 2 = 35.5
+            marginY: 50, // (330 - (115*2)) / 2 = 50
             gapX: 0,
             gapY: 0,
           };
@@ -359,27 +359,27 @@ export function calculateLayout(
             rows: 3,
             cardWidth,
             cardHeight,
-            marginX: 33, // (297 - (77*3)) / 2 = 33
-            marginY: 19.5, // (420 - (127*3)) / 2 = 19.5
+            marginX: 40.5, // (297 - (72*3)) / 2 = 40.5
+            marginY: 37.5, // (420 - (115*3)) / 2 = 37.5
             gapX: 0,
             gapY: 0,
           };
         case "A3+":
           return {
             columns: 4,
-            rows: 3,
+            rows: 4,
             cardWidth,
             cardHeight,
-            marginX: 10.5, // (329 - (77*4)) / 2 = 10.5
-            marginY: 51, // (483 - (127*3)) / 2 = 51
+            marginX: 20.5, // (329 - (72*4)) / 2 = 20.5
+            marginY: 11.5, // (483 - (115*4)) / 2 = 11.5
             gapX: 0,
             gapY: 0,
           };
       }
     } else if (luggageCardSize === "large_landscape") {
       // Landscape paper orientation: paper width is swapped with height
-      const cardWidth = 127;
-      const cardHeight = 77;
+      const cardWidth = 115;
+      const cardHeight = 72;
 
       switch (paperSize) {
         case "A4":
@@ -388,8 +388,8 @@ export function calculateLayout(
             rows: 2,
             cardWidth,
             cardHeight,
-            marginX: 21.5, // (297 - (127*2)) / 2 = 21.5
-            marginY: 28, // (210 - (77*2)) / 2 = 28
+            marginX: 33.5, // (297 - (115*2)) / 2 = 33.5
+            marginY: 33, // (210 - (72*2)) / 2 = 33
             gapX: 0,
             gapY: 0,
           };
@@ -399,8 +399,8 @@ export function calculateLayout(
             rows: 2,
             cardWidth,
             cardHeight,
-            marginX: 38, // (330 - (127*2)) / 2 = 38
-            marginY: 30.5, // (215 - (77*2)) / 2 = 30.5
+            marginX: 50, // (330 - (115*2)) / 2 = 50
+            marginY: 35.5, // (215 - (72*2)) / 2 = 35.5
             gapX: 0,
             gapY: 0,
           };
@@ -410,19 +410,19 @@ export function calculateLayout(
             rows: 3,
             cardWidth,
             cardHeight,
-            marginX: 19.5, // (420 - (127*3)) / 2 = 19.5
-            marginY: 33, // (297 - (77*3)) / 2 = 33
+            marginX: 37.5, // (420 - (115*3)) / 2 = 37.5
+            marginY: 40.5, // (297 - (72*3)) / 2 = 40.5
             gapX: 0,
             gapY: 0,
           };
         case "A3+":
           return {
-            columns: 3,
+            columns: 4,
             rows: 4,
             cardWidth,
             cardHeight,
-            marginX: 51, // (483 - (127*3)) / 2 = 51
-            marginY: 10.5, // (329 - (77*4)) / 2 = 10.5
+            marginX: 11.5, // (483 - (115*4)) / 2 = 11.5
+            marginY: 20.5, // (329 - (72*4)) / 2 = 20.5
             gapX: 0,
             gapY: 0,
           };

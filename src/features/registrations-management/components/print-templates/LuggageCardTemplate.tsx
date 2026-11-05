@@ -111,8 +111,8 @@ export function LuggageCardTemplate({
   const spacedTitle = formatSpacedEventTitle(eventName);
 
   if (cardSize === "large_portrait") {
-    const waves = renderWaveSvgOverlay(72, 122, "portrait");
-    const barcodeBars = generateBarcodeBars(data.studentNis || data.id, 34);
+    const waves = renderWaveSvgOverlay(67, 110, "portrait");
+    const barcodeBars = generateBarcodeBars(data.studentNis || data.id, 32);
 
     return (
       <div
@@ -130,7 +130,7 @@ export function LuggageCardTemplate({
           {/* Guilloche Ribbon Waves Overlay */}
           <svg
             className="absolute inset-0 w-full h-full pointer-events-none opacity-25"
-            viewBox="0 0 72 122"
+            viewBox="0 0 67 110"
             preserveAspectRatio="none"
           >
             {waves.map((d, idx) => (
@@ -144,7 +144,7 @@ export function LuggageCardTemplate({
           </div>
 
           {/* Top Header White Bar */}
-          <div className="relative z-10 mx-[2.5mm] mt-[6mm] bg-white rounded-lg p-1.5 flex items-center justify-between border border-slate-200/80 shadow-xs">
+          <div className="relative z-10 mx-[2.5mm] mt-[5mm] bg-white rounded-lg p-1.5 flex items-center justify-between border border-slate-200/80 shadow-xs">
             <div className="flex items-center gap-2 min-w-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -152,12 +152,12 @@ export function LuggageCardTemplate({
                 alt="Logo"
                 className="w-7 h-5 object-contain shrink-0"
               />
-              <span className="text-[11px] font-black tracking-wider text-slate-900 leading-none">
+              <span className="text-[10.5px] font-black tracking-wider text-slate-900 leading-none">
                 ID BARANG
               </span>
             </div>
             <div
-              className={`px-3 py-1 rounded-full text-[7.5px] font-black uppercase tracking-wider text-white ${kordaColor.headerBg} truncate max-w-[34mm] flex items-center justify-center leading-none text-center`}
+              className={`px-3 py-1 rounded-full text-[7.5px] font-black uppercase tracking-wider text-white ${kordaColor.headerBg} truncate max-w-[32mm] flex items-center justify-center leading-none text-center`}
             >
               {data.kordaName}
             </div>
@@ -201,7 +201,7 @@ export function LuggageCardTemplate({
               <div className="text-[6px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                 Titik Turun (Drop Point)
               </div>
-              <div className="text-[9.5px] font-bold text-slate-900 leading-tight line-clamp-2">
+              <div className="text-[11px] font-black text-slate-900 leading-tight line-clamp-2">
                 {data.dropPointName}
               </div>
             </div>
@@ -211,7 +211,7 @@ export function LuggageCardTemplate({
               <div className="text-[6px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                 Kontak Darurat / Ortu
               </div>
-              <div className="text-[9.5px] font-semibold text-slate-800 leading-none truncate">
+              <div className="text-[11.5px] font-black text-slate-900 leading-none truncate">
                 {data.parrentPhone || "-"}
               </div>
             </div>
@@ -230,11 +230,11 @@ export function LuggageCardTemplate({
           </div>
 
           {/* Footer: Event Title Spaced + Barcode Box */}
-          <div className="relative z-10 pb-[2mm] text-center">
+          <div className="relative z-10 pb-[4.5mm] text-center">
             <div className="text-[6.5px] font-black uppercase tracking-[0.25em] text-white leading-none mb-1 drop-shadow-xs">
               {spacedTitle}
             </div>
-            <div className="mx-auto w-[38mm] h-[8mm] bg-white rounded border border-slate-200/90 flex items-center justify-center p-1 shadow-xs">
+            <div className="mx-auto w-[36mm] h-[7.5mm] bg-white rounded border border-slate-200/90 flex items-center justify-center p-1 shadow-xs">
               <svg className="w-full h-full" viewBox="0 0 34 8" preserveAspectRatio="none">
                 {barcodeBars.map((bar, i) => (
                   <rect key={i} x={bar.x} y="0" width={bar.width} height="8" fill="#111827" />
@@ -248,8 +248,8 @@ export function LuggageCardTemplate({
   }
 
   if (cardSize === "large_landscape") {
-    const waves = renderWaveSvgOverlay(122, 72, "landscape");
-    const barcodeBars = generateBarcodeBars(data.studentNis || data.id, 42);
+    const waves = renderWaveSvgOverlay(110, 67, "landscape");
+    const barcodeBars = generateBarcodeBars(data.studentNis || data.id, 38);
 
     return (
       <div
@@ -267,7 +267,7 @@ export function LuggageCardTemplate({
           {/* Guilloche Ribbon Waves Overlay */}
           <svg
             className="absolute inset-0 w-full h-full pointer-events-none opacity-25"
-            viewBox="0 0 122 72"
+            viewBox="0 0 110 67"
             preserveAspectRatio="none"
           >
             {waves.map((d, idx) => (
@@ -284,7 +284,7 @@ export function LuggageCardTemplate({
                 alt="Logo"
                 className="w-7 h-5 object-contain shrink-0"
               />
-              <span className="text-[11px] font-black tracking-wider text-slate-900 leading-none">
+              <span className="text-[10.5px] font-black tracking-wider text-slate-900 leading-none">
                 ID BARANG
               </span>
             </div>
@@ -293,7 +293,7 @@ export function LuggageCardTemplate({
               <div className="w-0.5 h-0.5 rounded-full bg-slate-400" />
             </div>
             <div
-              className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider text-white ${kordaColor.headerBg} truncate max-w-[46mm] flex items-center justify-center leading-none text-center`}
+              className={`px-3 py-1 rounded-full text-[7.5px] font-black uppercase tracking-wider text-white ${kordaColor.headerBg} truncate max-w-[42mm] flex items-center justify-center leading-none text-center`}
             >
               {data.kordaName}
             </div>
@@ -339,7 +339,7 @@ export function LuggageCardTemplate({
                 <div className="text-[5.5px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                   Titik Turun (Drop Point)
                 </div>
-                <div className="text-[8.5px] font-bold text-slate-900 leading-tight line-clamp-1">
+                <div className="text-[10px] font-black text-slate-900 leading-tight line-clamp-1">
                   {data.dropPointName}
                 </div>
               </div>
@@ -349,14 +349,14 @@ export function LuggageCardTemplate({
                 <div className="text-[5.5px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                   Kontak Darurat / Ortu
                 </div>
-                <div className="text-[8.5px] font-semibold text-slate-800 leading-none truncate">
+                <div className="text-[10.5px] font-black text-slate-900 leading-none truncate">
                   {data.parrentPhone || "-"}
                 </div>
               </div>
             </div>
 
             {/* Right Column: Armada Bus & Footer */}
-            <div className="flex flex-col justify-between gap-1">
+            <div className="flex flex-col justify-between gap-1 pb-[2.5mm]">
               {/* Armada Bus Card */}
               <div className="bg-white rounded-lg overflow-hidden border border-slate-200/90 shadow-xs flex-1 flex flex-col justify-between">
                 <div
