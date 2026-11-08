@@ -25,6 +25,7 @@ interface AddPassengerSheetProps {
   onOpenChange: (open: boolean) => void;
   busId: string;
   busLabel: string;
+  kordaNames?: string[];
   journey: "outbound" | "return";
   onSuccess: () => void;
 }
@@ -34,6 +35,7 @@ export function AddPassengerSheet({
   onOpenChange,
   busId,
   busLabel,
+  kordaNames,
   journey,
   onSuccess,
 }: AddPassengerSheetProps) {
@@ -90,9 +92,15 @@ export function AddPassengerSheet({
       <SheetContent className="w-full sm:max-w-lg flex flex-col">
         <SheetHeader>
           <SheetTitle>Tambah Peserta — {journeyLabel}</SheetTitle>
-          <SheetDescription>
-            Pilih peserta untuk ditambahkan ke <strong>{busLabel}</strong>.
-            Hanya peserta dengan korda yang sesuai bus dan belum di-assign ke bus lain yang ditampilkan.
+          <SheetDescription className="space-y-1 text-xs">
+            <span className="block">
+              Pilih peserta perjalanan <strong>{journeyLabel}</strong> untuk ditempatkan ke <strong>{busLabel}</strong>.
+            </span>
+            {kordaNames && kordaNames.length > 0 && (
+              <span className="block text-muted-foreground">
+                Cakupan Korda armada ini: <strong>{kordaNames.join(", ")}</strong>. Menampilkan peserta belum berbus pada Korda tersebut.
+              </span>
+            )}
           </SheetDescription>
         </SheetHeader>
 
@@ -135,6 +143,18 @@ export function AddPassengerSheet({
                     >
                       {reg.studentGender === "L" ? "L" : "P"}
                     </Badge>
+                    {reg.oppositeJourneyInfo && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] shrink-0 font-normal ${
+                          reg.oppositeJourneyInfo.busLabel
+                            ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                            : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400"
+                        }`}
+                      >
+                        {reg.oppositeJourneyInfo.directionLabel}: {reg.oppositeJourneyInfo.busLabel ? reg.oppositeJourneyInfo.busLabel : "Belum ada armada"}
+                      </Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     {reg.kordaName && <div>Korda: {reg.kordaName}</div>}

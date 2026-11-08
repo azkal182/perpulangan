@@ -44,6 +44,7 @@ interface BusPassengersDialogProps {
 function PassengerList({
   busId,
   busLabel,
+  kordaNames,
   journey,
   capacity,
   onPassengerChange,
@@ -51,6 +52,7 @@ function PassengerList({
 }: {
   busId: string;
   busLabel: string;
+  kordaNames?: string[];
   journey: "outbound" | "return";
   capacity: number;
   onPassengerChange: () => void;
@@ -218,6 +220,7 @@ function PassengerList({
         onOpenChange={setAddSheetOpen}
         busId={busId}
         busLabel={busLabel}
+        kordaNames={kordaNames}
         journey={journey}
         onSuccess={() => {
           loadPassengers();
@@ -263,6 +266,14 @@ export function BusPassengersDialog({
   onPassengerChange,
   canWrite,
 }: BusPassengersDialogProps) {
+  const outboundCount = bus.journeyAssignments.filter(
+    (item) => item.journey.status === "REGISTERED" && item.journey.direction === "OUTBOUND",
+  ).length;
+  const returnCount = bus.journeyAssignments.filter(
+    (item) => item.journey.status === "REGISTERED" && item.journey.direction === "RETURN",
+  ).length;
+  const busKordaNames = bus.kordas.map((bk) => bk.korda.name);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -281,13 +292,13 @@ export function BusPassengersDialog({
             <TabsTrigger value="outbound" className="flex-1">
               Pulang
               <Badge variant="secondary" className="ml-2 text-xs">
-                {bus._count.outboundRegistrations}
+                {outboundCount}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="return" className="flex-1">
               Kembali
               <Badge variant="secondary" className="ml-2 text-xs">
-                {bus._count.returnRegistrations}
+                {returnCount}
               </Badge>
             </TabsTrigger>
           </TabsList>
@@ -296,6 +307,7 @@ export function BusPassengersDialog({
             <PassengerList
               busId={bus.id}
               busLabel={bus.label}
+              kordaNames={busKordaNames}
               journey="outbound"
               capacity={bus.capacity}
               onPassengerChange={onPassengerChange}
@@ -307,6 +319,7 @@ export function BusPassengersDialog({
             <PassengerList
               busId={bus.id}
               busLabel={bus.label}
+              kordaNames={busKordaNames}
               journey="return"
               capacity={bus.capacity}
               onPassengerChange={onPassengerChange}

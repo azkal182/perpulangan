@@ -48,6 +48,10 @@ export interface AssignableRegistration {
   kordaName: string | null;
   dropPointName: string | null;
   journeyDate: Date | null;
+  oppositeJourneyInfo?: {
+    directionLabel: string;
+    busLabel: string | null;
+  } | null;
 }
 
 export interface BusAttendancePassenger {
@@ -486,6 +490,7 @@ export async function getAssignableRegistrations(
           OR: [{ busAssignment: null }, { busAssignment: { busId: null } }],
           registration: {
             eventId: bus.eventId,
+            status: { not: "CANCELLED" },
             ...(normalizedSearch && { OR: [
               { student: searchFilter },
               { externalParticipant: { name: { contains: normalizedSearch, mode: "insensitive" as const } } },
@@ -500,21 +505,46 @@ export async function getAssignableRegistrations(
           include: {
             student: { select: { id: true, name: true, nis: true, gender: true } },
             externalParticipant: { select: { id: true, name: true, gender: true } },
+            journeys: {
+              where: {
+                direction: journey === "outbound" ? "RETURN" : "OUTBOUND",
+                status: "REGISTERED",
+              },
+              include: {
+                busAssignment: {
+                  include: {
+                    bus: { select: { label: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
       orderBy: { registration: { student: { name: "asc" } } },
     });
-    return journeys.map((item) => ({
-      registrationId: item.registration.id,
-      studentId: item.registration.student?.id ?? item.registration.externalParticipant?.id ?? "",
-      studentName: item.registration.student?.name ?? item.registration.externalParticipant?.name ?? "Peserta eksternal",
-      studentNis: item.registration.student?.nis ?? null,
-      studentGender: item.registration.student?.gender ?? normalizeExternalParticipantGender(item.registration.externalParticipant?.gender) ?? "-",
-      kordaName: item.destinationKorda.name,
-      dropPointName: item.locationNameSnapshot,
-      journeyDate: item.travelDate,
-    }));
+    return journeys.map((item) => {
+      const oppJourney = item.registration.journeys[0];
+      const oppDirectionLabel = journey === "outbound" ? "Kembali" : "Pulang";
+      const oppBusLabel = oppJourney?.busAssignment?.bus?.label ?? null;
+
+      return {
+        registrationId: item.registration.id,
+        studentId: item.registration.student?.id ?? item.registration.externalParticipant?.id ?? "",
+        studentName: item.registration.student?.name ?? item.registration.externalParticipant?.name ?? "Peserta eksternal",
+        studentNis: item.registration.student?.nis ?? null,
+        studentGender: item.registration.student?.gender ?? normalizeExternalParticipantGender(item.registration.externalParticipant?.gender) ?? "-",
+        kordaName: item.destinationKorda.name,
+        dropPointName: item.locationNameSnapshot,
+        journeyDate: item.travelDate,
+        oppositeJourneyInfo: oppJourney
+          ? {
+              directionLabel: oppDirectionLabel,
+              busLabel: oppBusLabel,
+            }
+          : null,
+      };
+    });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       throw new Error(error.message);
@@ -613,7 +643,7 @@ export async function assignJourneyToBus(
         where: {
           id: journeyId,
           status: "REGISTERED",
-          registration: registrationScopeWhere(scope),
+          registration: andWhere({ status: { not: "CANCELLED" } }, registrationScopeWhere(scope)),
         },
         include: {
           registration: { select: { id: true, eventId: true } },
@@ -718,7 +748,7 @@ export async function assignToBus(
           registrationId,
           direction: journey === "outbound" ? "OUTBOUND" : "RETURN",
           status: "REGISTERED",
-          registration: registrationScopeWhere(scope),
+          registration: andWhere({ status: { not: "CANCELLED" } }, registrationScopeWhere(scope)),
         },
         include: {
           registration: { select: { eventId: true } },

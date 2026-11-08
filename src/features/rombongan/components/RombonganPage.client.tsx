@@ -740,7 +740,10 @@ export default function RombonganPage({ canManageBuses, initialSelectedEventId, 
           }}
           bus={managingBus}
           initialJourney={managingJourney}
-          onPassengerChange={loadBuses}
+          onPassengerChange={() => {
+            void loadBuses();
+            void loadUnassignedCounts();
+          }}
           canWrite={canWriteEvent}
       />}
       {unassignedDirection && selectedEventId && <UnassignedJourneysDialog
