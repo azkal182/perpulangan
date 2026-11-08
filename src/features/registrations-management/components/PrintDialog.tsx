@@ -33,6 +33,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Search,
+  RotateCcw,
+  CheckSquare,
 } from "lucide-react";
 import { getPrintDataAction } from "../actions/print-actions";
 import type {
@@ -110,6 +113,10 @@ export function PrintWorkspace({
 }: PrintWorkspaceProps) {
   const [journeyFilter, setJourneyFilter] = useState<"" | "outbound" | "return">("");
   const [printType, setPrintType] = useState<PrintType>("luggage_card");
+  const [luggageCardSource, setLuggageCardSource] = useState<"data" | "blank_template">("data");
+  const [kordaQuantities, setKordaQuantities] = useState<Record<string, number>>({});
+  const [kordaSearch, setKordaSearch] = useState("");
+  const [bulkQty, setBulkQty] = useState<number>(5);
   const [luggageCardSize, setLuggageCardSize] = useState<LuggageCardSize>("standard");
   const [paperSize, setPaperSize] = useState<PaperSize>("A4");
   const [genderFilter, setGenderFilter] = useState<
@@ -131,6 +138,91 @@ export function PrintWorkspace({
   const resetPreview = () => {
     setShowPreview(false);
     setPreviewPageIndex(0);
+  };
+
+  const isBlankLuggageCard =
+    printType === "luggage_card" && luggageCardSource === "blank_template";
+
+  const filteredKordas = kordas.filter((k) =>
+    k.name.toLowerCase().includes(kordaSearch.toLowerCase().trim()),
+  );
+
+  const selectedKordaCount = Object.keys(kordaQuantities).filter(
+    (id) => (kordaQuantities[id] || 0) > 0,
+  ).length;
+
+  const totalBlankCards = Object.values(kordaQuantities).reduce(
+    (acc, q) => acc + (q || 0),
+    0,
+  );
+
+  const currentLayoutForBlank = calculateLayout(
+    paperSize,
+    printType,
+    luggageCardSize,
+  );
+  const cardsPerPageBlank =
+    currentLayoutForBlank.columns * currentLayoutForBlank.rows;
+  const estimatedSheetsBlank =
+    totalBlankCards > 0 ? Math.ceil(totalBlankCards / cardsPerPageBlank) : 0;
+
+  const handleKordaCheck = (kordaId: string, checked: boolean) => {
+    setKordaQuantities((prev) => {
+      const next = { ...prev };
+      if (checked) {
+        next[kordaId] =
+          next[kordaId] && next[kordaId] > 0
+            ? next[kordaId]
+            : bulkQty > 0
+              ? bulkQty
+              : 1;
+      } else {
+        delete next[kordaId];
+      }
+      return next;
+    });
+    resetPreview();
+  };
+
+  const handleKordaQtyChange = (kordaId: string, qtyStr: string) => {
+    const val = parseInt(qtyStr, 10);
+    setKordaQuantities((prev) => {
+      const next = { ...prev };
+      if (isNaN(val) || val <= 0) {
+        delete next[kordaId];
+      } else {
+        next[kordaId] = Math.min(500, val);
+      }
+      return next;
+    });
+    resetPreview();
+  };
+
+  const handleSelectAllKordas = () => {
+    const qty = bulkQty > 0 ? bulkQty : 1;
+    const next: Record<string, number> = {};
+    kordas.forEach((k) => {
+      next[k.id] = qty;
+    });
+    setKordaQuantities(next);
+    resetPreview();
+  };
+
+  const handleClearAllKordas = () => {
+    setKordaQuantities({});
+    resetPreview();
+  };
+
+  const handleApplyBulkQty = () => {
+    const qty = bulkQty > 0 ? bulkQty : 1;
+    setKordaQuantities((prev) => {
+      const next: Record<string, number> = {};
+      Object.keys(prev).forEach((id) => {
+        next[id] = qty;
+      });
+      return next;
+    });
+    resetPreview();
   };
 
   const selectedKordaNames = kordas
@@ -170,6 +262,44 @@ export function PrintWorkspace({
   }, [showPreview]);
 
   const handlePreview = async () => {
+    if (isBlankLuggageCard) {
+      const selectedEntries = Object.entries(kordaQuantities).filter(
+        ([kordaId, qty]) => qty > 0 && kordas.some((k) => k.id === kordaId),
+      );
+      if (selectedEntries.length === 0) {
+        toast.error("Pilih minimal satu korda dengan jumlah kartu lebih dari 0.");
+        return;
+      }
+      const blankItems: PrintDataItem[] = [];
+      selectedEntries.forEach(([kordaId, qty]) => {
+        const kordaObj = kordas.find((k) => k.id === kordaId);
+        const kordaName = kordaObj?.name || "KORDA";
+        for (let i = 1; i <= qty; i++) {
+          blankItems.push({
+            id: `blank-${kordaId}-${i}`,
+            rosterNumber: 0,
+            studentName: "",
+            studentNis: null,
+            fullAddress: null,
+            parrentPhone: null,
+            studentGender: "",
+            destinationKordaId: kordaId,
+            korwilName: null,
+            kordaName: kordaName,
+            dropPointId: null,
+            dropPointName: "",
+            busId: "",
+            busLabel: "",
+          });
+        }
+      });
+      setPreviewData(blankItems);
+      setShowPreview(true);
+      setPreviewPageIndex(0);
+      toast.success(`Preview template siap: ${blankItems.length} kartu`);
+      return;
+    }
+
     if (!journeyFilter) {
       toast.error("Pilih arah perjalanan sebelum membuat preview.");
       return;
@@ -297,7 +427,15 @@ export function PrintWorkspace({
       }
 
       // Download PDF
-      const filename = `${printType === "luggage_card" ? `kartu_barang_${luggageCardSize}` : printType === "ticket" ? "tiket" : "gelang_22x2cm"}_${paperSize}_${new Date().getTime()}.pdf`;
+      const filename = `${
+        isBlankLuggageCard
+          ? `kartu_barang_template_${luggageCardSize}`
+          : printType === "luggage_card"
+            ? `kartu_barang_${luggageCardSize}`
+            : printType === "ticket"
+              ? "tiket"
+              : "gelang_22x2cm"
+      }_${paperSize}_${new Date().getTime()}.pdf`;
       pdf.save(filename);
 
       toast.dismiss();
@@ -394,127 +532,324 @@ export function PrintWorkspace({
         </RadioGroup>
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="space-y-2">
-          <Label htmlFor="student-name-filter">Filter Nama</Label>
-          <Input
-            id="student-name-filter"
-            value={nameFilter}
-            onChange={(event) => {
-              setNameFilter(event.target.value);
-              resetPreview();
-            }}
-            placeholder="Cari nama peserta"
-          />
+      {/* Luggage Card Source Mode (Data vs Blank Template) */}
+      {printType === "luggage_card" && (
+        <div className="space-y-2 rounded-lg border bg-muted/20 p-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+            <div>
+              <Label className="text-sm font-semibold">Mode Kartu Barang</Label>
+              <p className="text-xs text-muted-foreground">
+                Pilih cetak berdasarkan data santri terdaftar atau cetak template kosong (blanko) per korda.
+              </p>
+            </div>
+            <div className="inline-flex rounded-lg border bg-background p-1 shadow-xs shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setLuggageCardSource("data");
+                  resetPreview();
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  luggageCardSource === "data"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Data Peserta
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLuggageCardSource("blank_template");
+                  resetPreview();
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  luggageCardSource === "blank_template"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Template Blanko (Kosong)
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="space-y-2">
-          <Label>Filter Gender</Label>
-          <Select
-            value={genderFilter}
-            onValueChange={(value: "all" | "Laki-laki" | "Perempuan") => {
-              setGenderFilter(value);
-              resetPreview();
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua</SelectItem>
-              <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-              <SelectItem value="Perempuan">Perempuan</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Blank Template Korda & Quantity Selector */}
+      {isBlankLuggageCard ? (
+        <div className="space-y-3 rounded-lg border bg-card p-4 shadow-xs">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">
+                Pilih Korda & Tentukan Jumlah Blanko
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                Centang korda yang ingin dicetak dan tentukan berapa item kartu kosong untuk tiap korda.
+              </p>
+            </div>
 
-        <div className="space-y-2">
-          <Label>Perjalanan <span className="text-destructive">*</span></Label>
-          <Select
-            value={journeyFilter}
-            onValueChange={(value: "outbound" | "return") => {
-              setJourneyFilter(value);
-              resetPreview();
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih perjalanan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="outbound">Pulang</SelectItem>
-              <SelectItem value="return">Kembali</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Filter Korda</Label>
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
+            {/* Quick action bar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Isi serentak:</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={bulkQty}
+                  onChange={(e) =>
+                    setBulkQty(Math.max(1, parseInt(e.target.value) || 1))
+                  }
+                  className="h-7 w-14 text-center text-xs bg-background"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleApplyBulkQty}
+                  disabled={selectedKordaCount === 0}
+                  className="h-7 px-2 text-xs"
+                >
+                  Terapkan
+                </Button>
+              </div>
               <Button
                 type="button"
                 variant="outline"
-                className="w-full justify-between font-normal"
+                size="sm"
+                onClick={handleSelectAllKordas}
+                className="h-8 text-xs gap-1.5"
               >
-                <span className="truncate text-left">{kordaFilterLabel}</span>
-                <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                <CheckSquare className="h-3.5 w-3.5" />
+                Pilih Semua ({kordas.length})
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="max-h-80 w-[--radix-dropdown-menu-trigger-width] overflow-y-auto"
-            >
-              <DropdownMenuCheckboxItem
-                checked={kordaFilters.length === 0}
-                onSelect={(event) => event.preventDefault()}
-                onCheckedChange={() => {
-                  setKordaFilters([]);
-                  resetPreview();
-                }}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAllKordas}
+                disabled={selectedKordaCount === 0}
+                className="h-8 text-xs text-muted-foreground hover:text-destructive gap-1"
               >
-                Semua
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuSeparator />
-              {kordas.map((korda) => (
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset
+              </Button>
+            </div>
+          </div>
+
+          {/* Search filter for Kordas */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Cari nama korda..."
+              value={kordaSearch}
+              onChange={(e) => setKordaSearch(e.target.value)}
+              className="h-9 pl-9 text-xs"
+            />
+          </div>
+
+          {/* Korda list with checkboxes and quantities */}
+          <div className="max-h-72 overflow-y-auto rounded-md border divide-y bg-background">
+            {filteredKordas.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                Tidak ada korda yang cocok dengan pencarian &quot;{kordaSearch}&quot;.
+              </div>
+            ) : (
+              filteredKordas.map((korda) => {
+                const isChecked = Boolean(
+                  kordaQuantities[korda.id] && kordaQuantities[korda.id] > 0,
+                );
+                const qty = kordaQuantities[korda.id] || 0;
+                const colorPalette = getKordaColor(korda.name);
+
+                return (
+                  <div
+                    key={korda.id}
+                    className={cn(
+                      "flex items-center justify-between p-2.5 transition-colors",
+                      isChecked ? "bg-muted/40" : "hover:bg-muted/20",
+                    )}
+                  >
+                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 pr-3 select-none">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => handleKordaCheck(korda.id, e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span
+                        className={cn(
+                          "h-3 w-3 rounded-full shrink-0 border border-black/10",
+                          colorPalette.headerBg,
+                        )}
+                      />
+                      <span className="text-sm font-medium truncate text-foreground">
+                        {korda.name}
+                      </span>
+                    </label>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-muted-foreground">Jumlah:</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={isChecked ? qty : ""}
+                        placeholder="0"
+                        disabled={!isChecked}
+                        onChange={(e) => handleKordaQtyChange(korda.id, e.target.value)}
+                        className="h-8 w-20 text-center text-xs font-semibold bg-background"
+                      />
+                      <span className="text-xs text-muted-foreground w-8">kartu</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Live Summary Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-2.5 text-xs border">
+            <div className="flex items-center gap-3">
+              <span>
+                Korda dipilih: <strong className="text-foreground">{selectedKordaCount}</strong> dari {kordas.length}
+              </span>
+              <span>•</span>
+              <span>
+                Total Kartu: <strong className="text-foreground text-sm font-bold text-primary">{totalBlankCards}</strong> item
+              </span>
+            </div>
+            <div>
+              Estimasi: <strong className="text-foreground font-semibold">{estimatedSheetsBlank}</strong> lembar kertas {paperSize} ({cardsPerPageBlank} kartu/lembar)
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Filters for Normal Registered Participant Data */
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="space-y-2">
+            <Label htmlFor="student-name-filter">Filter Nama</Label>
+            <Input
+              id="student-name-filter"
+              value={nameFilter}
+              onChange={(event) => {
+                setNameFilter(event.target.value);
+                resetPreview();
+              }}
+              placeholder="Cari nama peserta"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Filter Gender</Label>
+            <Select
+              value={genderFilter}
+              onValueChange={(value: "all" | "Laki-laki" | "Perempuan") => {
+                setGenderFilter(value);
+                resetPreview();
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua</SelectItem>
+                <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+                <SelectItem value="Perempuan">Perempuan</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Perjalanan <span className="text-destructive">*</span></Label>
+            <Select
+              value={journeyFilter}
+              onValueChange={(value: "outbound" | "return") => {
+                setJourneyFilter(value);
+                resetPreview();
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih perjalanan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="outbound">Pulang</SelectItem>
+                <SelectItem value="return">Kembali</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Filter Korda</Label>
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="truncate text-left">{kordaFilterLabel}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-80 w-[--radix-dropdown-menu-trigger-width] overflow-y-auto"
+              >
                 <DropdownMenuCheckboxItem
-                  key={korda.id}
-                  checked={kordaFilters.includes(korda.id)}
+                  checked={kordaFilters.length === 0}
                   onSelect={(event) => event.preventDefault()}
-                  onCheckedChange={(checked) => {
-                    setKordaFilters((prev) => {
-                      if (checked === true) {
-                        return prev.includes(korda.id) ? prev : [...prev, korda.id];
-                      }
-                      return prev.filter((id) => id !== korda.id);
-                    });
+                  onCheckedChange={() => {
+                    setKordaFilters([]);
                     resetPreview();
                   }}
                 >
-                  {korda.name}
+                  Semua
                 </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                <DropdownMenuSeparator />
+                {kordas.map((korda) => (
+                  <DropdownMenuCheckboxItem
+                    key={korda.id}
+                    checked={kordaFilters.includes(korda.id)}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={(checked) => {
+                      setKordaFilters((prev) => {
+                        if (checked === true) {
+                          return prev.includes(korda.id) ? prev : [...prev, korda.id];
+                        }
+                        return prev.filter((id) => id !== korda.id);
+                      });
+                      resetPreview();
+                    }}
+                  >
+                    {korda.name}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-        <div className="space-y-2">
-          <Label>Filter Drop Point</Label>
-          <Select value={dropPointFilter} onValueChange={(v) => { setDropPointFilter(v); resetPreview(); }}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua</SelectItem>
-              {dropPoints.map((dp) => (
-                <SelectItem key={dp.id} value={dp.id}>
-                  {dp.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            <Label>Filter Drop Point</Label>
+            <Select value={dropPointFilter} onValueChange={(v) => { setDropPointFilter(v); resetPreview(); }}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua</SelectItem>
+                {dropPoints.map((dp) => (
+                  <SelectItem key={dp.id} value={dp.id}>
+                    {dp.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Paper Size & Card Size */}
       <div
@@ -685,7 +1020,11 @@ export function PrintWorkspace({
         <Button
           variant="secondary"
           onClick={handlePreview}
-          disabled={!journeyFilter || loading || generatingPdf}
+          disabled={
+            isBlankLuggageCard
+              ? selectedKordaCount === 0 || loading || generatingPdf
+              : !journeyFilter || loading || generatingPdf
+          }
         >
           {loading ? (
             <>
@@ -695,13 +1034,19 @@ export function PrintWorkspace({
           ) : (
             <>
               <Eye className="mr-2 h-4 w-4" />
-              Preview
+              {isBlankLuggageCard
+                ? `Preview Template (${totalBlankCards} Kartu)`
+                : "Preview"}
             </>
           )}
         </Button>
         <Button
           onClick={handleGeneratePDF}
-          disabled={!journeyFilter || !showPreview || loading || generatingPdf}
+          disabled={
+            isBlankLuggageCard
+              ? !showPreview || !previewData || previewData.length === 0 || loading || generatingPdf
+              : !journeyFilter || !showPreview || loading || generatingPdf
+          }
         >
           {generatingPdf ? (
             <>
@@ -711,7 +1056,7 @@ export function PrintWorkspace({
           ) : (
             <>
               <FileDown className="mr-2 h-4 w-4" />
-              Generate PDF
+              {isBlankLuggageCard ? "Download PDF Blanko" : "Generate PDF"}
             </>
           )}
         </Button>
@@ -943,11 +1288,12 @@ function PreviewLuggageCard({
   cardSize?: LuggageCardSize;
   eventName?: string;
 }) {
+  const isBlank = !item.studentName;
   const palette = getHexPalette(item.kordaName);
   const isPutri = isPutriGender(item.studentGender);
-  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
-  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
-  const parentPhone = item.parrentPhone ? truncatePreviewText(item.parrentPhone, 22) : "-";
+  const genderLabel = isBlank ? "PUTRA / PUTRI" : isPutri ? "PUTRI" : "PUTRA";
+  const rosterNumber = isBlank ? "....." : String(item.rosterNumber).padStart(3, "0");
+  const parentPhone = isBlank ? "" : item.parrentPhone ? truncatePreviewText(item.parrentPhone, 22) : "-";
   const spacedTitle = formatSpacedEventTitle(eventName);
   const isLightKorda = contrastTextColor(palette.header) === "#111827";
   const footerTextColor = isLightKorda ? "#111827" : "#ffffff";
@@ -961,7 +1307,7 @@ function PreviewLuggageCard({
     const busLabel = truncatePreviewText(item.busLabel || "-", 14).toUpperCase();
     const nisBadgeWidth = Math.max(90, Math.min(260, studentNis.length * 11 + 65));
     const wavePaths = renderGuillocheWaveSvg(720, 1150, "portrait");
-    const barcodeBars = generateBraceletBarcodeBars(item.studentNis || item.id, 320);
+    const barcodeBars = generateBraceletBarcodeBars(item.studentNis || item.destinationKordaId || item.id, 320);
 
     return (
       <svg
@@ -969,7 +1315,7 @@ function PreviewLuggageCard({
         className="h-full w-full"
         preserveAspectRatio="xMidYMid meet"
         role="img"
-        aria-label={`Preview kartu barang tegak ${studentName}`}
+        aria-label={`Preview kartu barang tegak ${studentName || "Template"}`}
       >
         <defs>
           <linearGradient id={`grad-p-${item.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -1024,28 +1370,43 @@ function PreviewLuggageCard({
         <g transform="translate(35, 180)">
           <rect width="650" height="230" rx="14" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1.5" />
           <g transform="translate(24, 18)">
-            <rect width="110" height="34" rx="17" fill={palette.header} />
-            <text x="55" y="23" fill={contrastTextColor(palette.header)} textAnchor="middle" fontSize="15" fontWeight="900" letterSpacing="1">
+            <rect width={isBlank ? 140 : 110} height="34" rx="17" fill={palette.header} />
+            <text x={isBlank ? 70 : 55} y="23" fill={contrastTextColor(palette.header)} textAnchor="middle" fontSize={isBlank ? 13 : 15} fontWeight="900" letterSpacing="1">
               {genderLabel}
             </text>
           </g>
-          <g transform="translate(144, 18)">
-            <rect width="170" height="34" rx="8" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
-            <text x="85" y="23" fill="#0f172a" textAnchor="middle" fontSize="14" fontWeight="800" letterSpacing="0.5">
+          <g transform={`translate(${isBlank ? 174 : 144}, 18)`}>
+            <rect width={isBlank ? 140 : 170} height="34" rx="8" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
+            <text x={isBlank ? 70 : 85} y="23" fill="#0f172a" textAnchor="middle" fontSize="14" fontWeight="800" letterSpacing="0.5">
               NO. URUT: {rosterNumber}
             </text>
           </g>
           <text x="24" y="90" fill="#64748b" fontSize="14" fontWeight="800" letterSpacing="1.5">
             NAMA PENUMPANG / SANTRI
           </text>
-          <text x="24" y="140" fill="#0f172a" fontSize="38" fontWeight="900">
-            {studentName}
-          </text>
-          <g transform="translate(24, 166)">
-            <rect width={nisBadgeWidth} height="36" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
-            <text x="14" y="24" fill="#334155" fontSize="16" fontWeight="800">
-              {studentNis ? `NIS: ${studentNis}` : "PESERTA UMUM"}
+          {isBlank ? (
+            <line x1="24" y1="135" x2="626" y2="135" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+          ) : (
+            <text x="24" y="140" fill="#0f172a" fontSize="38" fontWeight="900">
+              {studentName}
             </text>
+          )}
+          <g transform="translate(24, 166)">
+            {isBlank ? (
+              <>
+                <rect width="210" height="36" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
+                <text x="14" y="24" fill="#94a3b8" fontSize="16" fontWeight="800">
+                  NIS: ....................
+                </text>
+              </>
+            ) : (
+              <>
+                <rect width={nisBadgeWidth} height="36" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
+                <text x="14" y="24" fill="#334155" fontSize="16" fontWeight="800">
+                  {studentNis ? `NIS: ${studentNis}` : "PESERTA UMUM"}
+                </text>
+              </>
+            )}
           </g>
         </g>
 
@@ -1055,13 +1416,22 @@ function PreviewLuggageCard({
           <text x="24" y="34" fill="#64748b" fontSize="14" fontWeight="800" letterSpacing="1.5">
             TITIK TURUN (DROP POINT)
           </text>
-          <text x="24" y="82" fill="#0f172a" fontSize="38" fontWeight="900">
-            {dropPointLines[0]}
-          </text>
-          {dropPointLines[1] && (
-            <text x="24" y="122" fill="#0f172a" fontSize="34" fontWeight="900">
-              {dropPointLines[1]}
-            </text>
+          {isBlank ? (
+            <>
+              <line x1="24" y1="80" x2="626" y2="80" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+              <line x1="24" y1="120" x2="626" y2="120" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="6 5" />
+            </>
+          ) : (
+            <>
+              <text x="24" y="82" fill="#0f172a" fontSize="38" fontWeight="900">
+                {dropPointLines[0]}
+              </text>
+              {dropPointLines[1] && (
+                <text x="24" y="122" fill="#0f172a" fontSize="34" fontWeight="900">
+                  {dropPointLines[1]}
+                </text>
+              )}
+            </>
           )}
         </g>
 
@@ -1071,9 +1441,13 @@ function PreviewLuggageCard({
           <text x="24" y="34" fill="#64748b" fontSize="14" fontWeight="800" letterSpacing="1.5">
             KONTAK DARURAT / ORTU
           </text>
-          <text x="24" y="84" fill="#1e293b" fontSize="40" fontWeight="900">
-            {parentPhone}
-          </text>
+          {isBlank ? (
+            <line x1="24" y1="80" x2="626" y2="80" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+          ) : (
+            <text x="24" y="84" fill="#1e293b" fontSize="40" fontWeight="900">
+              {parentPhone}
+            </text>
+          )}
         </g>
 
         {/* Armada Bus Focal Point */}
@@ -1085,9 +1459,15 @@ function PreviewLuggageCard({
           <text x="325" y="31" fill={contrastTextColor(palette.header)} textAnchor="middle" fontSize="17" fontWeight="900" letterSpacing="2.5">
             ARMADA BUS PENUMPANG
           </text>
-          <text x="325" y="152" fill="#0f172a" textAnchor="middle" fontSize="66" fontWeight="900" letterSpacing="2">
-            {busLabel}
-          </text>
+          {isBlank ? (
+            <text x="325" y="152" fill="#cbd5e1" textAnchor="middle" fontSize="36" fontWeight="800" letterSpacing="2">
+              (TULIS NO. BUS)
+            </text>
+          ) : (
+            <text x="325" y="152" fill="#0f172a" textAnchor="middle" fontSize="66" fontWeight="900" letterSpacing="2">
+              {busLabel}
+            </text>
+          )}
         </g>
 
         {/* Footer: Event Title Spaced + Barcode Box (Shifted Upwards) */}
@@ -1123,7 +1503,7 @@ function PreviewLuggageCard({
     const busLabel = truncatePreviewText(item.busLabel || "-", 14).toUpperCase();
     const nisBadgeWidth = Math.max(110, Math.min(320, studentNis.length * 13 + 80));
     const wavePaths = renderGuillocheWaveSvg(1150, 720, "landscape");
-    const barcodeBars = generateBraceletBarcodeBars(item.studentNis || item.id, 340);
+    const barcodeBars = generateBraceletBarcodeBars(item.studentNis || item.destinationKordaId || item.id, 340);
 
     return (
       <svg
@@ -1131,7 +1511,7 @@ function PreviewLuggageCard({
         className="h-full w-full"
         preserveAspectRatio="xMidYMid meet"
         role="img"
-        aria-label={`Preview kartu barang besar mendatar ${studentName}`}
+        aria-label={`Preview kartu barang besar mendatar ${studentName || "Template"}`}
       >
         <defs>
           <linearGradient id={`grad-ll-${item.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -1188,28 +1568,43 @@ function PreviewLuggageCard({
           <g>
             <rect width="600" height="220" rx="14" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1.5" />
             <g transform="translate(24, 16)">
-              <rect width="110" height="32" rx="16" fill={palette.header} />
-              <text x="55" y="22" fill={contrastTextColor(palette.header)} textAnchor="middle" fontSize="15" fontWeight="900" letterSpacing="1">
+              <rect width={isBlank ? 140 : 110} height="32" rx="16" fill={palette.header} />
+              <text x={isBlank ? 70 : 55} y="22" fill={contrastTextColor(palette.header)} textAnchor="middle" fontSize={isBlank ? 13 : 15} fontWeight="900" letterSpacing="1">
                 {genderLabel}
               </text>
             </g>
-            <g transform="translate(144, 16)">
-              <rect width="170" height="32" rx="8" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
-              <text x="85" y="22" fill="#0f172a" textAnchor="middle" fontSize="14" fontWeight="800" letterSpacing="0.5">
+            <g transform={`translate(${isBlank ? 174 : 144}, 16)`}>
+              <rect width={isBlank ? 140 : 170} height="32" rx="8" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
+              <text x={isBlank ? 70 : 85} y="22" fill="#0f172a" textAnchor="middle" fontSize="14" fontWeight="800" letterSpacing="0.5">
                 NO. URUT: {rosterNumber}
               </text>
             </g>
             <text x="24" y="86" fill="#64748b" fontSize="14" fontWeight="800" letterSpacing="1.5">
               NAMA PENUMPANG / SANTRI
             </text>
-            <text x="24" y="136" fill="#0f172a" fontSize="38" fontWeight="900">
-              {studentName}
-            </text>
-            <g transform="translate(24, 162)">
-              <rect width={nisBadgeWidth} height="36" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
-              <text x="14" y="24" fill="#334155" fontSize="16" fontWeight="800">
-                {studentNis ? `NIS: ${studentNis}` : "PESERTA UMUM"}
+            {isBlank ? (
+              <line x1="24" y1="132" x2="576" y2="132" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+            ) : (
+              <text x="24" y="136" fill="#0f172a" fontSize="38" fontWeight="900">
+                {studentName}
               </text>
+            )}
+            <g transform="translate(24, 162)">
+              {isBlank ? (
+                <>
+                  <rect width="210" height="36" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
+                  <text x="14" y="24" fill="#94a3b8" fontSize="16" fontWeight="800">
+                    NIS: ....................
+                  </text>
+                </>
+              ) : (
+                <>
+                  <rect width={nisBadgeWidth} height="36" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
+                  <text x="14" y="24" fill="#334155" fontSize="16" fontWeight="800">
+                    {studentNis ? `NIS: ${studentNis}` : "PESERTA UMUM"}
+                  </text>
+                </>
+              )}
             </g>
           </g>
 
@@ -1219,13 +1614,22 @@ function PreviewLuggageCard({
             <text x="24" y="34" fill="#64748b" fontSize="14" fontWeight="800" letterSpacing="1.5">
               TITIK TURUN (DROP POINT)
             </text>
-            <text x="24" y="82" fill="#0f172a" fontSize="38" fontWeight="900">
-              {dropPointLines[0]}
-            </text>
-            {dropPointLines[1] && (
-              <text x="24" y="122" fill="#0f172a" fontSize="34" fontWeight="900">
-                {dropPointLines[1]}
-              </text>
+            {isBlank ? (
+              <>
+                <line x1="24" y1="80" x2="576" y2="80" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+                <line x1="24" y1="120" x2="576" y2="120" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="6 5" />
+              </>
+            ) : (
+              <>
+                <text x="24" y="82" fill="#0f172a" fontSize="38" fontWeight="900">
+                  {dropPointLines[0]}
+                </text>
+                {dropPointLines[1] && (
+                  <text x="24" y="122" fill="#0f172a" fontSize="34" fontWeight="900">
+                    {dropPointLines[1]}
+                  </text>
+                )}
+              </>
             )}
           </g>
 
@@ -1235,9 +1639,13 @@ function PreviewLuggageCard({
             <text x="24" y="34" fill="#64748b" fontSize="14" fontWeight="800" letterSpacing="1.5">
               KONTAK DARURAT / ORTU
             </text>
-            <text x="24" y="82" fill="#1e293b" fontSize="40" fontWeight="900">
-              {parentPhone}
-            </text>
+            {isBlank ? (
+              <line x1="24" y1="80" x2="576" y2="80" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+            ) : (
+              <text x="24" y="82" fill="#1e293b" fontSize="40" fontWeight="900">
+                {parentPhone}
+              </text>
+            )}
           </g>
         </g>
 
@@ -1251,9 +1659,15 @@ function PreviewLuggageCard({
           <text x="222" y="31" fill={contrastTextColor(palette.header)} textAnchor="middle" fontSize="17" fontWeight="900" letterSpacing="2.5">
             ARMADA BUS PENUMPANG
           </text>
-          <text x="222" y="182" fill="#0f172a" textAnchor="middle" fontSize="68" fontWeight="900" letterSpacing="2">
-            {busLabel}
-          </text>
+          {isBlank ? (
+            <text x="222" y="182" fill="#cbd5e1" textAnchor="middle" fontSize="36" fontWeight="800" letterSpacing="2">
+              (TULIS NO. BUS)
+            </text>
+          ) : (
+            <text x="222" y="182" fill="#0f172a" textAnchor="middle" fontSize="68" fontWeight="900" letterSpacing="2">
+              {busLabel}
+            </text>
+          )}
 
           {/* Footer Box (Shifted Upwards) */}
           <g transform="translate(0, 312)">
@@ -1296,7 +1710,7 @@ function PreviewLuggageCard({
       className="h-full w-full"
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label={`Preview kartu barang ${studentName}`}
+      aria-label={`Preview kartu barang ${studentName || "Template"}`}
     >
       {/* Outer Cutting Border (Subtle Gray) */}
       <rect x="0.5" y="0.5" width="949" height="529" fill="#ffffff" stroke="#d1d5db" strokeWidth="1" />
@@ -1341,16 +1755,16 @@ function PreviewLuggageCard({
       {/* Header Chips (Right) */}
       {/* Gender Chip */}
       <rect
-        x="635"
+        x={isBlank ? 575 : 635}
         y="42"
-        width="120"
+        width={isBlank ? 180 : 120}
         height="64"
         rx="32"
         fill="rgba(255, 255, 255, 0.22)"
         stroke="rgba(255, 255, 255, 0.6)"
         strokeWidth="1.5"
       />
-      <text x="695" y="82" fill="#ffffff" textAnchor="middle" fontSize="23" fontWeight="800" letterSpacing="1.5">
+      <text x={isBlank ? 665 : 695} y="82" fill="#ffffff" textAnchor="middle" fontSize={isBlank ? 20 : 23} fontWeight="800" letterSpacing="1.5">
         {genderLabel}
       </text>
 
@@ -1379,12 +1793,23 @@ function PreviewLuggageCard({
       <text x="60" y="175" fill="#9ca3af" fontSize="17" fontWeight="800" letterSpacing="2">
         NAMA PENUMPANG / SANTRI
       </text>
-      <text x="60" y="222" fill="#111827" fontSize="40" fontWeight="900">
-        {studentName}
-      </text>
+      {isBlank ? (
+        <line x1="60" y1="218" x2="890" y2="218" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+      ) : (
+        <text x="60" y="222" fill="#111827" fontSize="40" fontWeight="900">
+          {studentName}
+        </text>
+      )}
 
       {/* Sub Identity: NIS or General Participant */}
-      {studentNis ? (
+      {isBlank ? (
+        <g transform="translate(60, 238)">
+          <rect width="210" height="32" rx="6" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+          <text x="12" y="22" fill="#9ca3af" fontSize="17" fontWeight="800" letterSpacing="0.5">
+            NIS: ....................
+          </text>
+        </g>
+      ) : studentNis ? (
         <g transform="translate(60, 238)">
           <rect width={nisBadgeWidth} height="32" rx="6" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
           <text x="12" y="22" fill="#4b5563" fontSize="19" fontWeight="800" letterSpacing="0.5">
@@ -1408,21 +1833,31 @@ function PreviewLuggageCard({
       <text x="60" y="318" fill="#6b7280" fontSize="18" fontWeight="800" letterSpacing="1.5">
         TITIK TURUN (DROP POINT)
       </text>
-      <text x="60" y="353" fill="#111827" fontSize="30" fontWeight="800">
-        {dropPointLines[0]}
-      </text>
-      {dropPointLines[1] && (
-        <text x="60" y="388" fill="#111827" fontSize="26" fontWeight="800">
-          {dropPointLines[1]}
-        </text>
+      {isBlank ? (
+        <line x1="60" y1="365" x2="460" y2="365" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+      ) : (
+        <>
+          <text x="60" y="353" fill="#111827" fontSize="30" fontWeight="800">
+            {dropPointLines[0]}
+          </text>
+          {dropPointLines[1] && (
+            <text x="60" y="388" fill="#111827" fontSize="26" fontWeight="800">
+              {dropPointLines[1]}
+            </text>
+          )}
+        </>
       )}
 
       <text x="60" y="438" fill="#6b7280" fontSize="17" fontWeight="800" letterSpacing="1.5">
         KONTAK DARURAT / ORTU
       </text>
-      <text x="60" y="474" fill="#1f2937" fontSize="27" fontWeight="800">
-        {parentPhone}
-      </text>
+      {isBlank ? (
+        <line x1="60" y1="465" x2="460" y2="465" stroke="#cbd5e1" strokeWidth="2.5" strokeDasharray="8 6" />
+      ) : (
+        <text x="60" y="474" fill="#1f2937" fontSize="27" fontWeight="800">
+          {parentPhone}
+        </text>
+      )}
 
       {/* Vertical Column Divider */}
       <line x1="490" y1="302" x2="490" y2="490" stroke="#e5e7eb" strokeWidth="1.5" />
@@ -1439,9 +1874,15 @@ function PreviewLuggageCard({
         <text x="195" y="26" fill="#ffffff" opacity="0.95" textAnchor="middle" fontSize="17" fontWeight="800" letterSpacing="2">
           BUS PENUMPANG
         </text>
-        <text x="195" y="102" fill="#ffffff" textAnchor="middle" fontSize="48" fontWeight="900" letterSpacing="1.5">
-          {busLabel}
-        </text>
+        {isBlank ? (
+          <text x="195" y="102" fill="rgba(255, 255, 255, 0.65)" textAnchor="middle" fontSize="32" fontWeight="800" letterSpacing="1.5">
+            (NO. BUS)
+          </text>
+        ) : (
+          <text x="195" y="102" fill="#ffffff" textAnchor="middle" fontSize="48" fontWeight="900" letterSpacing="1.5">
+            {busLabel}
+          </text>
+        )}
       </g>
     </svg>
   );
@@ -2295,9 +2736,11 @@ function drawLuggageCardStandardPdf(
   width: number,
   height: number,
 ) {
+  const isBlank = !item.studentName;
   const palette = getPdfPalette(item.kordaName);
   const isPutri = isPutriGender(item.studentGender);
-  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
+  const genderLabel = isBlank ? "PUTRA / PUTRI" : isPutri ? "PUTRI" : "PUTRA";
+  const rosterNumber = isBlank ? "....." : String(item.rosterNumber).padStart(3, "0");
 
   // 1. Outer Cutting Border (Subtle Gray) and Plain White Frame
   pdf.setFillColor(255, 255, 255);
@@ -2359,9 +2802,9 @@ function drawLuggageCardStandardPdf(
 
   // Header Right Chips:
   // Gender Pill
-  const genderPillW = 11.5;
+  const genderPillW = isBlank ? 16.5 : 11.5;
   const genderPillH = 6.0;
-  const genderPillX = ix + iw - 29.0;
+  const genderPillX = ix + iw - (isBlank ? 34.0 : 29.0);
   const genderPillY = iy + 2.6;
   pdf.setFillColor(...blendWithWhite(palette.header, 0.25));
   pdf.roundedRect(genderPillX, genderPillY, genderPillW, genderPillH, 1.2, 1.2, "F");
@@ -2369,7 +2812,7 @@ function drawLuggageCardStandardPdf(
   pdf.setLineWidth(0.15);
   pdf.roundedRect(genderPillX, genderPillY, genderPillW, genderPillH, 1.2, 1.2, "S");
   pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(6.2);
+  pdf.setFontSize(isBlank ? 4.8 : 6.2);
   pdf.text(genderLabel, genderPillX + genderPillW / 2, genderPillY + 4.2, { align: "center" });
 
   // Roster Number Badge (White Card)
@@ -2388,7 +2831,7 @@ function drawLuggageCardStandardPdf(
   pdf.text("NO. URUT", rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 2.6, { align: "center" });
   pdf.setTextColor(17, 24, 39);
   pdf.setFontSize(9.0);
-  pdf.text(String(item.rosterNumber).padStart(3, "0"), rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 6.5, { align: "center" });
+  pdf.text(rosterNumber, rosterBadgeX + rosterBadgeW / 2, rosterBadgeY + 6.5, { align: "center" });
 
   // Accent Line below Header
   pdf.setFillColor(...palette.border);
@@ -2400,32 +2843,47 @@ function drawLuggageCardStandardPdf(
   pdf.setFontSize(5.0);
   pdf.text("NAMA PENUMPANG / SANTRI", ix + 4.2, iy + 15.6);
 
-  const studentName = fitSingleLineText(
-    pdf,
-    normalizeText(item.studentName).toUpperCase(),
-    iw - 8.0,
-    11.2,
-    7.5,
-    "bold",
-  );
-  pdf.setTextColor(17, 24, 39);
-  pdf.setFontSize(studentName.fontSize);
-  pdf.text(studentName.text, ix + 4.2, iy + 20.2);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.22);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(ix + 4.2, iy + 20.0, ix + iw - 4.2, iy + 20.0);
+    pdf.setLineDashPattern([], 0);
 
-  if (item.studentNis) {
-    const nisText = fitSingleLineText(pdf, `NIS: ${item.studentNis}`, 30, 6.0, 4.8, "bold");
-    const nisBadgeW = pdf.getTextWidth(nisText.text) + 3.0;
+    const nisText = "NIS: ....................";
     pdf.setFillColor(243, 244, 246);
-    pdf.roundedRect(ix + 4.2, iy + 21.8, nisBadgeW, 3.4, 0.8, 0.8, "F");
-    pdf.setTextColor(75, 85, 99);
-    pdf.setFontSize(nisText.fontSize);
-    pdf.text(nisText.text, ix + 5.7, iy + 24.3);
+    pdf.roundedRect(ix + 4.2, iy + 21.8, 22.0, 3.4, 0.8, 0.8, "F");
+    pdf.setTextColor(156, 163, 175);
+    pdf.setFontSize(4.8);
+    pdf.text(nisText, ix + 5.7, iy + 24.3);
   } else {
-    pdf.setFillColor(243, 244, 246);
-    pdf.roundedRect(ix + 4.2, iy + 21.8, 19.0, 3.4, 0.8, 0.8, "F");
-    pdf.setTextColor(107, 114, 128);
-    pdf.setFontSize(5.2);
-    pdf.text("PESERTA UMUM", ix + 5.2, iy + 24.3);
+    const studentName = fitSingleLineText(
+      pdf,
+      normalizeText(item.studentName).toUpperCase(),
+      iw - 8.0,
+      11.2,
+      7.5,
+      "bold",
+    );
+    pdf.setTextColor(17, 24, 39);
+    pdf.setFontSize(studentName.fontSize);
+    pdf.text(studentName.text, ix + 4.2, iy + 20.2);
+
+    if (item.studentNis) {
+      const nisText = fitSingleLineText(pdf, `NIS: ${item.studentNis}`, 30, 6.0, 4.8, "bold");
+      const nisBadgeW = pdf.getTextWidth(nisText.text) + 3.0;
+      pdf.setFillColor(243, 244, 246);
+      pdf.roundedRect(ix + 4.2, iy + 21.8, nisBadgeW, 3.4, 0.8, 0.8, "F");
+      pdf.setTextColor(75, 85, 99);
+      pdf.setFontSize(nisText.fontSize);
+      pdf.text(nisText.text, ix + 5.7, iy + 24.3);
+    } else {
+      pdf.setFillColor(243, 244, 246);
+      pdf.roundedRect(ix + 4.2, iy + 21.8, 19.0, 3.4, 0.8, 0.8, "F");
+      pdf.setTextColor(107, 114, 128);
+      pdf.setFontSize(5.2);
+      pdf.text("PESERTA UMUM", ix + 5.2, iy + 24.3);
+    }
   }
 
   // 4. Mid Horizontal Divider
@@ -2440,31 +2898,47 @@ function drawLuggageCardStandardPdf(
   pdf.setFontSize(5.2);
   pdf.text("TITIK TURUN (DROP POINT)", ix + 4.2, iy + 30.2);
 
-  const dropPointValue = fitMultilineText(
-    pdf,
-    item.dropPointName,
-    39.0,
-    2,
-    7.8,
-    6.2,
-    "bold",
-  );
-  pdf.setTextColor(31, 41, 55);
-  pdf.setFontSize(dropPointValue.fontSize);
-  const dropLineHeight = Math.max(2.8, dropPointValue.fontSize * 0.38);
-  dropPointValue.lines.forEach((line, index) => {
-    pdf.text(line, ix + 4.2, iy + 34.0 + index * dropLineHeight);
-  });
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.2);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(ix + 4.2, iy + 34.5, ix + 44.0, iy + 34.5);
+    pdf.setLineDashPattern([], 0);
+  } else {
+    const dropPointValue = fitMultilineText(
+      pdf,
+      item.dropPointName,
+      39.0,
+      2,
+      7.8,
+      6.2,
+      "bold",
+    );
+    pdf.setTextColor(31, 41, 55);
+    pdf.setFontSize(dropPointValue.fontSize);
+    const dropLineHeight = Math.max(2.8, dropPointValue.fontSize * 0.38);
+    dropPointValue.lines.forEach((line, index) => {
+      pdf.text(line, ix + 4.2, iy + 34.0 + index * dropLineHeight);
+    });
+  }
 
   // Left: Emergency Parent Phone
   pdf.setTextColor(107, 114, 128);
   pdf.setFontSize(5.0);
   pdf.text("KONTAK DARURAT / ORTU", ix + 4.2, iy + 41.6);
 
-  const parentPhone = fitSingleLineText(pdf, item.parrentPhone || "-", 39.0, 7.5, 6.2, "bold");
-  pdf.setTextColor(55, 65, 81);
-  pdf.setFontSize(parentPhone.fontSize);
-  pdf.text(parentPhone.text, ix + 4.2, iy + 45.4);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.2);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(ix + 4.2, iy + 45.4, ix + 44.0, iy + 45.4);
+    pdf.setLineDashPattern([], 0);
+  } else {
+    const parentPhone = fitSingleLineText(pdf, item.parrentPhone || "-", 39.0, 7.5, 6.2, "bold");
+    pdf.setTextColor(55, 65, 81);
+    pdf.setFontSize(parentPhone.fontSize);
+    pdf.text(parentPhone.text, ix + 4.2, iy + 45.4);
+  }
 
   // Column Divider Line
   pdf.setDrawColor(229, 231, 235);
@@ -2496,9 +2970,15 @@ function drawLuggageCardStandardPdf(
   pdf.setFontSize(4.6);
   pdf.text("BUS PENUMPANG", busCardX + busCardW / 2, busCardY + 2.6, { align: "center" });
 
-  const busValue = fitSingleLineText(pdf, item.busLabel || "-", busCardW - 2.5, 11.2, 7.2, "bold");
-  pdf.setFontSize(busValue.fontSize);
-  pdf.text(busValue.text, busCardX + busCardW / 2, busCardY + 9.8, { align: "center" });
+  if (isBlank) {
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(6.5);
+    pdf.text("(NO. BUS)", busCardX + busCardW / 2, busCardY + 9.8, { align: "center" });
+  } else {
+    const busValue = fitSingleLineText(pdf, item.busLabel || "-", busCardW - 2.5, 11.2, 7.2, "bold");
+    pdf.setFontSize(busValue.fontSize);
+    pdf.text(busValue.text, busCardX + busCardW / 2, busCardY + 9.8, { align: "center" });
+  }
 
   // 6. Inner Card Border (Clean rounded corners without bottom block clash)
   pdf.setDrawColor(...palette.border);
@@ -2579,10 +3059,11 @@ function drawLuggageCardPortraitPdf(
   logoData: string | null = null,
   eventName: string = "Mabar Ati 0.5",
 ) {
+  const isBlank = !item.studentName;
   const palette = getPdfPalette(item.kordaName);
   const isPutri = isPutriGender(item.studentGender);
-  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
-  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
+  const genderLabel = isBlank ? "PUTRA / PUTRI" : isPutri ? "PUTRI" : "PUTRA";
+  const rosterNumber = isBlank ? "....." : String(item.rosterNumber).padStart(3, "0");
   const isLightKorda = contrastTextColor(rgbToHex(palette.header)) === "#111827";
 
   // 1. Outer Cutting Border (Subtle Gray) and Plain White Frame
@@ -2687,48 +3168,67 @@ function drawLuggageCardPortraitPdf(
   pdf.roundedRect(ix + 2.5, card1Y, iw - 5.0, card1H, 1.4, 1.4, "FD");
 
   // Gender Pill
+  const genderPillW = isBlank ? 16.5 : 11.5;
   pdf.setFillColor(...palette.header);
-  pdf.roundedRect(ix + 4.5, card1Y + 1.8, 11.5, 3.4, 1.7, 1.7, "F");
+  pdf.roundedRect(ix + 4.5, card1Y + 1.8, genderPillW, 3.4, 1.7, 1.7, "F");
   pdf.setTextColor(isLightKorda ? 17 : 255, isLightKorda ? 24 : 255, isLightKorda ? 39 : 255);
-  pdf.setFontSize(4.2);
+  pdf.setFontSize(isBlank ? 3.6 : 4.2);
   pdf.setFont("helvetica", "bold");
-  pdf.text(genderLabel, ix + 10.25, card1Y + 4.2, { align: "center" });
+  pdf.text(genderLabel, ix + 4.5 + genderPillW / 2, card1Y + 4.2, { align: "center" });
 
   // No. Urut Badge
+  const noUrutX = ix + 4.5 + genderPillW + 1.5;
   pdf.setFillColor(248, 250, 252);
   pdf.setDrawColor(226, 232, 240);
-  pdf.roundedRect(ix + 17.5, card1Y + 1.8, 17.5, 3.4, 0.8, 0.8, "FD");
+  pdf.roundedRect(noUrutX, card1Y + 1.8, 17.5, 3.4, 0.8, 0.8, "FD");
   pdf.setTextColor(15, 23, 42);
   pdf.setFontSize(4.2);
   pdf.setFont("helvetica", "bold");
-  pdf.text(`NO. URUT: ${rosterNumber}`, ix + 26.25, card1Y + 4.2, { align: "center" });
+  pdf.text(`NO. URUT: ${rosterNumber}`, noUrutX + 8.75, card1Y + 4.2, { align: "center" });
 
   pdf.setTextColor(100, 116, 139);
   pdf.setFontSize(4.0);
   pdf.setFont("helvetica", "bold");
   pdf.text("NAMA PENUMPANG / SANTRI", ix + 4.5, card1Y + 8.2);
 
-  pdf.setTextColor(15, 23, 42);
-  const studentNameFit = fitSingleLineText(
-    pdf,
-    normalizeText(item.studentName).toUpperCase(),
-    iw - 14,
-    9.0,
-    6.4,
-    "bold",
-  );
-  pdf.setFontSize(studentNameFit.fontSize);
-  pdf.text(studentNameFit.text, ix + 4.5, card1Y + 13.0);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.25);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(ix + 4.5, card1Y + 12.8, ix + iw - 4.5, card1Y + 12.8);
+    pdf.setLineDashPattern([], 0);
 
-  const nisText = item.studentNis ? `NIS: ${item.studentNis}` : "PESERTA UMUM";
-  pdf.setFillColor(241, 245, 249);
-  pdf.setDrawColor(226, 232, 240);
-  const nisW = Math.max(15, pdf.getStringUnitWidth(nisText) * 4.0 + 3.8);
-  pdf.roundedRect(ix + 4.5, card1Y + 15.6, nisW, 3.8, 0.8, 0.8, "FD");
-  pdf.setTextColor(51, 65, 85);
-  pdf.setFontSize(4.2);
-  pdf.setFont("helvetica", "bold");
-  pdf.text(nisText, ix + 6.4, card1Y + 18.5);
+    const nisText = "NIS: ....................";
+    pdf.setFillColor(241, 245, 249);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.roundedRect(ix + 4.5, card1Y + 15.6, 22.0, 3.8, 0.8, 0.8, "FD");
+    pdf.setTextColor(148, 163, 184);
+    pdf.setFontSize(4.0);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(nisText, ix + 6.4, card1Y + 18.5);
+  } else {
+    pdf.setTextColor(15, 23, 42);
+    const studentNameFit = fitSingleLineText(
+      pdf,
+      normalizeText(item.studentName).toUpperCase(),
+      iw - 14,
+      9.0,
+      6.4,
+      "bold",
+    );
+    pdf.setFontSize(studentNameFit.fontSize);
+    pdf.text(studentNameFit.text, ix + 4.5, card1Y + 13.0);
+
+    const nisText = item.studentNis ? `NIS: ${item.studentNis}` : "PESERTA UMUM";
+    pdf.setFillColor(241, 245, 249);
+    pdf.setDrawColor(226, 232, 240);
+    const nisW = Math.max(15, pdf.getStringUnitWidth(nisText) * 4.0 + 3.8);
+    pdf.roundedRect(ix + 4.5, card1Y + 15.6, nisW, 3.8, 0.8, 0.8, "FD");
+    pdf.setTextColor(51, 65, 85);
+    pdf.setFontSize(4.2);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(nisText, ix + 6.4, card1Y + 18.5);
+  }
 
   // 7. Drop Point Card
   const card2Y = card1Y + card1H + 1.6;
@@ -2742,20 +3242,30 @@ function drawLuggageCardPortraitPdf(
   pdf.setFont("helvetica", "bold");
   pdf.text("TITIK TURUN (DROP POINT)", ix + 4.5, card2Y + 3.8);
 
-  pdf.setTextColor(15, 23, 42);
-  const dropLines = fitMultilineText(
-    pdf,
-    item.dropPointName,
-    iw - 10,
-    2,
-    8.4,
-    6.6,
-    "bold",
-  );
-  pdf.setFontSize(dropLines.fontSize);
-  pdf.text(dropLines.lines[0] || "-", ix + 4.5, card2Y + 7.8);
-  if (dropLines.lines[1]) {
-    pdf.text(dropLines.lines[1], ix + 4.5, card2Y + 11.8);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.22);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(ix + 4.5, card2Y + 7.5, ix + iw - 4.5, card2Y + 7.5);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(ix + 4.5, card2Y + 11.2, ix + iw - 4.5, card2Y + 11.2);
+    pdf.setLineDashPattern([], 0);
+  } else {
+    pdf.setTextColor(15, 23, 42);
+    const dropLines = fitMultilineText(
+      pdf,
+      item.dropPointName,
+      iw - 10,
+      2,
+      8.4,
+      6.6,
+      "bold",
+    );
+    pdf.setFontSize(dropLines.fontSize);
+    pdf.text(dropLines.lines[0] || "-", ix + 4.5, card2Y + 7.8);
+    if (dropLines.lines[1]) {
+      pdf.text(dropLines.lines[1], ix + 4.5, card2Y + 11.8);
+    }
   }
 
   // 8. Emergency Contact Card
@@ -2770,10 +3280,18 @@ function drawLuggageCardPortraitPdf(
   pdf.setFont("helvetica", "bold");
   pdf.text("KONTAK DARURAT / ORTU", ix + 4.5, card3Y + 3.6);
 
-  pdf.setTextColor(30, 41, 59);
-  pdf.setFontSize(8.5);
-  pdf.setFont("helvetica", "bold");
-  pdf.text(item.parrentPhone ? normalizeText(item.parrentPhone) : "-", ix + 4.5, card3Y + 8.4);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.22);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(ix + 4.5, card3Y + 8.0, ix + iw - 4.5, card3Y + 8.0);
+    pdf.setLineDashPattern([], 0);
+  } else {
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFontSize(8.5);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(item.parrentPhone ? normalizeText(item.parrentPhone) : "-", ix + 4.5, card3Y + 8.4);
+  }
 
   // 9. Armada Bus Card
   const card4Y = card3Y + card3H + 1.6;
@@ -2792,17 +3310,24 @@ function drawLuggageCardPortraitPdf(
   pdf.setFont("helvetica", "bold");
   pdf.text("ARMADA BUS PENUMPANG", ix + iw / 2, card4Y + 3.2, { align: "center" });
 
-  pdf.setTextColor(15, 23, 42);
-  const busFit = fitSingleLineText(
-    pdf,
-    normalizeText(item.busLabel || "-").toUpperCase(),
-    iw - 14,
-    14.5,
-    9.5,
-    "bold",
-  );
-  pdf.setFontSize(busFit.fontSize);
-  pdf.text(busFit.text, ix + iw / 2, card4Y + 14.8, { align: "center" });
+  if (isBlank) {
+    pdf.setTextColor(203, 213, 225);
+    pdf.setFontSize(8.0);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("(TULIS NO. BUS)", ix + iw / 2, card4Y + 14.5, { align: "center" });
+  } else {
+    pdf.setTextColor(15, 23, 42);
+    const busFit = fitSingleLineText(
+      pdf,
+      normalizeText(item.busLabel || "-").toUpperCase(),
+      iw - 14,
+      14.5,
+      9.5,
+      "bold",
+    );
+    pdf.setFontSize(busFit.fontSize);
+    pdf.text(busFit.text, ix + iw / 2, card4Y + 14.8, { align: "center" });
+  }
 
   // 10. Footer Area (Event Name Spaced + Barcode Box)
   const spacedTitle = formatSpacedEventTitle(eventName);
@@ -2820,7 +3345,10 @@ function drawLuggageCardPortraitPdf(
   pdf.setLineWidth(0.18);
   pdf.roundedRect(barcodeBoxX, barcodeBoxY, barcodeBoxW, barcodeBoxH, 1.0, 1.0, "FD");
 
-  const barcodeBars = generateBraceletBarcodeBars(item.studentNis || item.id, 30.0);
+  const barcodeBars = generateBraceletBarcodeBars(
+    item.studentNis || item.destinationKordaId || item.id,
+    30.0,
+  );
   pdf.setFillColor(17, 24, 39);
   for (const bar of barcodeBars) {
     pdf.rect(barcodeBoxX + 2.0 + bar.x, barcodeBoxY + 1.2, bar.width, 5.1, "F");
@@ -2837,10 +3365,11 @@ function drawLuggageCardLargeLandscapePdf(
   logoData: string | null = null,
   eventName: string = "Mabar Ati 0.5",
 ) {
+  const isBlank = !item.studentName;
   const palette = getPdfPalette(item.kordaName);
   const isPutri = isPutriGender(item.studentGender);
-  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
-  const rosterNumber = String(item.rosterNumber).padStart(3, "0");
+  const genderLabel = isBlank ? "PUTRA / PUTRI" : isPutri ? "PUTRI" : "PUTRA";
+  const rosterNumber = isBlank ? "....." : String(item.rosterNumber).padStart(3, "0");
   const isLightKorda = contrastTextColor(rgbToHex(palette.header)) === "#111827";
 
   // 1. Outer Cutting Border (Subtle Gray) and Plain White Frame
@@ -2950,48 +3479,67 @@ function drawLuggageCardLargeLandscapePdf(
   pdf.roundedRect(col1X, contentY, col1W, c1H, 1.4, 1.4, "FD");
 
   // Gender Pill
+  const genderPillW = isBlank ? 16.5 : 11.5;
   pdf.setFillColor(...palette.header);
-  pdf.roundedRect(col1X + 2.5, contentY + 1.6, 11.5, 3.2, 1.6, 1.6, "F");
+  pdf.roundedRect(col1X + 2.5, contentY + 1.6, genderPillW, 3.2, 1.6, 1.6, "F");
   pdf.setTextColor(isLightKorda ? 17 : 255, isLightKorda ? 24 : 255, isLightKorda ? 39 : 255);
-  pdf.setFontSize(4.2);
+  pdf.setFontSize(isBlank ? 3.6 : 4.2);
   pdf.setFont("helvetica", "bold");
-  pdf.text(genderLabel, col1X + 8.25, contentY + 3.8, { align: "center" });
+  pdf.text(genderLabel, col1X + 2.5 + genderPillW / 2, contentY + 3.8, { align: "center" });
 
   // No. Urut Badge
+  const noUrutX = col1X + 2.5 + genderPillW + 1.5;
   pdf.setFillColor(248, 250, 252);
   pdf.setDrawColor(226, 232, 240);
-  pdf.roundedRect(col1X + 15.0, contentY + 1.6, 17.5, 3.2, 0.8, 0.8, "FD");
+  pdf.roundedRect(noUrutX, contentY + 1.6, 17.5, 3.2, 0.8, 0.8, "FD");
   pdf.setTextColor(15, 23, 42);
   pdf.setFontSize(4.2);
   pdf.setFont("helvetica", "bold");
-  pdf.text(`NO. URUT: ${rosterNumber}`, col1X + 23.75, contentY + 3.8, { align: "center" });
+  pdf.text(`NO. URUT: ${rosterNumber}`, noUrutX + 8.75, contentY + 3.8, { align: "center" });
 
   pdf.setTextColor(100, 116, 139);
   pdf.setFontSize(4.0);
   pdf.setFont("helvetica", "bold");
   pdf.text("NAMA PENUMPANG / SANTRI", col1X + 2.5, contentY + 7.8);
 
-  pdf.setTextColor(15, 23, 42);
-  const studentNameFit = fitSingleLineText(
-    pdf,
-    normalizeText(item.studentName).toUpperCase(),
-    col1W - 5.0,
-    9.0,
-    6.4,
-    "bold",
-  );
-  pdf.setFontSize(studentNameFit.fontSize);
-  pdf.text(studentNameFit.text, col1X + 2.5, contentY + 12.6);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.25);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(col1X + 2.5, contentY + 12.6, col1X + col1W - 2.5, contentY + 12.6);
+    pdf.setLineDashPattern([], 0);
 
-  const nisText = item.studentNis ? `NIS: ${item.studentNis}` : "PESERTA UMUM";
-  pdf.setFillColor(241, 245, 249);
-  pdf.setDrawColor(226, 232, 240);
-  const nisW = Math.max(15, pdf.getStringUnitWidth(nisText) * 4.0 + 3.8);
-  pdf.roundedRect(col1X + 2.5, contentY + 15.2, nisW, 3.8, 0.8, 0.8, "FD");
-  pdf.setTextColor(51, 65, 85);
-  pdf.setFontSize(4.2);
-  pdf.setFont("helvetica", "bold");
-  pdf.text(nisText, col1X + 4.5, contentY + 18.0);
+    const nisText = "NIS: ....................";
+    pdf.setFillColor(241, 245, 249);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.roundedRect(col1X + 2.5, contentY + 15.2, 22.0, 3.8, 0.8, 0.8, "FD");
+    pdf.setTextColor(148, 163, 184);
+    pdf.setFontSize(4.0);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(nisText, col1X + 4.5, contentY + 18.0);
+  } else {
+    pdf.setTextColor(15, 23, 42);
+    const studentNameFit = fitSingleLineText(
+      pdf,
+      normalizeText(item.studentName).toUpperCase(),
+      col1W - 5.0,
+      9.0,
+      6.4,
+      "bold",
+    );
+    pdf.setFontSize(studentNameFit.fontSize);
+    pdf.text(studentNameFit.text, col1X + 2.5, contentY + 12.6);
+
+    const nisText = item.studentNis ? `NIS: ${item.studentNis}` : "PESERTA UMUM";
+    pdf.setFillColor(241, 245, 249);
+    pdf.setDrawColor(226, 232, 240);
+    const nisW = Math.max(15, pdf.getStringUnitWidth(nisText) * 4.0 + 3.8);
+    pdf.roundedRect(col1X + 2.5, contentY + 15.2, nisW, 3.8, 0.8, 0.8, "FD");
+    pdf.setTextColor(51, 65, 85);
+    pdf.setFontSize(4.2);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(nisText, col1X + 4.5, contentY + 18.0);
+  }
 
   // Drop Point Card
   const c2Y = contentY + c1H + 1.5;
@@ -3005,20 +3553,30 @@ function drawLuggageCardLargeLandscapePdf(
   pdf.setFont("helvetica", "bold");
   pdf.text("TITIK TURUN (DROP POINT)", col1X + 2.5, c2Y + 3.8);
 
-  pdf.setTextColor(15, 23, 42);
-  const dropLines = fitMultilineText(
-    pdf,
-    item.dropPointName,
-    col1W - 5.0,
-    2,
-    8.4,
-    6.6,
-    "bold",
-  );
-  pdf.setFontSize(dropLines.fontSize);
-  pdf.text(dropLines.lines[0] || "-", col1X + 2.5, c2Y + 7.8);
-  if (dropLines.lines[1]) {
-    pdf.text(dropLines.lines[1], col1X + 2.5, c2Y + 11.8);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.22);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(col1X + 2.5, c2Y + 7.5, col1X + col1W - 2.5, c2Y + 7.5);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(col1X + 2.5, c2Y + 11.2, col1X + col1W - 2.5, c2Y + 11.2);
+    pdf.setLineDashPattern([], 0);
+  } else {
+    pdf.setTextColor(15, 23, 42);
+    const dropLines = fitMultilineText(
+      pdf,
+      item.dropPointName,
+      col1W - 5.0,
+      2,
+      8.4,
+      6.6,
+      "bold",
+    );
+    pdf.setFontSize(dropLines.fontSize);
+    pdf.text(dropLines.lines[0] || "-", col1X + 2.5, c2Y + 7.8);
+    if (dropLines.lines[1]) {
+      pdf.text(dropLines.lines[1], col1X + 2.5, c2Y + 11.8);
+    }
   }
 
   // Emergency Contact Card
@@ -3033,10 +3591,18 @@ function drawLuggageCardLargeLandscapePdf(
   pdf.setFont("helvetica", "bold");
   pdf.text("KONTAK DARURAT / ORTU", col1X + 2.5, c3Y + 3.6);
 
-  pdf.setTextColor(30, 41, 59);
-  pdf.setFontSize(8.5);
-  pdf.setFont("helvetica", "bold");
-  pdf.text(item.parrentPhone ? normalizeText(item.parrentPhone) : "-", col1X + 2.5, c3Y + 8.0);
+  if (isBlank) {
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.22);
+    pdf.setLineDashPattern([0.8, 0.8], 0);
+    pdf.line(col1X + 2.5, c3Y + 8.0, col1X + col1W - 2.5, c3Y + 8.0);
+    pdf.setLineDashPattern([], 0);
+  } else {
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFontSize(8.5);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(item.parrentPhone ? normalizeText(item.parrentPhone) : "-", col1X + 2.5, c3Y + 8.0);
+  }
 
   // 6. Right Column (Armada Bus + Footer Event & Barcode)
   const col2X = col1X + col1W + 3.0;
@@ -3058,17 +3624,24 @@ function drawLuggageCardLargeLandscapePdf(
   pdf.setFont("helvetica", "bold");
   pdf.text("ARMADA BUS PENUMPANG", col2X + col2W / 2, contentY + 3.2, { align: "center" });
 
-  pdf.setTextColor(15, 23, 42);
-  const busFit = fitSingleLineText(
-    pdf,
-    normalizeText(item.busLabel || "-").toUpperCase(),
-    col2W - 4.0,
-    15.0,
-    9.5,
-    "bold",
-  );
-  pdf.setFontSize(busFit.fontSize);
-  pdf.text(busFit.text, col2X + col2W / 2, contentY + 18.0, { align: "center" });
+  if (isBlank) {
+    pdf.setTextColor(203, 213, 225);
+    pdf.setFontSize(8.5);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("(TULIS NO. BUS)", col2X + col2W / 2, contentY + 18.0, { align: "center" });
+  } else {
+    pdf.setTextColor(15, 23, 42);
+    const busFit = fitSingleLineText(
+      pdf,
+      normalizeText(item.busLabel || "-").toUpperCase(),
+      col2W - 4.0,
+      15.0,
+      9.5,
+      "bold",
+    );
+    pdf.setFontSize(busFit.fontSize);
+    pdf.text(busFit.text, col2X + col2W / 2, contentY + 18.0, { align: "center" });
+  }
 
   // Footer Box
   const footerY = contentY + busCardH + 1.2;
@@ -3087,7 +3660,10 @@ function drawLuggageCardLargeLandscapePdf(
   pdf.setLineWidth(0.18);
   pdf.roundedRect(barcodeBoxX, barcodeBoxY, barcodeBoxW, barcodeBoxH, 1.0, 1.0, "FD");
 
-  const barcodeBars = generateBraceletBarcodeBars(item.studentNis || item.id, 34.0);
+  const barcodeBars = generateBraceletBarcodeBars(
+    item.studentNis || item.destinationKordaId || item.id,
+    34.0,
+  );
   pdf.setFillColor(17, 24, 39);
   for (const bar of barcodeBars) {
     pdf.rect(barcodeBoxX + 2.0 + bar.x, barcodeBoxY + 1.2, bar.width, 5.1, "F");

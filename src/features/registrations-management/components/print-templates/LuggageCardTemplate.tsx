@@ -99,13 +99,14 @@ export function LuggageCardTemplate({
   cardSize = "standard",
   eventName = "Mabar Ati 0.5",
 }: LuggageCardTemplateProps) {
+  const isBlank = !data.studentName;
   const kordaColor = getKordaColor(data.kordaName);
   const isPutri =
     data.studentGender === "P" ||
     data.studentGender === "PUTRI" ||
     data.studentGender === "Perempuan";
-  const genderLabel = isPutri ? "PUTRI" : "PUTRA";
-  const rosterNumber = String(data.rosterNumber).padStart(3, "0");
+  const genderLabel = isBlank ? "PUTRA / PUTRI" : isPutri ? "PUTRI" : "PUTRA";
+  const rosterNumber = isBlank ? "....." : String(data.rosterNumber).padStart(3, "0");
   const isLarge = cardSize === "large_landscape" || cardSize === "large_portrait";
   const paddingClass = isLarge ? "p-[2.5mm]" : "p-[2mm]";
   const spacedTitle = formatSpacedEventTitle(eventName);
@@ -180,11 +181,19 @@ export function LuggageCardTemplate({
               <div className="text-[6px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                 Nama Penumpang / Santri
               </div>
-              <div className="text-[13px] font-black text-slate-900 leading-tight truncate">
-                {data.studentName}
-              </div>
+              {isBlank ? (
+                <div className="h-4 border-b border-dashed border-slate-300 my-1" />
+              ) : (
+                <div className="text-[13px] font-black text-slate-900 leading-tight truncate">
+                  {data.studentName}
+                </div>
+              )}
               <div className="mt-1">
-                {data.studentNis ? (
+                {isBlank ? (
+                  <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[6.5px] font-bold">
+                    NIS: ....................
+                  </span>
+                ) : data.studentNis ? (
                   <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[6.5px] font-bold">
                     NIS: {data.studentNis}
                   </span>
@@ -201,9 +210,16 @@ export function LuggageCardTemplate({
               <div className="text-[6px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                 Titik Turun (Drop Point)
               </div>
-              <div className="text-[11px] font-black text-slate-900 leading-tight line-clamp-2">
-                {data.dropPointName}
-              </div>
+              {isBlank ? (
+                <div className="space-y-1.5 my-1">
+                  <div className="h-3 border-b border-dashed border-slate-300" />
+                  <div className="h-2.5 border-b border-dashed border-slate-200" />
+                </div>
+              ) : (
+                <div className="text-[11px] font-black text-slate-900 leading-tight line-clamp-2">
+                  {data.dropPointName}
+                </div>
+              )}
             </div>
 
             {/* Emergency Contact Card */}
@@ -211,9 +227,13 @@ export function LuggageCardTemplate({
               <div className="text-[6px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                 Kontak Darurat / Ortu
               </div>
-              <div className="text-[11.5px] font-black text-slate-900 leading-none truncate">
-                {data.parrentPhone || "-"}
-              </div>
+              {isBlank ? (
+                <div className="h-3 border-b border-dashed border-slate-300 my-1" />
+              ) : (
+                <div className="text-[11.5px] font-black text-slate-900 leading-none truncate">
+                  {data.parrentPhone || "-"}
+                </div>
+              )}
             </div>
 
             {/* Armada Bus Card (Moved to bottom section) */}
@@ -223,9 +243,15 @@ export function LuggageCardTemplate({
               >
                 Armada Bus Penumpang
               </div>
-              <div className="py-2 text-center text-[18px] font-black text-slate-900 leading-none tracking-wider">
-                {data.busLabel || "-"}
-              </div>
+              {isBlank ? (
+                <div className="py-2.5 text-center text-[10px] font-extrabold text-slate-300 leading-none tracking-wider">
+                  (TULIS NO. BUS)
+                </div>
+              ) : (
+                <div className="py-2 text-center text-[18px] font-black text-slate-900 leading-none tracking-wider">
+                  {data.busLabel || "-"}
+                </div>
+              )}
             </div>
           </div>
 
@@ -318,11 +344,19 @@ export function LuggageCardTemplate({
                 <div className="text-[5.5px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                   Nama Penumpang / Santri
                 </div>
-                <div className="text-[12px] font-black text-slate-900 leading-tight truncate">
-                  {data.studentName}
-                </div>
+                {isBlank ? (
+                  <div className="h-3.5 border-b border-dashed border-slate-300 my-0.5" />
+                ) : (
+                  <div className="text-[12px] font-black text-slate-900 leading-tight truncate">
+                    {data.studentName}
+                  </div>
+                )}
                 <div className="mt-0.5">
-                  {data.studentNis ? (
+                  {isBlank ? (
+                    <span className="inline-block px-1 py-0.2 rounded bg-slate-100 text-slate-500 text-[6px] font-bold">
+                      NIS: ....................
+                    </span>
+                  ) : data.studentNis ? (
                     <span className="inline-block px-1 py-0.2 rounded bg-slate-100 text-slate-700 text-[6px] font-bold">
                       NIS: {data.studentNis}
                     </span>
@@ -339,9 +373,16 @@ export function LuggageCardTemplate({
                 <div className="text-[5.5px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                   Titik Turun (Drop Point)
                 </div>
-                <div className="text-[10px] font-black text-slate-900 leading-tight line-clamp-1">
-                  {data.dropPointName}
-                </div>
+                {isBlank ? (
+                  <div className="space-y-1 my-0.5">
+                    <div className="h-2.5 border-b border-dashed border-slate-300" />
+                    <div className="h-2 border-b border-dashed border-slate-200" />
+                  </div>
+                ) : (
+                  <div className="text-[10px] font-black text-slate-900 leading-tight line-clamp-1">
+                    {data.dropPointName}
+                  </div>
+                )}
               </div>
 
               {/* Phone Card */}
@@ -349,9 +390,13 @@ export function LuggageCardTemplate({
                 <div className="text-[5.5px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
                   Kontak Darurat / Ortu
                 </div>
-                <div className="text-[10.5px] font-black text-slate-900 leading-none truncate">
-                  {data.parrentPhone || "-"}
-                </div>
+                {isBlank ? (
+                  <div className="h-2.5 border-b border-dashed border-slate-300 my-0.5" />
+                ) : (
+                  <div className="text-[10.5px] font-black text-slate-900 leading-none truncate">
+                    {data.parrentPhone || "-"}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -364,11 +409,17 @@ export function LuggageCardTemplate({
                 >
                   Armada Bus Penumpang
                 </div>
-                <div className="py-2 text-center text-[22px] font-black text-slate-900 leading-none tracking-wider">
-                  {data.busLabel || "-"}
-                </div>
+                {isBlank ? (
+                  <div className="py-2.5 text-center text-[10px] font-extrabold text-slate-300 leading-none tracking-wider">
+                    (TULIS NO. BUS)
+                  </div>
+                ) : (
+                  <div className="py-2 text-center text-[22px] font-black text-slate-900 leading-none tracking-wider">
+                    {data.busLabel || "-"}
+                  </div>
+                )}
                 <div className="text-[5px] text-center text-slate-400 pb-0.5 font-bold uppercase">
-                  Perjalanan Terdaftar
+                  {isBlank ? "KARTU BLANKO RESMI" : "Perjalanan Terdaftar"}
                 </div>
               </div>
 
@@ -444,11 +495,19 @@ export function LuggageCardTemplate({
             <div className="text-[6px] font-bold text-gray-400 uppercase tracking-wider leading-none mb-0.5">
               Nama Penumpang / Santri
             </div>
-            <div className="text-[12px] font-black text-gray-900 leading-tight truncate">
-              {data.studentName}
-            </div>
+            {isBlank ? (
+              <div className="h-3.5 border-b border-dashed border-gray-300 my-0.5" />
+            ) : (
+              <div className="text-[12px] font-black text-gray-900 leading-tight truncate">
+                {data.studentName}
+              </div>
+            )}
             <div className="mt-0.5">
-              {data.studentNis ? (
+              {isBlank ? (
+                <span className="inline-block px-1 py-0.5 text-[6px] rounded bg-gray-100 text-gray-500 font-bold">
+                  NIS: ....................
+                </span>
+              ) : data.studentNis ? (
                 <span className="inline-block px-1 py-0.5 text-[6.5px] rounded bg-gray-100 text-gray-700 font-bold">
                   NIS: {data.studentNis}
                 </span>
@@ -468,17 +527,25 @@ export function LuggageCardTemplate({
                 <div className="text-[6px] font-bold text-gray-400 uppercase tracking-wider leading-none mb-0.5">
                   Titik Turun (Drop Point)
                 </div>
-                <div className="text-[9px] font-bold text-gray-900 leading-tight line-clamp-2">
-                  {data.dropPointName}
-                </div>
+                {isBlank ? (
+                  <div className="h-2.5 border-b border-dashed border-gray-300 my-0.5" />
+                ) : (
+                  <div className="text-[9px] font-bold text-gray-900 leading-tight line-clamp-2">
+                    {data.dropPointName}
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-[5.5px] font-bold text-gray-400 uppercase tracking-wider leading-none mb-0.5">
                   Kontak Darurat / Ortu
                 </div>
-                <div className="text-[8px] font-semibold text-gray-700 leading-none truncate">
-                  {data.parrentPhone || "-"}
-                </div>
+                {isBlank ? (
+                  <div className="h-2 border-b border-dashed border-gray-300 my-0.5" />
+                ) : (
+                  <div className="text-[8px] font-semibold text-gray-700 leading-none truncate">
+                    {data.parrentPhone || "-"}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -492,9 +559,15 @@ export function LuggageCardTemplate({
                 <div className="text-[5px] font-bold uppercase tracking-wider text-white/80 leading-none mb-0.5">
                   Bus Penumpang
                 </div>
-                <div className="text-[11.5px] font-black uppercase tracking-wider text-white leading-tight truncate">
-                  {data.busLabel || "-"}
-                </div>
+                {isBlank ? (
+                  <div className="text-[9px] font-black uppercase tracking-wider text-white/70 leading-tight truncate py-0.5">
+                    (NO. BUS)
+                  </div>
+                ) : (
+                  <div className="text-[11.5px] font-black uppercase tracking-wider text-white leading-tight truncate">
+                    {data.busLabel || "-"}
+                  </div>
+                )}
               </div>
             </div>
           </div>
