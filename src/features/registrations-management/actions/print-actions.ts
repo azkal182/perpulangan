@@ -19,6 +19,7 @@ export interface GetPrintDataParams {
   kordaIds?: string[];
   dropPointId?: string;
   studentName?: string;
+  journeyIds?: string[];
 }
 
 export async function getPrintDataAction(
@@ -136,7 +137,9 @@ export async function getPrintDataAction(
     // Apply secondary filters after numbering so filtered previews preserve the
     // same Korda roster numbers as the complete eligible print roster.
     const studentName = params.studentName?.trim().toLocaleLowerCase("id-ID");
+    const journeyIdSet = params.journeyIds && params.journeyIds.length > 0 ? new Set(params.journeyIds) : null;
     const printData: PrintDataItem[] = completeRoster
+      .filter((item) => !journeyIdSet || journeyIdSet.has(item.id))
       .filter((item) => !studentName || item.participantName.toLocaleLowerCase("id-ID").includes(studentName))
       .filter((item) => !params.gender || item.studentGender === params.gender)
       .filter((item) => selectedKordaIds.length === 0 || selectedKordaIds.includes(item.destinationKordaId))

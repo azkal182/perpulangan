@@ -26,6 +26,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Loader2,
   FileDown,
@@ -36,6 +38,7 @@ import {
   Search,
   RotateCcw,
   CheckSquare,
+  Users,
 } from "lucide-react";
 import { getPrintDataAction } from "../actions/print-actions";
 import type {
@@ -125,7 +128,10 @@ export function PrintWorkspace({
   const [nameFilter, setNameFilter] = useState("");
   const [kordaFilters, setKordaFilters] = useState<string[]>([]);
   const [dropPointFilter, setDropPointFilter] = useState<string>("all");
-  const [loading, setLoading] = useState(false);
+  const [availableParticipants, setAvailableParticipants] = useState<PrintDataItem[]>([]);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [participantViewTab, setParticipantViewTab] = useState<"all" | "selected">("all");
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [previewData, setPreviewData] = useState<PrintDataItem[] | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -142,6 +148,73 @@ export function PrintWorkspace({
 
   const isBlankLuggageCard =
     printType === "luggage_card" && luggageCardSource === "blank_template";
+
+  const currentLayoutForData = calculateLayout(
+    paperSize,
+    printType,
+    luggageCardSize,
+  );
+  const cardsPerPageData =
+    currentLayoutForData.columns * currentLayoutForData.rows;
+  const estimatedSheetsData =
+    selectedParticipantIds.length > 0
+      ? Math.ceil(selectedParticipantIds.length / cardsPerPageData)
+      : 0;
+
+  const searchTerms = nameFilter
+    .split(/[,;\n]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const visibleParticipants = availableParticipants.filter((item) => {
+    if (participantViewTab === "selected" && !selectedParticipantIds.includes(item.id)) {
+      return false;
+    }
+    if (searchTerms.length > 0) {
+      const name = item.studentName.toLowerCase();
+      const nis = (item.studentNis ?? "").toLowerCase();
+      const korda = item.kordaName.toLowerCase();
+      const bus = (item.busLabel ?? "").toLowerCase();
+      const matchesAny = searchTerms.some(
+        (term) =>
+          name.includes(term) ||
+          nis.includes(term) ||
+          korda.includes(term) ||
+          bus.includes(term),
+      );
+      if (!matchesAny) return false;
+    }
+    return true;
+  });
+
+  const handleToggleParticipant = (id: string) => {
+    setSelectedParticipantIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+    resetPreview();
+  };
+
+  const handleSelectAllVisible = () => {
+    const visibleIds = visibleParticipants.map((p) => p.id);
+    setSelectedParticipantIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    resetPreview();
+  };
+
+  const handleDeselectAllVisible = () => {
+    const visibleIdSet = new Set(visibleParticipants.map((p) => p.id));
+    setSelectedParticipantIds((prev) => prev.filter((id) => !visibleIdSet.has(id)));
+    resetPreview();
+  };
+
+  const handleSelectAllParticipants = () => {
+    setSelectedParticipantIds(availableParticipants.map((p) => p.id));
+    resetPreview();
+  };
+
+  const handleClearAllParticipants = () => {
+    setSelectedParticipantIds([]);
+    resetPreview();
+  };
 
   const filteredKordas = kordas.filter((k) =>
     k.name.toLowerCase().includes(kordaSearch.toLowerCase().trim()),
@@ -261,6 +334,99 @@ export function PrintWorkspace({
     };
   }, [showPreview]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!journeyFilter || isBlankLuggageCard) {
+      setAvailableParticipants([]);
+      setSelectedParticipantIds([]);
+      resetPreview();
+      return;
+    }
+
+    setLoadingParticipants(true);
+    getPrintDataAction({
+      eventId,
+      journeyType: journeyFilter,
+      printType,
+      gender: genderFilter === "all" ? undefined : genderFilter,
+      kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
+      dropPointId: dropPointFilter === "all" ? undefined : dropPointFilter,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setAvailableParticipants(res.data);
+          setSelectedParticipantIds((prev) => {
+            const newIdSet = new Set(res.data!.map((item) => item.id));
+            if (prev.length === 0) {
+              return res.data!.map((item) => item.id);
+            }
+            const retained = prev.filter((id) => newIdSet.has(id));
+            return retained.length > 0 ? retained : res.data!.map((item) => item.id);
+          });
+        } else {
+          setAvailableParticipants([]);
+          setSelectedParticipantIds([]);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Gagal memuat peserta:", err);
+        setAvailableParticipants([]);
+        setSelectedParticipantIds([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingParticipants(false);
+          resetPreview();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    eventId,
+    journeyFilter,
+    printType,
+    isBlankLuggageCard,
+    genderFilter,
+    kordaFilters,
+    dropPointFilter,
+  ]);
+
+  const handleReloadParticipants = async () => {
+    if (!journeyFilter || isBlankLuggageCard) return;
+    setLoadingParticipants(true);
+    try {
+      const res = await getPrintDataAction({
+        eventId,
+        journeyType: journeyFilter,
+        printType,
+        gender: genderFilter === "all" ? undefined : genderFilter,
+        kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
+        dropPointId: dropPointFilter === "all" ? undefined : dropPointFilter,
+      });
+      if (res.success && res.data) {
+        setAvailableParticipants(res.data);
+        setSelectedParticipantIds((prev) => {
+          const newIdSet = new Set(res.data!.map((item) => item.id));
+          if (prev.length === 0) return res.data!.map((item) => item.id);
+          const retained = prev.filter((id) => newIdSet.has(id));
+          return retained.length > 0 ? retained : res.data!.map((item) => item.id);
+        });
+        toast.success(`Data peserta diperbarui: ${res.data.length} peserta`);
+      } else {
+        toast.error(res.error || "Gagal memuat peserta");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan saat memuat peserta");
+    } finally {
+      setLoadingParticipants(false);
+      resetPreview();
+    }
+  };
+
   const handlePreview = async () => {
     if (isBlankLuggageCard) {
       const selectedEntries = Object.entries(kordaQuantities).filter(
@@ -304,38 +470,20 @@ export function PrintWorkspace({
       toast.error("Pilih arah perjalanan sebelum membuat preview.");
       return;
     }
-    setLoading(true);
-    try {
-      const result = await getPrintDataAction({
-        eventId,
-        journeyType: journeyFilter,
-        printType,
-        gender: genderFilter === "all" ? undefined : genderFilter,
-        studentName: nameFilter.trim() || undefined,
-        kordaIds: kordaFilters.length > 0 ? kordaFilters : undefined,
-        dropPointId: dropPointFilter === "all" ? undefined : dropPointFilter,
-      });
 
-      if (result.success && result.data) {
-        if (result.data.length === 0) {
-          toast.error("Tidak ada data ditemukan dengan filter yang dipilih");
-          setShowPreview(false);
-          setPreviewPageIndex(0);
-          return;
-        }
-        setPreviewData(result.data);
-        setShowPreview(true);
-        setPreviewPageIndex(0);
-        toast.success(`Preview siap: ${result.data.length} item`);
-      } else {
-        toast.error(result.error || "Gagal memuat data");
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Terjadi kesalahan saat memuat data");
-    } finally {
-      setLoading(false);
+    const selectedItems = availableParticipants.filter((p) =>
+      selectedParticipantIds.includes(p.id),
+    );
+
+    if (selectedItems.length === 0) {
+      toast.error("Pilih minimal satu peserta pada tabel sebelum membuat preview.");
+      return;
     }
+
+    setPreviewData(selectedItems);
+    setShowPreview(true);
+    setPreviewPageIndex(0);
+    toast.success(`Preview siap: ${selectedItems.length} kartu terpilih`);
   };
 
   const handleGeneratePDF = async () => {
@@ -728,126 +876,385 @@ export function PrintWorkspace({
           </div>
         </div>
       ) : (
-        /* Filters for Normal Registered Participant Data */
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <div className="space-y-2">
-            <Label htmlFor="student-name-filter">Filter Nama</Label>
-            <Input
-              id="student-name-filter"
-              value={nameFilter}
-              onChange={(event) => {
-                setNameFilter(event.target.value);
-                resetPreview();
-              }}
-              placeholder="Cari nama peserta"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Filter Gender</Label>
-            <Select
-              value={genderFilter}
-              onValueChange={(value: "all" | "Laki-laki" | "Perempuan") => {
-                setGenderFilter(value);
-                resetPreview();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua</SelectItem>
-                <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                <SelectItem value="Perempuan">Perempuan</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Perjalanan <span className="text-destructive">*</span></Label>
-            <Select
-              value={journeyFilter}
-              onValueChange={(value: "outbound" | "return") => {
-                setJourneyFilter(value);
-                resetPreview();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih perjalanan" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="outbound">Pulang</SelectItem>
-                <SelectItem value="return">Kembali</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Filter Korda</Label>
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-between font-normal"
-                >
-                  <span className="truncate text-left">{kordaFilterLabel}</span>
-                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="max-h-80 w-[--radix-dropdown-menu-trigger-width] overflow-y-auto"
+        /* Filters & Participant Table for Registered Participant Data */
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-2">
+              <Label>
+                Perjalanan <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={journeyFilter}
+                onValueChange={(value: "outbound" | "return") => {
+                  setJourneyFilter(value);
+                  resetPreview();
+                }}
               >
-                <DropdownMenuCheckboxItem
-                  checked={kordaFilters.length === 0}
-                  onSelect={(event) => event.preventDefault()}
-                  onCheckedChange={() => {
-                    setKordaFilters([]);
-                    resetPreview();
-                  }}
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih perjalanan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="outbound">Pulang</SelectItem>
+                  <SelectItem value="return">Kembali</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Filter Korda</Label>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate text-left">{kordaFilterLabel}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="max-h-80 w-[--radix-dropdown-menu-trigger-width] overflow-y-auto"
                 >
-                  Semua
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuSeparator />
-                {kordas.map((korda) => (
                   <DropdownMenuCheckboxItem
-                    key={korda.id}
-                    checked={kordaFilters.includes(korda.id)}
+                    checked={kordaFilters.length === 0}
                     onSelect={(event) => event.preventDefault()}
-                    onCheckedChange={(checked) => {
-                      setKordaFilters((prev) => {
-                        if (checked === true) {
-                          return prev.includes(korda.id) ? prev : [...prev, korda.id];
-                        }
-                        return prev.filter((id) => id !== korda.id);
-                      });
+                    onCheckedChange={() => {
+                      setKordaFilters([]);
                       resetPreview();
                     }}
                   >
-                    {korda.name}
+                    Semua
                   </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuSeparator />
+                  {kordas.map((korda) => (
+                    <DropdownMenuCheckboxItem
+                      key={korda.id}
+                      checked={kordaFilters.includes(korda.id)}
+                      onSelect={(event) => event.preventDefault()}
+                      onCheckedChange={(checked) => {
+                        setKordaFilters((prev) => {
+                          if (checked === true) {
+                            return prev.includes(korda.id) ? prev : [...prev, korda.id];
+                          }
+                          return prev.filter((id) => id !== korda.id);
+                        });
+                        resetPreview();
+                      }}
+                    >
+                      {korda.name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Filter Drop Point</Label>
+              <Select
+                value={dropPointFilter}
+                onValueChange={(v) => {
+                  setDropPointFilter(v);
+                  resetPreview();
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua</SelectItem>
+                  {dropPoints.map((dp) => (
+                    <SelectItem key={dp.id} value={dp.id}>
+                      {dp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Filter Gender</Label>
+              <Select
+                value={genderFilter}
+                onValueChange={(value: "all" | "Laki-laki" | "Perempuan") => {
+                  setGenderFilter(value);
+                  resetPreview();
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua</SelectItem>
+                  <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+                  <SelectItem value="Perempuan">Perempuan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Filter Drop Point</Label>
-            <Select value={dropPointFilter} onValueChange={(v) => { setDropPointFilter(v); resetPreview(); }}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua</SelectItem>
-                {dropPoints.map((dp) => (
-                  <SelectItem key={dp.id} value={dp.id}>
-                    {dp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Participant Table */}
+          {!journeyFilter ? (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/10">
+              <Users className="mx-auto mb-2 h-7 w-7 opacity-40 text-primary" />
+              <p className="font-semibold text-foreground">Pilih Arah Perjalanan</p>
+              <p className="mt-1 text-xs max-w-md mx-auto">
+                Silakan tentukan arah perjalanan (Pulang atau Kembali) di atas untuk memuat daftar santri dan memilih data kartu yang ingin dicetak.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-lg border bg-card p-4 shadow-xs">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-foreground">
+                      Daftar Peserta Siap Cetak
+                    </h4>
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      {selectedParticipantIds.length} / {availableParticipants.length} dipilih
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Centang peserta yang ingin dicetak kartu barangnya. Anda dapat mencari satu atau banyak nama sekaligus.
+                  </p>
+                </div>
+
+                {/* Quick actions & View Tab */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setParticipantViewTab("all")}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-medium transition-colors cursor-pointer",
+                        participantViewTab === "all"
+                          ? "bg-background text-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Semua ({availableParticipants.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setParticipantViewTab("selected")}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-medium transition-colors cursor-pointer",
+                        participantViewTab === "selected"
+                          ? "bg-background text-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Terpilih ({selectedParticipantIds.length})
+                    </button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSelectAllParticipants}
+                    disabled={loadingParticipants || availableParticipants.length === 0}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <CheckSquare className="h-3.5 w-3.5" />
+                    Pilih Semua
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearAllParticipants}
+                    disabled={selectedParticipantIds.length === 0}
+                    className="h-7 text-xs text-muted-foreground hover:text-destructive gap-1"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Kosongkan
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleReloadParticipants}
+                    disabled={loadingParticipants}
+                    title="Segarkan data peserta"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RotateCcw className={cn("h-3.5 w-3.5", loadingParticipants && "animate-spin")} />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Multi-Name Search Box */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={nameFilter}
+                  onChange={(e) => {
+                    setNameFilter(e.target.value);
+                    resetPreview();
+                  }}
+                  placeholder="Cari nama atau NIS (bisa banyak nama, pisahkan koma: cth. Ahmad, Budi, Siti)..."
+                  className="pl-9 pr-20 text-xs sm:text-sm bg-background"
+                />
+                {nameFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameFilter("");
+                      resetPreview();
+                    }}
+                    className="absolute right-3 top-2.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Hapus cari
+                  </button>
+                )}
+              </div>
+
+              {/* Table with Sticky Header */}
+              <div className="max-h-72 overflow-y-auto rounded-md border bg-background">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead className="sticky top-0 z-10 border-b bg-muted/90 backdrop-blur-xs font-semibold text-muted-foreground text-xs uppercase">
+                    <tr>
+                      <th className="w-10 px-3 py-2 text-center">
+                        <Checkbox
+                          checked={
+                            visibleParticipants.length > 0 &&
+                            visibleParticipants.every((p) =>
+                              selectedParticipantIds.includes(p.id),
+                            )
+                          }
+                          onCheckedChange={(checked) => {
+                            if (checked) handleSelectAllVisible();
+                            else handleDeselectAllVisible();
+                          }}
+                          aria-label="Pilih semua baris"
+                        />
+                      </th>
+                      <th className="w-12 px-3 py-2 text-center">No.</th>
+                      <th className="px-3 py-2">Nama Peserta</th>
+                      <th className="px-3 py-2">NIS</th>
+                      <th className="px-3 py-2 text-center">Gender</th>
+                      <th className="px-3 py-2">Korda Tujuan</th>
+                      <th className="px-3 py-2">Drop Point</th>
+                      <th className="px-3 py-2">Armada</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {loadingParticipants ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-10 text-center text-sm text-muted-foreground"
+                        >
+                          <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-primary" />
+                          Memuat daftar peserta perjalanan...
+                        </td>
+                      </tr>
+                    ) : visibleParticipants.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-10 text-center text-sm text-muted-foreground"
+                        >
+                          {participantViewTab === "selected"
+                            ? "Belum ada peserta yang dipilih. Beralih ke tab 'Semua' untuk memilih peserta."
+                            : nameFilter
+                              ? "Tidak ada peserta yang cocok dengan kata kunci pencarian nama."
+                              : "Tidak ada peserta yang terdaftar dengan alokasi bus pada filter ini."}
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleParticipants.map((item, idx) => {
+                        const isSelected = selectedParticipantIds.includes(item.id);
+                        return (
+                          <tr
+                            key={item.id}
+                            onClick={() => handleToggleParticipant(item.id)}
+                            className={cn(
+                              "cursor-pointer transition-colors hover:bg-muted/40",
+                              isSelected && "bg-primary/5 dark:bg-primary/10",
+                            )}
+                          >
+                            <td
+                              className="px-3 py-2.5 text-center"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() =>
+                                  handleToggleParticipant(item.id)
+                                }
+                                aria-label={`Pilih ${item.studentName}`}
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 text-center font-mono text-xs text-muted-foreground">
+                              {item.rosterNumber || idx + 1}
+                            </td>
+                            <td className="px-3 py-2.5 font-medium text-foreground">
+                              {item.studentName}
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
+                              {item.studentNis || "-"}
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <span
+                                className={cn(
+                                  "inline-flex rounded px-1.5 py-0.5 text-[11px] font-semibold",
+                                  item.studentGender === "Laki-laki"
+                                    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                    : "bg-pink-500/10 text-pink-700 dark:text-pink-300",
+                                )}
+                              >
+                                {item.studentGender === "Laki-laki"
+                                  ? "L"
+                                  : item.studentGender === "Perempuan"
+                                    ? "P"
+                                    : "-"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className="font-medium text-foreground">
+                                {item.kordaName}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-muted-foreground">
+                              {item.dropPointName || "-"}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className="inline-flex rounded border bg-muted/40 px-2 py-0.5 text-xs font-mono">
+                                {item.busLabel || "-"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table Live Summary Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-2.5 text-xs border">
+                <div className="flex items-center gap-3">
+                  <span>
+                    Peserta dipilih:{" "}
+                    <strong className="text-foreground text-sm font-bold text-primary">
+                      {selectedParticipantIds.length}
+                    </strong>{" "}
+                    dari {availableParticipants.length}
+                  </span>
+                </div>
+                <div>
+                  Estimasi:{" "}
+                  <strong className="text-foreground font-semibold">
+                    {estimatedSheetsData}
+                  </strong>{" "}
+                  lembar kertas {paperSize} ({cardsPerPageData} kartu/lembar)
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1022,21 +1429,21 @@ export function PrintWorkspace({
           onClick={handlePreview}
           disabled={
             isBlankLuggageCard
-              ? selectedKordaCount === 0 || loading || generatingPdf
-              : !journeyFilter || loading || generatingPdf
+              ? selectedKordaCount === 0 || generatingPdf
+              : !journeyFilter || loadingParticipants || selectedParticipantIds.length === 0 || generatingPdf
           }
         >
-          {loading ? (
+          {loadingParticipants ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading...
+              Memuat...
             </>
           ) : (
             <>
               <Eye className="mr-2 h-4 w-4" />
               {isBlankLuggageCard
                 ? `Preview Template (${totalBlankCards} Kartu)`
-                : "Preview"}
+                : `Preview (${selectedParticipantIds.length} Kartu)`}
             </>
           )}
         </Button>
@@ -1044,8 +1451,8 @@ export function PrintWorkspace({
           onClick={handleGeneratePDF}
           disabled={
             isBlankLuggageCard
-              ? !showPreview || !previewData || previewData.length === 0 || loading || generatingPdf
-              : !journeyFilter || !showPreview || loading || generatingPdf
+              ? !showPreview || !previewData || previewData.length === 0 || generatingPdf
+              : !journeyFilter || !showPreview || !previewData || previewData.length === 0 || loadingParticipants || generatingPdf
           }
         >
           {generatingPdf ? (
