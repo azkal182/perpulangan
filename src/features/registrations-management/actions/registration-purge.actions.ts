@@ -19,12 +19,22 @@ type PurgePlan = {
   journeyIds: string[];
   paymentIds: string[];
   allocationIds: string[];
+  correctionIds: string[];
+  correctionRows: Array<{
+    id: string;
+    amount: number;
+    reason: string;
+    correctedAt: Date;
+    evidenceFile: { storageKey: string; originalName: string } | null;
+  }>;
   rootParticipantName: string;
-  participants: Array<{ registrationId: string; name: string; nis: string | null; originKorda: string | null; journeys: Array<{ direction: string; destination: string; dropPoint: string | null; tariff: number | null; status: string }> }>;
+  participants: Array<{ registrationId: string; name: string; nis: string | null; originKorda: string | null; journeys: Array<{ direction: string; destination: string; dropPoint: string | null; tariff: number | null; status: string; bus?: string | null; assignmentHistory?: Array<{ action: string; fromBus: string | null; toBus: string | null; actorUserId: string | null; createdAt: Date }> }>; legacyPaymentReconciliations: Array<{ direction: string; legacyMarkedPaid: boolean; status: string; note: string | null; createdAt: Date; reconciledAt: Date | null }> }>;
   payments: Array<{ id: string; amount: number; paidAt: Date; note: string; allocationCount: number; evidenceName: string | null; allocations: Array<{ participant: string; type: string; amount: number; destination: string }> }>;
   paymentAmount: number;
   evidence: Array<{ storageKey: string; originalName: string }>;
   financial: { safe: boolean; reason: string | null; centralCashBefore: number; centralCashAfter: number; affectedKordas: Array<{ id: string; name: string; disbursed: number; registrationEntitlementBefore: number; registrationEntitlementAfter: number; registrationReceivedBefore: number; registrationReceivedAfter: number; balanceBefore: number; balanceAfter: number; remainingSupportBefore: number; remainingSupportAfter: number }> };
+  refundCount: number;
+  correctionCount: number;
   refundsOrCorrections: number;
   fingerprint: string;
 };
@@ -129,15 +139,40 @@ async function buildPurgePlan(db: Db, registrationId: string): Promise<PurgePlan
   });
   const allocationIds = allocations.map((row) => row.id);
   const balanceEntries = allocationIds.length ? await db.kordaBalanceEntry.findMany({ where: { sourcePaymentAllocationId: { in: allocationIds } }, select: { id: true } }) : [];
-  const [refunds, corrections, unresolved, position] = await Promise.all([
-    db.refund.count({ where: { OR: [{ paymentAllocationId: { in: allocationIds } }, { balanceSourceEntryId: { in: balanceEntries.map((row) => row.id) } }] } }),
-    db.financialCorrection.count({ where: { OR: [{ paymentAllocationId: { in: allocationIds } }, { balanceSourceEntryId: { in: balanceEntries.map((row) => row.id) } }] } }),
+  const balanceEntryIds = balanceEntries.map((row) => row.id);
+  const correctionWhere = (allocationIds.length || balanceEntryIds.length) ? {
+    OR: [
+      ...(allocationIds.length ? [{ paymentAllocationId: { in: allocationIds } }] : []),
+      ...(balanceEntryIds.length ? [{ balanceSourceEntryId: { in: balanceEntryIds } }] : []),
+    ],
+  } : undefined;
+
+  const [refundCount, correctionRows, unresolved] = await Promise.all([
+    correctionWhere ? db.refund.count({ where: correctionWhere }) : 0,
+    correctionWhere ? db.financialCorrection.findMany({
+      where: correctionWhere,
+      select: {
+        id: true,
+        amount: true,
+        reason: true,
+        correctedAt: true,
+        evidenceFile: { select: { storageKey: true, originalName: true } },
+      },
+    }) : [],
     db.paymentAllocation.count({ where: { paymentId: { in: [...paymentIds] }, registrationId: null, journeyId: null } }),
-    calculateFinancialProjection(db, registrations.map((row) => row.id), journeyIds, paymentIds, allocationIds, paymentRows.reduce((sum, row) => sum + row.amount, 0)),
   ]);
-  const refundsOrCorrections = refunds + corrections;
+  const correctionIds = correctionRows.map((row) => row.id);
+  const position = await calculateFinancialProjection(
+    db,
+    registrations.map((row) => row.id),
+    journeyIds,
+    paymentIds,
+    allocationIds,
+    paymentRows.reduce((sum, row) => sum + row.amount, 0),
+    new Set(correctionIds),
+  );
   const blockers = [
-    refundsOrCorrections > 0 ? `Terdapat ${refunds} refund dan ${corrections} koreksi pada transaksi terkait.` : null,
+    refundCount > 0 ? `Terdapat ${refundCount} refund dana nyata pada transaksi terkait. Selesaikan rekonsiliasi pengembalian dana tersebut terlebih dahulu; riwayat uang nyata yang sudah keluar ke wali santri tidak dapat dipurge.` : null,
     unresolved > 0 ? `Ada ${unresolved} alokasi Saldo Lain lama yang tidak dapat dipastikan pemilik pesertanya.` : null,
     !position.safe ? position.reason : null,
   ].filter(Boolean);
@@ -150,7 +185,9 @@ async function buildPurgePlan(db: Db, registrationId: string): Promise<PurgePlan
     legacyPaymentReconciliations: registration.legacyPaymentReconciliations.map((item) => ({ direction: item.direction, legacyMarkedPaid: item.legacyMarkedPaid, status: item.status, note: item.note, createdAt: item.createdAt, reconciledAt: item.reconciledAt })),
   }));
   const payments = paymentRows.map((payment) => ({ id: payment.id, amount: payment.amount, paidAt: payment.paidAt, note: payment.noteSnapshot, allocationCount: payment.allocations.length, evidenceName: payment.evidence?.originalName ?? null, allocations: payment.allocations.map((allocation) => ({ participant: allocation.participantNameSnapshot, type: allocation.type, amount: allocation.amount, destination: allocation.destinationKordaNameSnapshot })) }));
-  const evidence = paymentRows.flatMap((payment) => payment.evidence ? [{ storageKey: payment.evidence.storageKey, originalName: payment.evidence.originalName }] : []);
+  const paymentEvidence = paymentRows.flatMap((payment) => payment.evidence ? [{ storageKey: payment.evidence.storageKey, originalName: payment.evidence.originalName }] : []);
+  const correctionEvidence = correctionRows.flatMap((row) => row.evidenceFile ? [{ storageKey: row.evidenceFile.storageKey, originalName: row.evidenceFile.originalName }] : []);
+  const evidence = [...paymentEvidence, ...correctionEvidence];
   const core = {
     rootRegistrationId: registrationId,
     eventId: root.eventId,
@@ -158,8 +195,10 @@ async function buildPurgePlan(db: Db, registrationId: string): Promise<PurgePlan
     journeyIds: [...journeyIds].sort(),
     paymentIds: [...paymentIds].sort(),
     allocationIds: [...allocationIds].sort(),
+    correctionIds: [...correctionIds].sort(),
     participants,
     payments,
+    corrections: correctionRows.map((row) => ({ id: row.id, amount: row.amount, reason: row.reason, correctedAt: row.correctedAt })),
     allocations: allocations.map((row) => ({ id: row.id, paymentId: row.paymentId, registrationId: row.registrationId, journeyId: row.journeyId, type: row.type, amount: row.amount, participantNameSnapshot: row.participantNameSnapshot, destinationKordaNameSnapshot: row.destinationKordaNameSnapshot })).sort((a, b) => a.id.localeCompare(b.id)),
     evidence,
     financial: position,
@@ -173,22 +212,26 @@ async function buildPurgePlan(db: Db, registrationId: string): Promise<PurgePlan
     journeyIds,
     paymentIds: [...paymentIds],
     allocationIds,
+    correctionIds,
+    correctionRows,
     rootParticipantName: participants.find((row) => row.registrationId === registrationId)?.name ?? "Peserta",
     participants,
     payments,
     paymentAmount: paymentRows.reduce((sum, row) => sum + row.amount, 0),
     evidence,
     financial: { ...position, safe: !blockers.some(Boolean), reason: blockers.join(" ") || null },
-    refundsOrCorrections,
+    refundCount,
+    correctionCount: correctionRows.length,
+    refundsOrCorrections: refundCount,
     fingerprint: digest(core),
   };
 }
 
-async function calculateFinancialProjection(db: Db, registrationIds: string[], journeyIds: string[], paymentIds: Set<string>, allocationIds: string[], removedPaymentAmount: number) {
+async function calculateFinancialProjection(db: Db, registrationIds: string[], journeyIds: string[], paymentIds: Set<string>, allocationIds: string[], removedPaymentAmount: number, correctionIds: Set<string>) {
   const [kordas, journeys, ledger, disbursements, payments, refunds, allDisbursements] = await Promise.all([
     db.korda.findMany({ select: { id: true, name: true } }),
-    db.journey.findMany({ select: { id: true, registrationId: true, destinationKordaId: true, status: true, tariffSnapshot: true, paymentAllocations: { select: { paymentId: true, type: true, amount: true, refunds: { select: { amount: true } }, corrections: { select: { amount: true } } } } } }),
-    db.kordaBalanceEntry.findMany({ select: { ownerKordaId: true, entryType: true, amount: true, sourcePaymentAllocationId: true } }),
+    db.journey.findMany({ select: { id: true, registrationId: true, destinationKordaId: true, status: true, tariffSnapshot: true, paymentAllocations: { select: { paymentId: true, type: true, amount: true, refunds: { select: { amount: true } }, corrections: { select: { id: true, amount: true } } } } } }),
+    db.kordaBalanceEntry.findMany({ select: { ownerKordaId: true, entryType: true, amount: true, sourcePaymentAllocationId: true, sourceCorrectionId: true } }),
     db.treasuryDisbursement.groupBy({ by: ["kordaId"], _sum: { amount: true } }),
     db.payment.aggregate({ _sum: { amount: true } }),
     db.refund.aggregate({ _sum: { amount: true } }),
@@ -207,9 +250,13 @@ async function calculateFinancialProjection(db: Db, registrationIds: string[], j
     };
     const received = (items: typeof journeys, excludePurgedPayments = false) => items.reduce((sum, journey) => sum + journey.paymentAllocations
       .filter((allocation) => allocation.type === "JOURNEY" && (!excludePurgedPayments || !paymentIds.has(allocation.paymentId)))
-      .reduce((total, allocation) => total + allocation.amount - allocation.refunds.reduce((r, row) => r + row.amount, 0) - allocation.corrections.reduce((c, row) => c + row.amount, 0), 0), 0);
-    const balance = ledger.filter((entry) => entry.ownerKordaId === korda.id && (!entry.sourcePaymentAllocationId || !removedAllocations.has(entry.sourcePaymentAllocationId)))
-      .reduce((sum, entry) => sum + (entry.entryType === "CREDIT" ? Math.abs(entry.amount) : -Math.abs(entry.amount)), 0);
+      .reduce((total, allocation) => total + allocation.amount - allocation.refunds.reduce((r, row) => r + row.amount, 0) - allocation.corrections.reduce((c, row) => c + (excludePurgedPayments && correctionIds.has(row.id) ? 0 : row.amount), 0), 0), 0);
+    const balance = ledger.filter((entry) => {
+      if (entry.ownerKordaId !== korda.id) return false;
+      if (entry.sourcePaymentAllocationId && removedAllocations.has(entry.sourcePaymentAllocationId)) return false;
+      if (entry.sourceCorrectionId && correctionIds.has(entry.sourceCorrectionId)) return false;
+      return true;
+    }).reduce((sum, entry) => sum + (entry.entryType === "CREDIT" ? Math.abs(entry.amount) : -Math.abs(entry.amount)), 0);
     const disbursed = disbursedByKorda.get(korda.id) ?? 0;
     const entitlementBefore = entitlement(allKordaJourneys);
     const entitlementAfter = entitlement(remainingJourneys);
@@ -226,6 +273,7 @@ async function calculateFinancialProjection(db: Db, registrationIds: string[], j
   const affectedKordaIds = new Set([
     ...journeys.filter((journey) => registrationIds.includes(journey.registrationId)).map((journey) => journey.destinationKordaId),
     ...ledger.filter((entry) => !!entry.sourcePaymentAllocationId && removedAllocations.has(entry.sourcePaymentAllocationId)).map((entry) => entry.ownerKordaId),
+    ...ledger.filter((entry) => !!entry.sourceCorrectionId && correctionIds.has(entry.sourceCorrectionId)).map((entry) => entry.ownerKordaId),
   ]);
   const affectedKordas = rows.filter((row) => affectedKordaIds.has(row.id));
   const insufficient = affectedKordas.find((row) => row.remainingSupportAfter < 0);
@@ -243,7 +291,29 @@ export async function previewRegistrationPurgeAction(registrationId: string) {
     const scope = await getRegionalAccessScope();
     requireAdmin(scope);
     const plan = await prisma.$transaction((tx) => buildPurgePlan(tx, registrationId), { isolationLevel: "Serializable" });
-    return { success: true as const, plan: { eventId: plan.eventId, eventName: plan.eventName, rootParticipantName: plan.rootParticipantName, participants: plan.participants, payments: plan.payments, paymentAmount: plan.paymentAmount, evidence: plan.evidence.map((row) => row.originalName), financial: plan.financial, refundsOrCorrections: plan.refundsOrCorrections, fingerprint: plan.fingerprint } };
+    return {
+      success: true as const,
+      plan: {
+        eventId: plan.eventId,
+        eventName: plan.eventName,
+        rootParticipantName: plan.rootParticipantName,
+        participants: plan.participants,
+        payments: plan.payments,
+        corrections: plan.correctionRows.map((row) => ({
+          id: row.id,
+          amount: row.amount,
+          reason: row.reason,
+          correctedAt: row.correctedAt,
+        })),
+        paymentAmount: plan.paymentAmount,
+        evidence: plan.evidence.map((row) => row.originalName),
+        financial: plan.financial,
+        refundCount: plan.refundCount,
+        correctionCount: plan.correctionCount,
+        refundsOrCorrections: plan.refundsOrCorrections,
+        fingerprint: plan.fingerprint,
+      },
+    };
   } catch (error) {
     return { success: false as const, error: error instanceof Error ? error.message : "Gagal menyiapkan pratinjau penghapusan." };
   }
@@ -263,7 +333,7 @@ export async function purgeRegistrationGroupAction(input: { registrationId: stri
       if (plan.fingerprint !== input.fingerprint) throw new Error("Data atau cakupan penghapusan berubah setelah pratinjau. Tutup dialog lalu buka kembali untuk meninjau ulang.");
       if (input.confirmation !== `HAPUS PERMANEN ${plan.participants.length}`) throw new Error(`Konfirmasi harus diketik: HAPUS PERMANEN ${plan.participants.length}`);
       if (!plan.financial.safe) throw new Error(plan.financial.reason || "Posisi keuangan tidak cukup untuk menghapus data ini.");
-      if (plan.refundsOrCorrections > 0) throw new Error("Transaksi memiliki refund/koreksi. Selesaikan rekonsiliasi terlebih dahulu; riwayat uang nyata tidak dapat dipurge.");
+      if (plan.refundCount > 0) throw new Error(`Transaksi memiliki ${plan.refundCount} refund dana nyata. Selesaikan rekonsiliasi pengembalian dana tersebut terlebih dahulu; riwayat uang nyata yang sudah keluar ke wali santri tidak dapat dipurge.`);
       const account = await tx.account.findFirst({ where: { userId: scope.userId, providerId: "credential" }, select: { password: true } });
       if (!account?.password || !(await verifyPassword({ hash: account.password, password: input.password }))) throw new Error("Password admin tidak cocok.");
       const registrations = await tx.registration.findMany({
@@ -288,19 +358,39 @@ export async function purgeRegistrationGroupAction(input: { registrationId: stri
       });
       const payments = await tx.payment.findMany({ where: { id: { in: plan.paymentIds } }, include: { allocations: true, evidence: true } });
       storageKeys.push(...payments.flatMap((payment) => payment.evidence ? [{ storageKey: payment.evidence.storageKey, originalName: payment.evidence.originalName }] : []));
+      storageKeys.push(...plan.correctionRows.flatMap((row) => row.evidenceFile ? [{ storageKey: row.evidenceFile.storageKey, originalName: row.evidenceFile.originalName }] : []));
       const actor = await tx.user.findUnique({ where: { id: scope.userId }, select: { name: true, username: true } });
       const details = {
         participants: registrations.map((registration) => ({ name: registration.student?.name ?? registration.externalParticipant?.name ?? "Peserta", nis: registration.student?.nis ?? null, originKorda: registration.originKordaNameSnapshot, journeys: registration.journeys.map((journey) => ({ direction: journey.direction, destination: journey.destinationKordaNameSnapshot, dropPoint: journey.locationNameSnapshot || journey.dropPoint?.name || null, tariff: journey.tariffSnapshot, status: journey.status, bus: journey.busAssignment?.bus?.label ?? null, assignmentHistory: journey.busAssignment?.history.map((item) => ({ action: item.action, fromBus: item.fromBusLabelSnapshot, toBus: item.toBusLabelSnapshot, actorUserId: item.actorUserId, createdAt: item.createdAt.toISOString() })) ?? [] })), legacyPaymentReconciliations: registration.legacyPaymentReconciliations.map((item) => ({ direction: item.direction, legacyMarkedPaid: item.legacyMarkedPaid, status: item.status, note: item.note, createdAt: item.createdAt.toISOString(), reconciledAt: item.reconciledAt?.toISOString() ?? null })) })),
         payments: payments.map((payment) => ({ amount: payment.amount, paidAt: payment.paidAt.toISOString(), note: payment.noteSnapshot, allocations: payment.allocations.map((allocation) => ({ participant: allocation.participantNameSnapshot, type: allocation.type, amount: allocation.amount, destinationKorda: allocation.destinationKordaNameSnapshot })) })),
+        corrections: plan.correctionRows.map((row) => ({ id: row.id, amount: row.amount, reason: row.reason, correctedAt: row.correctedAt.toISOString() })),
       };
       await tx.registrationPurge.create({ data: { id: purgeId, eventId: plan.eventId, eventNameSnapshot: plan.eventName, actorUserId: scope.userId, actorNameSnapshot: actor?.name ?? "Admin", actorUsernameSnapshot: actor?.username ?? null, reason, participantCount: registrations.length, registrationCount: registrations.length, journeyCount: plan.journeyIds.length, paymentCount: payments.length, paymentAmount: payments.reduce((sum, payment) => sum + payment.amount, 0), details, financialSnapshot: { centralCashBefore: plan.financial.centralCashBefore, centralCashAfter: plan.financial.centralCashAfter, affectedKordas: plan.financial.affectedKordas } } });
       if (storageKeys.length) await tx.registrationPurgeEvidence.createMany({ data: storageKeys.map((row) => ({ purgeId, storageKey: row.storageKey, originalName: row.originalName })) });
-      await tx.financialAuditEntry.deleteMany({ where: { paymentId: { in: plan.paymentIds } } });
-      await tx.kordaBalanceEntry.deleteMany({ where: { sourcePaymentAllocationId: { in: plan.allocationIds } } });
-      await tx.paymentAllocation.deleteMany({ where: { id: { in: plan.allocationIds } } });
+      if (plan.correctionIds.length) {
+        await tx.evidenceFile.deleteMany({ where: { correctionId: { in: plan.correctionIds } } });
+      }
+      await tx.financialAuditEntry.deleteMany({
+        where: {
+          OR: [
+            ...(plan.paymentIds.length ? [{ paymentId: { in: plan.paymentIds } }] : []),
+            ...(plan.correctionIds.length ? [{ correctionId: { in: plan.correctionIds } }] : []),
+          ],
+        },
+      });
+      if (plan.correctionIds.length) {
+        await tx.kordaBalanceEntry.deleteMany({ where: { sourceCorrectionId: { in: plan.correctionIds } } });
+        await tx.financialCorrection.deleteMany({ where: { id: { in: plan.correctionIds } } });
+      }
+      if (plan.allocationIds.length) {
+        await tx.kordaBalanceEntry.deleteMany({ where: { sourcePaymentAllocationId: { in: plan.allocationIds } } });
+        await tx.paymentAllocation.deleteMany({ where: { id: { in: plan.allocationIds } } });
+      }
       await tx.legacyPaymentReconciliation.deleteMany({ where: { registrationId: { in: plan.registrationIds } } });
-      await tx.evidenceFile.deleteMany({ where: { paymentId: { in: plan.paymentIds } } });
-      await tx.payment.deleteMany({ where: { id: { in: plan.paymentIds } } });
+      if (plan.paymentIds.length) {
+        await tx.evidenceFile.deleteMany({ where: { paymentId: { in: plan.paymentIds } } });
+        await tx.payment.deleteMany({ where: { id: { in: plan.paymentIds } } });
+      }
       await tx.registration.deleteMany({ where: { id: { in: plan.registrationIds } } });
     }, { isolationLevel: "Serializable", timeout: 30_000 });
 
